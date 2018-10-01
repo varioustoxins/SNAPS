@@ -9,6 +9,7 @@ Created on Fri Sep 28 10:45:35 2018
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from math import isnan, log10
 
 #"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
 
@@ -98,22 +99,24 @@ def calc_match_probability(obs1, pred1,
     
     # At the moment, this doesn't deal with case where both obs and pres are missing an atom.
     
-    # Throw away any non-atom columns
-    obs1 = obs1.loc[atom_set.intersection(obs1.index)]
-    pred1 = pred1.loc[atom_set.intersection(pred1.index)]
-    
-    df = pd.DataFrame({'obs':obs1, 'pred':pred1})   # Make obs1 and pred1 into columns of a data frame
-    df["Delta"] = df['obs'] - df['pred']            # Calculate difference between observation and prediction  
-    df["Prob"] = 1
-    for i in df.index:          # For each atom type present, calculate the probability that Delta would be this size or larger
-        df.loc[i, "Prob"] = 2*norm.cdf(-abs(df.loc[i, "Delta"]), scale=atom_sd[i]*sf)
-    
-    # If any probabilities are NaN due to missing data, set to a default value
-    df.loc[df["Prob"].isnull(),"Prob"] = default_prob
-    
-    overall_prob = df["Prob"].prod(skipna=False)
-    
-    return(overall_prob)
+     # If observed residue has an amide proton, it can't be proline.
+    if pred1["Res_type"]=="P" and not isnan(obs1["H"]):      # I don't think this works properly
+        return(0)
+    else:
+        # Throw away any non-atom columns
+        obs1 = obs1.loc[atom_set.intersection(obs1.index)]
+        pred1 = pred1.loc[atom_set.intersection(pred1.index)]
+        df = pd.DataFrame({'obs':obs1, 'pred':pred1})   # Make obs1 and pred1 into columns of a data frame
+        df["Delta"] = df['obs'] - df['pred']            # Calculate difference between observation and prediction  
+        df["Prob"] = 1
+        for i in df.index:          # For each atom type present, calculate the probability that Delta would be this size or larger
+            if isnan(df.loc[i, "Delta"]):   # Use default probability if data is missing.
+                df.loc[i, "Prob"] = default_prob
+            else:       # Otherwise, probability taken from cumulative distribution function.
+                df.loc[i, "Prob"] = 2*norm.cdf(-abs(df.loc[i, "Delta"]), scale=atom_sd[i]*sf)
+        
+        overall_prob = df["Prob"].prod(skipna=False)
+        return(overall_prob)
     
 calc_match_probability(obs.loc["1LYS"], preds.loc["1K"], sf=2)
 
@@ -132,4 +135,25 @@ def calc_probability_matrix(obs, pred,
             
     return(prob_matrix)
     
-prob_matrix = calc_probability_matrix(obs, preds)
+#prob_matrix = calc_probability_matrix(obs, preds)
+
+def calc_log_prob_matrix(obs, pred,
+                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
+                            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
+                                    'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
+    # Calculate a matrix of -log10(match probabilities)
+    prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
+    
+    for i in obs.index:
+        print(i)
+        for j in preds.index:
+            prob_matrix.loc[i, j] = calc_match_probability(obs.loc[i,:], preds.loc[j,:], atom_set, atom_sd, sf, default_prob)
+    
+    # Calculate log of matrix
+    log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
+    log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmax(log_prob_matrix.values)
+        
+    return(log_prob_matrix)
+    
+log_prob_matrix = calc_log_prob_matrix(obs, preds)
