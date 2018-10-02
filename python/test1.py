@@ -9,6 +9,7 @@ Created on Fri Sep 28 10:45:35 2018
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 
 #"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
@@ -18,8 +19,8 @@ def import_obs_shifts(filename):
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
     obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
-    obs_long["Res_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
-    obs_long = obs_long.reindex(columns=["Res_N","Res_type","Res_name","Atom_type","Shift"])
+    obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
+    obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
     
     # Convert from long to wide
     obs = obs_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
@@ -35,12 +36,12 @@ def import_obs_shifts(filename):
     obs = obs[atom_list]
     
     # Add the other data back in
-    tmp = obs_long[["Res_N","Res_type","Res_name"]]
-    tmp = tmp.drop_duplicates(subset="Res_name")
+    tmp = obs_long[["Res_N","Res_type","SS_name"]]
+    tmp = tmp.drop_duplicates(subset="SS_name")
     tmp.index = tmp["Res_N"]
     obs = pd.concat([tmp, obs], axis=1)
     
-    obs.index = obs["Res_name"]
+    obs.index = obs["SS_name"]
     
     return(obs)
 
@@ -156,4 +157,32 @@ def calc_log_prob_matrix(obs, pred,
         
     return(log_prob_matrix)
     
-log_prob_matrix = calc_log_prob_matrix(obs, preds)
+log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
+
+def find_best_assignment(obs, preds, log_prob_matrix):
+    # Use the Hungarian algorithm to find the highest probability matching 
+    # (ie. the one with the lowest log probability sum)
+    # Return a data frame with matched observed and predicted shifts, and the raw matching
+    valid_atoms = ["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]
+    
+    row_ind, col_ind = linear_sum_assignment(log_prob_matrix)
+    
+    obs_names = [log_prob_matrix.index[r] for r in row_ind]
+    pred_names = [log_prob_matrix.columns[c] for c in col_ind]
+    #return(list(zip(obs_names, pred_names)))
+    
+    assignment = pd.DataFrame({
+            "Res_name":pred_names,
+            "SS_name":obs_names
+            })
+    #assignment.index = assignment["Res_name"]
+    
+    assignment = pd.merge(assignment, preds[["Res_N","Res_type"]], on="Res_name")
+    assignment = assignment[["Res_name","Res_N","Res_type","SS_name"]]
+    assignment = pd.merge(assignment, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name"])], on="SS_name")
+    # Above line raises an error about index/column confusion, which needs fixing.
+    assignment = pd.merge(assignment, preds.loc[:, preds.columns.isin(valid_atoms)], on="Res_name", suffixes=("","_pred"))
+    
+    return(assignment, [row_ind, col_ind])
+
+assignment, matching = find_best_assignment(obs, preds, log_prob_matrix)
