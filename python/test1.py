@@ -87,57 +87,37 @@ preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A001_1KF3A.cs")
 obs1=obs.iloc[0]
 pred1=preds.iloc[0]
 
-def calc_match_probability(obs1, pred1,
+def calc_match_probability(obs, pred1,
                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
                                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
-    # Calculate a match score between an observed spin system and a predicted residue, assuming a Gaussian probability distribution.
-    # obs1 and obs2 are single rows from the obs and preds data frames. Note that they become type Series
+    # Calculate match scores between all observed spin systems and a single predicted residue
     # default_prob is the probability assigned when an observation or prediction is missing
     # atom_set is a set used to restrict to only certain measurements
     # atom_sd is the expected standard deviation for each atom type
     # sf is a scaling factor for the entire atom_sd dictionary
     
-    # At the moment, this doesn't deal with case where both obs and pres are missing an atom.
+    # Throw away any non-atom columns
+    obs = obs.loc[:, atom_set.intersection(obs.columns)]
+    pred1 = pred1.loc[atom_set.intersection(pred1.index)]
     
-     # If observed residue has an amide proton, it can't be proline.
-    if pred1["Res_type"]=="P" and not isnan(obs1["H"]):      # I don't think this works properly
-        return(0)
-    else:
-        # Throw away any non-atom columns
-        obs1 = obs1.loc[atom_set.intersection(obs1.index)]
-        pred1 = pred1.loc[atom_set.intersection(pred1.index)]
-        df = pd.DataFrame({'obs':obs1, 'pred':pred1})   # Make obs1 and pred1 into columns of a data frame
-        df["Delta"] = df['obs'] - df['pred']            # Calculate difference between observation and prediction  
-        df["Prob"] = 1
-        for i in df.index:          # For each atom type present, calculate the probability that Delta would be this size or larger
-            if isnan(df.loc[i, "Delta"]):   # Use default probability if data is missing.
-                df.loc[i, "Prob"] = default_prob
-            else:       # Otherwise, probability taken from cumulative distribution function.
-                df.loc[i, "Prob"] = 2*norm.cdf(-abs(df.loc[i, "Delta"]), scale=atom_sd[i]*sf)
-        
-        overall_prob = df["Prob"].prod(skipna=False)
-        return(overall_prob)
+    # Calculate shift differences and probabilities for each observed spin system
+    delta = obs - pred1
+    prob = delta.copy()
+    prob.iloc[:,:] = 1
+    for c in delta.columns:
+        # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
+        prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
     
-calc_match_probability(obs.loc["1LYS"], preds.loc["1K"], sf=2)
+    # Where data is missing, use a default probability
+    prob[prob.isna()] = default_prob
+    
+    # Calculate overall probability of each row
+    overall_prob = prob.prod(skipna=False, axis=1)
+    return(overall_prob)
 
-def calc_probability_matrix(obs, pred,
-                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
-                            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
-                                    'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
-    # Calculate a matrix of match probabilities
-    prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
-    
-    for i in obs.index:
-        print(i)
-        for j in preds.index:
-            prob_matrix.loc[i, j] = calc_match_probability(obs.loc[i,:], preds.loc[j,:], atom_set, atom_sd, sf, default_prob)
-            
-    return(prob_matrix)
-    
-#prob_matrix = calc_probability_matrix(obs, preds)
+calc_match_probability(obs, pred1)
 
 def calc_log_prob_matrix(obs, pred,
                             atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
@@ -147,17 +127,16 @@ def calc_log_prob_matrix(obs, pred,
     # Calculate a matrix of -log10(match probabilities)
     prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
     
-    for i in obs.index:
+    for i in preds.index:
         print(i)
-        for j in preds.index:
-            prob_matrix.loc[i, j] = calc_match_probability(obs.loc[i,:], preds.loc[j,:], atom_set, atom_sd, sf, default_prob)
+        prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob)
     
     # Calculate log of matrix
     log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
     log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmax(log_prob_matrix.values)
         
     return(log_prob_matrix)
-    
+
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 
 def find_best_assignment(obs, preds, log_prob_matrix):
@@ -219,4 +198,4 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     
     return(plt)
     
-plot_strips(assign_df.iloc[0:10, :])
+plot_strips(assign_df.iloc[0:30, :])
