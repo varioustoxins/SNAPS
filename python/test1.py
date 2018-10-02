@@ -8,6 +8,7 @@ Created on Fri Sep 28 10:45:35 2018
 
 import numpy as np
 import pandas as pd
+from plotnine import *
 from scipy.stats import norm
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
@@ -171,18 +172,51 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     pred_names = [log_prob_matrix.columns[c] for c in col_ind]
     #return(list(zip(obs_names, pred_names)))
     
-    assignment = pd.DataFrame({
+    assign_df = pd.DataFrame({
             "Res_name":pred_names,
             "SS_name":obs_names
             })
-    #assignment.index = assignment["Res_name"]
+    #assign_df.index = assign_df["Res_name"]
     
-    assignment = pd.merge(assignment, preds[["Res_N","Res_type"]], on="Res_name")
-    assignment = assignment[["Res_name","Res_N","Res_type","SS_name"]]
-    assignment = pd.merge(assignment, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name"])], on="SS_name")
+    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type"]], on="Res_name")
+    assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name"]]
+    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name"])], on="SS_name")
     # Above line raises an error about index/column confusion, which needs fixing.
-    assignment = pd.merge(assignment, preds.loc[:, preds.columns.isin(valid_atoms)], on="Res_name", suffixes=("","_pred"))
+    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms)], on="Res_name", suffixes=("","_pred"))
     
-    return(assignment, [row_ind, col_ind])
+    assign_df = assign_df.sort_values(by="Res_N")
+    
+    return(assign_df, [row_ind, col_ind])
 
-assignment, matching = find_best_assignment(obs, preds, log_prob_matrix)
+assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
+
+def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
+    # Make a strip plot of the assignment, using only the atoms in atom_list
+    
+    # First, convert assign_df from wide to long
+    plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name"]+atom_list]
+    plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", "SS_name"],
+                               value_vars=atom_list, var_name="Atom_type", value_name="Shift")
+    
+    # Add columns with information to be plotted
+    plot_df["i"] = "0"     # This column determines if shift is from the i or i-1 residue
+    plot_df.loc[plot_df["Atom_type"].isin(["Cm1","CAm1","CBm1"]),"i"] = "-1"
+    plot_df["Atom_type"] = plot_df["Atom_type"].replace({"Cm1":"C", "CAm1":"CA", "CBm1":"CB"}) # Simplify atom type
+    
+    plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
+    
+    # Pad Res_name column with spaces so that sorting works correctly
+    plot_df["Res_name"] = plot_df["Res_name"].str.pad(6)
+    plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
+    
+    # Make the plot
+    plt = ggplot(aes(x="x_name"), data=plot_df) + geom_point(aes(y="Shift", colour="i"))
+    plt = plt + geom_line(aes(y="Shift", group="seq_group"))        # Add lines connecting i to i-1 points
+    plt = plt + geom_line(aes(y="Shift", group="Res_N"), linetype="dashed")
+    plt = plt + facet_grid("Atom_type~.", scales="free") + scale_colour_brewer(type="Qualitative", palette="Set1") 
+    plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
+    plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90)) + scale_y_reverse()
+    
+    return(plt)
+    
+plot_strips(assign_df.iloc[0:10, :])
