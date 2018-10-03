@@ -146,16 +146,16 @@ def calc_match_probability(obs, pred1,
 
 #calc_match_probability(obs, pred1)
 
-def calc_log_prob_matrix(obs, pred,
+def calc_log_prob_matrix(obs, preds,
                             atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                             atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, verbose=False):
     # Calculate a matrix of -log10(match probabilities)
     prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
     
     for i in preds.index:
-        print(i)
+        if verbose: print(i)
         prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob)
     
     # Calculate log of matrix
@@ -227,17 +227,64 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     
     return(plt)
 
-#### Main
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt")
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A001_1KF3A.cs")
-obs, preds = add_dummy_rows(obs, preds.iloc[0:115,:])
 
-#### Create a probability matrix
-#obs1=obs.iloc[0]
-#pred1=preds.iloc[0]
+def NAPS_single(obs_file, preds_file, out_name, 
+                out_path="../output", plot_path="../plots", 
+                use_atoms=["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"], make_plots=True):
+    # Function to assign a single protein from files of observed and predicted shifts
+    
+    # Import the observed and predicted shifts
+    obs = import_obs_shifts(obs_file)
+    preds = read_shiftx2(preds_file)
+    
+    # Add dummy rows so that obs and preds are the same length
+    obs, preds = add_dummy_rows(obs, preds)
+    
+    # Calculate the log probability for each observation/prediction pair
+    log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
+    
+    # Find the assignment with the highest overall probability
+    assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
+    assign_df.to_csv(out_path+"/"+out_name+".txt", sep="\t")
+    
+    # Produce a strip plot
+    if make_plots:
+        plt = plot_strips(assign_df.iloc[:, :])
+        plt.save(out_name+".pdf", path=plot_path, height=210, width=297, units="mm")
+    return(1)
+    
+def NAPS_batch(file_df, out_path="../output", plot_path="../plots",
+               use_atoms=["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"], make_plots=True):
+    # Assign multiple proteins.
+    # file_df is a pandas DataFrame containing obs_file, preds_file and out_name columns
+    for i in file_df.index:
+        print(file_df.loc[i, "ID"])
+        NAPS_single(file_df.loc[i, "obs_file"], file_df.loc[i, "preds_file"], 
+                    file_df.loc[i, "out_name"], out_path, plot_path, use_atoms, make_plots)
+    return(1)
+
+#### Main
+    
+NAPS_single("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt", "~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs", "A002_6338")    
+
+# Assign a batch of proteins
+testset_df = pd.read_table("../data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["obs_file"] = "../data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
+testset_df["preds_file"] = "../data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"
+testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
+
+NAPS_batch(testset_df, "../output/testset", "../plots/testset", make_plots=False)
+
+obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
+preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs")
+obs, preds = add_dummy_rows(obs, preds)
+#
+##### Create a probability matrix
+##obs1=obs.iloc[0]
+##pred1=preds.iloc[0]
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-assign_df.to_csv("../output/A001_4032.txt", sep="\t")
-
-plt = plot_strips(assign_df.iloc[:, :])
-plt.save("A001_4032.pdf", path="../plots", height=210, width=297, units="mm")
+#assign_df.to_csv("../output/A001_4032.txt", sep="\t")
+#
+#plt = plot_strips(assign_df.iloc[:, :])
+#plt.save("A001_4032.pdf", path="../plots", height=210, width=297, units="mm")
