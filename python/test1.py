@@ -27,14 +27,14 @@ def import_obs_shifts(filename, remove_Pro=True):
     obs = obs_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
     # Make columns for the i-1 observed shifts of C, CA and CB
-    obs_m1 = obs[["C","CA","CB"]]
+    obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
     obs_m1.index = obs_m1.index+1
-    obs_m1.columns = ["Cm1","CAm1","CBm1"]
+    obs_m1.columns = obs_m1.columns + "m1"
     obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
     
     # Restrict to specific atom types
-    atom_list = ["H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"]
-    obs = obs[atom_list]
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+    obs = obs[list(atom_set.intersection(obs.columns))]
     
     # Add the other data back in
     tmp = obs_long[["Res_N","Res_type","SS_name"]]
@@ -62,16 +62,15 @@ def read_shiftx2(input_file, offset=0):
     preds = preds_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
     # Make columns for the i-1 predicted shifts of C, CA and CB
-    preds_m1 = preds[["C","CA","CB"]].copy()
+    preds_m1 = preds[list({"C","CA","CB"}.intersection(preds.columns))].copy()
     preds_m1.index = preds_m1.index+1
-    #preds_m1 = preds_m1[["C","CA","CB"]]
-    preds_m1.columns = ["Cm1","CAm1","CBm1"]
+    preds_m1.columns = preds_m1.columns + "m1"
     preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
     # TODO: also do this for Res_type
     
     # Restrict to only certain atom types
-    atom_list = ["H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"]
-    preds = preds[atom_list]
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+    preds = preds[list(atom_set.intersection(preds.columns))]
     
     # Add the other data back in
     tmp = preds_long[["Res_N","Res_type","Res_name"]]
@@ -86,10 +85,20 @@ def read_shiftx2(input_file, offset=0):
 
 def add_dummy_rows(obs, preds):
     # Add dummy rows to obs and preds to bring them to the same length
+    # Also throw away any atom types that aren't present in both obs and preds
     
     # Delete any prolines in preds
     preds = preds.drop(preds.index[preds["Res_type"]=="P"])
     
+    # Restrict atom types
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+    obs_metadata = list(set(obs.columns).difference(atom_set))
+    preds_metadata = list(set(preds.columns).difference(atom_set))
+    shared_atoms = list(atom_set.intersection(obs.columns).intersection(preds.columns))
+    obs = obs[obs_metadata+shared_atoms]
+    preds = preds[preds_metadata+shared_atoms]
+    
+    # Create columns to keep track of dummy status
     preds["Dummy_res"] = False
     obs["Dummy_SS"] = False
     
@@ -183,7 +192,6 @@ def find_best_assignment(obs, preds, log_prob_matrix):
             "Res_name":pred_names,
             "SS_name":obs_names
             })
-    #assign_df.index = assign_df["Res_name"]
     
     # Merge residue information, shifts and predicted shifts into assignment dataframe
     assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name")
@@ -196,6 +204,49 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     
     return(assign_df, [row_ind, col_ind])
 
+
+def check_assignment_consistency(assign_df, threshold=0.1):
+    # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
+    # Any sequential residues with a difference greater than threshold count as mismatched
+    
+    # First check if there are any sequential atoms
+    carbons = pd.Series(["C","CA","CB"])
+    carbons_m1 = carbons + "m1"
+    seq_atoms = carbons[carbons.isin(preds.columns) & carbons_m1.isin(preds.columns)]
+    seq_atoms_m1 = seq_atoms+"m1"
+    #seq_atoms = list(seq_atoms)
+
+    if seq_atoms.size==0:
+        # You can't do a comparison
+        return(0)
+    else:
+        # First, get the i and i-1 shifts for the preceeding and succeeding residues
+        tmp = assign_df.copy()
+        tmp.index = tmp["Res_N"]
+        tmp = tmp[list(seq_atoms)+list(seq_atoms_m1)]
+        tmp_next = tmp.copy()
+        tmp_next.index -= 1
+        tmp_prev = tmp.copy()
+        tmp_prev.index += 1
+        tmp = tmp.join(tmp_next, rsuffix="_next")
+        tmp = tmp.join(tmp_prev, rsuffix="_prev")
+        # Calculate mismatch for each atom type
+        for atom in seq_atoms:
+            tmp["d"+atom+"_prev"] = tmp[atom+"m1"] - tmp[atom+"_prev"]
+            tmp["d"+atom+"_next"] = tmp[atom] - tmp[atom+"m1_next"]
+        # Calculate maximum mismatch
+        tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, skipna=True)
+        tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1, skipna=True)
+        
+        # Calculate number of consistent matches (work in progress)
+        #tmp["Num_good_links_next"] = 
+        
+        # Join relevant columns back onto assign_df
+        tmp["Res_N"] = tmp.index
+        assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next"]], on="Res_N")
+       
+        return(assign_df)
+    
 
 def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     # Make a strip plot of the assignment, using only the atoms in atom_list
@@ -245,7 +296,7 @@ def NAPS_single(obs_file, preds_file, out_name,
     
     # Find the assignment with the highest overall probability
     assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-    assign_df.to_csv(out_path+"/"+out_name+".txt", sep="\t")
+    assign_df.to_csv(out_path+"/"+out_name+".txt", sep="\t", na_rep="NA")
     
     # Produce a strip plot
     if make_plots:
@@ -275,15 +326,16 @@ testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
 
 NAPS_batch(testset_df, "../output/testset", "../plots/testset", make_plots=False)
 
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs")
+obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4300.txt")
+preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A032_1HQ2A.cs")
 obs, preds = add_dummy_rows(obs, preds)
-#
-##### Create a probability matrix
-##obs1=obs.iloc[0]
-##pred1=preds.iloc[0]
+
+#### Create a probability matrix
+#obs1=obs.iloc[0]
+#pred1=preds.iloc[0]
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
+assign_df = check_assignment_consistency(assign_df)
 #assign_df.to_csv("../output/A001_4032.txt", sep="\t")
 #
 #plt = plot_strips(assign_df.iloc[:, :])
