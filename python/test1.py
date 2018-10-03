@@ -162,7 +162,7 @@ def calc_log_prob_matrix(obs, pred,
     log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
     log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmax(log_prob_matrix.values)
     log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
-    log_prob_matrix.loc[:, obs["Dummy_Res"]] = 0
+    log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
     return(log_prob_matrix)
 
@@ -177,19 +177,20 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     
     obs_names = [log_prob_matrix.index[r] for r in row_ind]
     pred_names = [log_prob_matrix.columns[c] for c in col_ind]
-    #return(list(zip(obs_names, pred_names)))
     
+    #Create assignment dataframe
     assign_df = pd.DataFrame({
             "Res_name":pred_names,
             "SS_name":obs_names
             })
     #assign_df.index = assign_df["Res_name"]
     
-    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type"]], on="Res_name")
-    assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name"]]
-    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name"])], on="SS_name")
-    # Above line raises an error about index/column confusion, which needs fixing.
-    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms)], on="Res_name", suffixes=("","_pred"))
+    # Merge residue information, shifts and predicted shifts into assignment dataframe
+    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name")
+    assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", "Dummy_res"]]
+    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name")
+        # Above line raises an error about index/column confusion, which needs fixing.
+    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"))
     
     assign_df = assign_df.sort_values(by="Res_N")
     
@@ -200,8 +201,8 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     # Make a strip plot of the assignment, using only the atoms in atom_list
     
     # First, convert assign_df from wide to long
-    plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name"]+atom_list]
-    plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", "SS_name"],
+    plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", "Dummy_res", "Dummy_SS"]+atom_list]
+    plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", "SS_name", "Dummy_res", "Dummy_SS"],
                                value_vars=atom_list, var_name="Atom_type", value_name="Shift")
     
     # Add columns with information to be plotted
@@ -216,23 +217,24 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
     
     # Make the plot
-    plt = ggplot(aes(x="x_name"), data=plot_df) + geom_point(aes(y="Shift", colour="i"))
-    plt = plt + geom_line(aes(y="Shift", group="seq_group"))        # Add lines connecting i to i-1 points
-    plt = plt + geom_line(aes(y="Shift", group="Res_N"), linetype="dashed")
+    plt = ggplot(aes(x="x_name"), data=plot_df) + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
+    plt = plt + scale_y_reverse() + scale_shape_manual(values=["o","x"])
+    plt = plt + geom_line(aes(y="Shift", group="seq_group"), data=plot_df.loc[~plot_df["Dummy_res"],])        # Add lines connecting i to i-1 points
+    plt = plt + geom_line(aes(y="Shift", group="x_name"), linetype="dashed")
     plt = plt + facet_grid("Atom_type~.", scales="free") + scale_colour_brewer(type="Qualitative", palette="Set1") 
     plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
-    plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90)) + scale_y_reverse()
+    plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
     
     return(plt)
 
 #### Main
 obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt")
 preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A001_1KF3A.cs")
-obs, preds = add_dummy_rows(obs.iloc[:100,:], preds)    # Gives a warning, and I'm not sure why
+obs, preds = add_dummy_rows(obs, preds.iloc[0:115,:])
 
 #### Create a probability matrix
 #obs1=obs.iloc[0]
 #pred1=preds.iloc[0]
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-plot_strips(assign_df.iloc[90:120, :])
+plt = plot_strips(assign_df.iloc[90:120, :])
