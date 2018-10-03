@@ -237,4 +237,7 @@ obs, preds = add_dummy_rows(obs, preds.iloc[0:115,:])
 #pred1=preds.iloc[0]
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-plt = plot_strips(assign_df.iloc[90:120, :])
+assign_df.to_csv("../output/A001_4032.txt", sep="\t")
+
+plt = plot_strips(assign_df.iloc[:, :])
+plt.save("A001_4032.pdf", path="../plots", height=210, width=297, units="mm")
