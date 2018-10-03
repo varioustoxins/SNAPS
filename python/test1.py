@@ -15,7 +15,7 @@ from math import isnan, log10
 
 #"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
 
-def import_obs_shifts(filename):
+def import_obs_shifts(filename, remove_Pro=True):
     #### Import the observed chemical shifts
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
@@ -44,9 +44,10 @@ def import_obs_shifts(filename):
     
     obs.index = obs["SS_name"]
     
+    if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"]=="PRO"]) # Remove prolines, as they wouldn't be observed in a real spectrum
+    
     return(obs)
 
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt")
 
 def read_shiftx2(input_file, offset=0):
     #### Import the predicted chemical shifts
@@ -66,6 +67,7 @@ def read_shiftx2(input_file, offset=0):
     #preds_m1 = preds_m1[["C","CA","CB"]]
     preds_m1.columns = ["Cm1","CAm1","CBm1"]
     preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
+    # TODO: also do this for Res_type
     
     # Restrict to only certain atom types
     atom_list = ["H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"]
@@ -81,11 +83,34 @@ def read_shiftx2(input_file, offset=0):
     
     return(preds)
 
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A001_1KF3A.cs")
 
-#### Create a probability matrix
-obs1=obs.iloc[0]
-pred1=preds.iloc[0]
+def add_dummy_rows(obs, preds):
+    # Add dummy rows to obs and preds to bring them to the same length
+    
+    # Delete any prolines in preds
+    preds = preds.drop(preds.index[preds["Res_type"]=="P"])
+    
+    preds["Dummy_res"] = False
+    obs["Dummy_SS"] = False
+    
+    N = len(obs.index)
+    M = len(preds.index)
+    
+    if N>M:     # If there are more spin systems than predictions
+        dummies = pd.DataFrame(np.NaN, index=["dummy_res_"+str(i) for i in 1+np.arange(N-M)], columns = preds.columns)
+        dummies["Res_name"] = dummies.index
+        dummies["Dummy_res"] = True
+        preds = preds.append(dummies)        
+    elif M>N:
+        dummies = pd.DataFrame(np.NaN, index=["dummy_SS_"+str(i) for i in 1+np.arange(M-N)], columns = obs.columns)
+        dummies["SS_name"] = dummies.index
+        dummies["Dummy_SS"] = True
+        obs = obs.append(dummies)
+        #obs.loc[["dummy_"+str(i) for i in 1+np.arange(M-N)]] = np.NaN
+        #obs.loc[obs.index[N:M], "SS_name"] = ["dummy_"+str(i) for i in 1+np.arange(M-N)]
+    
+    return(obs, preds)
+
 
 def calc_match_probability(obs, pred1,
                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
@@ -97,6 +122,8 @@ def calc_match_probability(obs, pred1,
     # atom_set is a set used to restrict to only certain measurements
     # atom_sd is the expected standard deviation for each atom type
     # sf is a scaling factor for the entire atom_sd dictionary
+    
+    # Doesn't currently deal specially with prolines 
     
     # Throw away any non-atom columns
     obs = obs.loc[:, atom_set.intersection(obs.columns)]
@@ -117,7 +144,7 @@ def calc_match_probability(obs, pred1,
     overall_prob = prob.prod(skipna=False, axis=1)
     return(overall_prob)
 
-calc_match_probability(obs, pred1)
+#calc_match_probability(obs, pred1)
 
 def calc_log_prob_matrix(obs, pred,
                             atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
@@ -134,10 +161,11 @@ def calc_log_prob_matrix(obs, pred,
     # Calculate log of matrix
     log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
     log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmax(log_prob_matrix.values)
+    log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
+    log_prob_matrix.loc[:, obs["Dummy_Res"]] = 0
         
     return(log_prob_matrix)
 
-log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
 
 def find_best_assignment(obs, preds, log_prob_matrix):
     # Use the Hungarian algorithm to find the highest probability matching 
@@ -167,7 +195,6 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     
     return(assign_df, [row_ind, col_ind])
 
-assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
 
 def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     # Make a strip plot of the assignment, using only the atoms in atom_list
@@ -197,5 +224,15 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90)) + scale_y_reverse()
     
     return(plt)
-    
-plot_strips(assign_df.iloc[0:30, :])
+
+#### Main
+obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt")
+preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A001_1KF3A.cs")
+obs, preds = add_dummy_rows(obs.iloc[:100,:], preds)    # Gives a warning, and I'm not sure why
+
+#### Create a probability matrix
+#obs1=obs.iloc[0]
+#pred1=preds.iloc[0]
+log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
+assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
+plot_strips(assign_df.iloc[90:120, :])
