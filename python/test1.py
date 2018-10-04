@@ -142,12 +142,16 @@ def calc_match_probability(obs, pred1,
     delta = obs - pred1
     prob = delta.copy()
     prob.iloc[:,:] = 1
+    
+    # Make a note of NA positions in delta, and set them to zero (this avoids warnings when using norm.cdf later)
+    na_mask = delta.isna()
+    delta[na_mask] = 0
     for c in delta.columns:
         # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
         prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
     
-    # Where data is missing, use a default probability
-    prob[prob.isna()] = default_prob
+    # In positions where data was missing, use a default probability
+    prob[na_mask] = default_prob
     
     # Calculate overall probability of each row
     overall_prob = prob.prod(skipna=False, axis=1)
@@ -184,10 +188,13 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     
     row_ind, col_ind = linear_sum_assignment(log_prob_matrix)
     
+    obs.index.name = "SS_index"
+    preds.index.name = "Res_index"
+    
+    #Create assignment dataframe
     obs_names = [log_prob_matrix.index[r] for r in row_ind]
     pred_names = [log_prob_matrix.columns[c] for c in col_ind]
     
-    #Create assignment dataframe
     assign_df = pd.DataFrame({
             "Res_name":pred_names,
             "SS_name":obs_names
@@ -201,6 +208,7 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"))
     
     assign_df = assign_df.sort_values(by="Res_N")
+    assign_df["Log_prob"] = log_prob_matrix.lookup(log_prob_matrix.index[row_ind], log_prob_matrix.columns[col_ind])
     
     return(assign_df, [row_ind, col_ind])
 
@@ -212,13 +220,14 @@ def check_assignment_consistency(assign_df, threshold=0.1):
     # First check if there are any sequential atoms
     carbons = pd.Series(["C","CA","CB"])
     carbons_m1 = carbons + "m1"
-    seq_atoms = carbons[carbons.isin(preds.columns) & carbons_m1.isin(preds.columns)]
+    seq_atoms = carbons[carbons.isin(assign_df.columns) & carbons_m1.isin(assign_df.columns)]
     seq_atoms_m1 = seq_atoms+"m1"
     #seq_atoms = list(seq_atoms)
 
     if seq_atoms.size==0:
         # You can't do a comparison
-        return(0)
+        assign_df[["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
+        return(assign_df)
     else:
         # First, get the i and i-1 shifts for the preceeding and succeeding residues
         tmp = assign_df.copy()
@@ -238,18 +247,24 @@ def check_assignment_consistency(assign_df, threshold=0.1):
         tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, skipna=True)
         tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1, skipna=True)
         
-        # Calculate number of consistent matches (work in progress)
-        #tmp["Num_good_links_next"] = 
+        # Calculate number of consistent matches
+        #
+        tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
+        tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
+        #tmp["Num_good_links"] = tmp["Num_good_links_prev"] + tmp["Num_good_links_next"]
         
         # Join relevant columns back onto assign_df
         tmp["Res_N"] = tmp.index
-        assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next"]], on="Res_N")
+        assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]], on="Res_N")
        
         return(assign_df)
     
 
 def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     # Make a strip plot of the assignment, using only the atoms in atom_list
+    
+    # Narrow down atom list to those actually present
+    atom_list = list(set(atom_list).intersection(assign_df.columns))
     
     # First, convert assign_df from wide to long
     plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", "Dummy_res", "Dummy_SS"]+atom_list]
@@ -278,6 +293,24 @@ def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
     
     return(plt)
 
+def plot_seq_mismatch(assign_df):
+    # Make a plot of the maximum sequential mismatch between i-1,i and i+1 residues
+    
+    # Check that the assignment data frame has the right columns
+    if not all(pd.Series(['Max_mismatch_prev', 'Max_mismatch_next']).isin(assign_df.columns)):
+        return(None)
+    else:
+        # Pad Res_name column with spaces so that sorting works correctly
+        assign_df["Res_name"] = assign_df["Res_name"].str.pad(6)
+        assign_df["x_name"] = assign_df["Res_name"] + "_(" + assign_df["SS_name"] + ")"
+        
+        # Make the plot
+        plt = ggplot(aes(x="x_name"), data=assign_df) 
+        plt = plt + geom_col(aes(y="abs(Max_mismatch_prev)"))
+        plt = plt + xlab("Residue name") + ylab("Mismatch to previous residue (ppm)")
+        plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
+               
+        return(plt)
 
 def NAPS_single(obs_file, preds_file, out_name, 
                 out_path="../output", plot_path="../plots", 
@@ -296,12 +329,13 @@ def NAPS_single(obs_file, preds_file, out_name,
     
     # Find the assignment with the highest overall probability
     assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-    assign_df.to_csv(out_path+"/"+out_name+".txt", sep="\t", na_rep="NA")
+    assign_df = check_assignment_consistency(assign_df, threshold=0.05)
+    assign_df.to_csv(out_path+"/"+out_name+".txt", sep="\t", na_rep="NA", float_format="%.3f")
     
     # Produce a strip plot
     if make_plots:
         plt = plot_strips(assign_df.iloc[:, :])
-        plt.save(out_name+".pdf", path=plot_path, height=210, width=297, units="mm")
+        plt.save(out_name+".pdf", path=plot_path, height=210, width=max(297, preds.index.size*3), units="mm", limitsize=False)
     return(1)
     
 def NAPS_batch(file_df, out_path="../output", plot_path="../plots",
@@ -316,27 +350,30 @@ def NAPS_batch(file_df, out_path="../output", plot_path="../plots",
 
 #### Main
     
-NAPS_single("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt", "~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs", "A002_6338")    
+#NAPS_single("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt", "~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs", "A002_6338")    
 
 # Assign a batch of proteins
 testset_df = pd.read_table("../data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
 testset_df["obs_file"] = "../data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
 testset_df["preds_file"] = "../data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"
 testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
+testset_df.index = testset_df["ID"]
 
-NAPS_batch(testset_df, "../output/testset", "../plots/testset", make_plots=False)
+NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
 
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/4300.txt")
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/A032_1HQ2A.cs")
-obs, preds = add_dummy_rows(obs, preds)
-
-#### Create a probability matrix
-#obs1=obs.iloc[0]
-#pred1=preds.iloc[0]
-log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
-assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-assign_df = check_assignment_consistency(assign_df)
-#assign_df.to_csv("../output/A001_4032.txt", sep="\t")
+#i = "A001"
+#obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt")
+#preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
+#obs, preds = add_dummy_rows(obs, preds)
 #
-#plt = plot_strips(assign_df.iloc[:, :])
-#plt.save("A001_4032.pdf", path="../plots", height=210, width=297, units="mm")
+##### Create a probability matrix
+##obs1=obs.iloc[0]
+##pred1=preds.iloc[0]
+#log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+#assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
+#assign_df = check_assignment_consistency(assign_df)
+##assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
+#
+#plot_strips(assign_df.iloc[:, :])
+#plt = plot_seq_mismatch(assign_df)
+#plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
