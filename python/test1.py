@@ -213,51 +213,85 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     return(assign_df, [row_ind, col_ind])
 
 
-def check_assignment_consistency(assign_df, threshold=0.1):
-    # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
-    # Any sequential residues with a difference greater than threshold count as mismatched
+def find_alt_assignments(log_prob_matrix, best_match_indexes, by_res=True,  verbose=False):
+    # Function to find the second best assignment for each residue or spin system
+    # Does this by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+    # best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
+    # If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+    # Outputs a dataframe with the next best matching for each residue/spin system, and a list of their relative probabilities
     
-    # First check if there are any sequential atoms
-    carbons = pd.Series(["C","CA","CB"])
-    carbons_m1 = carbons + "m1"
-    seq_atoms = carbons[carbons.isin(assign_df.columns) & carbons_m1.isin(assign_df.columns)]
-    seq_atoms_m1 = seq_atoms+"m1"
-    #seq_atoms = list(seq_atoms)
+    # Calculate sum probability for the best matching
+    best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
+                               log_prob_matrix.columns[best_match_indexes[1]]))
+    
+    # Convert best_match_indexes into a list of (obs.index, preds.index) tuples
+    best_matching = list(zip(obs.index[best_match_indexes[0]], preds.index[best_match_indexes[1]]))
+    
+    if by_res:
+        # Create a dataframe to store the results
+        matching_df = pd.DataFrame(index=obs.index[best_match_indexes[0]], columns=preds.index)
+        rel_log_prob = pd.Series(index = preds.index) 
+        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        
+        for i in best_matching:
+            if verbose: print(i)
+            ss, res = i
+            tmp = log_prob_matrix.copy()
+            tmp.loc[ss, res] = penalty
+            row_ind, col_ind = linear_sum_assignment(tmp)
+            matching_df.loc[:,res] = preds.index[col_ind]
+            rel_log_prob[res] = sum(tmp.lookup(tmp.index[row_ind], tmp.columns[col_ind])) - best_sum_prob
+    
+    return(matching_df, rel_log_prob)
 
-    if seq_atoms.size==0:
-        # You can't do a comparison
-        assign_df[["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
-        return(assign_df)
-    else:
-        # First, get the i and i-1 shifts for the preceeding and succeeding residues
-        tmp = assign_df.copy()
-        tmp.index = tmp["Res_N"]
-        tmp = tmp[list(seq_atoms)+list(seq_atoms_m1)]
-        tmp_next = tmp.copy()
-        tmp_next.index -= 1
-        tmp_prev = tmp.copy()
-        tmp_prev.index += 1
-        tmp = tmp.join(tmp_next, rsuffix="_next")
-        tmp = tmp.join(tmp_prev, rsuffix="_prev")
-        # Calculate mismatch for each atom type
-        for atom in seq_atoms:
-            tmp["d"+atom+"_prev"] = tmp[atom+"m1"] - tmp[atom+"_prev"]
-            tmp["d"+atom+"_next"] = tmp[atom] - tmp[atom+"m1_next"]
-        # Calculate maximum mismatch
-        tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, skipna=True)
-        tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1, skipna=True)
+
+
+    def check_assignment_consistency(assign_df, threshold=0.1):
+        # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
+        # Any sequential residues with a difference greater than threshold count as mismatched
         
-        # Calculate number of consistent matches
-        #
-        tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
-        tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
-        #tmp["Num_good_links"] = tmp["Num_good_links_prev"] + tmp["Num_good_links_next"]
-        
-        # Join relevant columns back onto assign_df
-        tmp["Res_N"] = tmp.index
-        assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]], on="Res_N")
-       
-        return(assign_df)
+        # First check if there are any sequential atoms
+        carbons = pd.Series(["C","CA","CB"])
+        carbons_m1 = carbons + "m1"
+        seq_atoms = carbons[carbons.isin(assign_df.columns) & carbons_m1.isin(assign_df.columns)]
+        seq_atoms_m1 = seq_atoms+"m1"
+        #seq_atoms = list(seq_atoms)
+    
+        if seq_atoms.size==0:
+            # You can't do a comparison
+            assign_df[["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
+            return(assign_df)
+        else:
+            # First, get the i and i-1 shifts for the preceeding and succeeding residues
+            tmp = assign_df.copy()
+            tmp = tmp.loc[tmp["Dummy_res"]==False,]
+            tmp.index = tmp["Res_N"]
+            tmp = tmp[list(seq_atoms)+list(seq_atoms_m1)]
+            tmp_next = tmp.copy()
+            tmp_next.index -= 1
+            tmp_prev = tmp.copy()
+            tmp_prev.index += 1
+            tmp = tmp.join(tmp_next, rsuffix="_next")
+            tmp = tmp.join(tmp_prev, rsuffix="_prev")
+            # Calculate mismatch for each atom type
+            for atom in seq_atoms:
+                tmp["d"+atom+"_prev"] = tmp[atom+"m1"] - tmp[atom+"_prev"]
+                tmp["d"+atom+"_next"] = tmp[atom] - tmp[atom+"m1_next"]
+            # Calculate maximum mismatch
+            tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, skipna=True)
+            tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1, skipna=True)
+            
+            # Calculate number of consistent matches
+            #
+            tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
+            tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
+            #tmp["Num_good_links"] = tmp["Num_good_links_prev"] + tmp["Num_good_links_next"]
+            
+            # Join relevant columns back onto assign_df
+            tmp["Res_N"] = tmp.index
+            assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]], on="Res_N")
+           
+            return(assign_df)
     
 
 def plot_strips(assign_df, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
@@ -359,21 +393,22 @@ testset_df["preds_file"] = "../data/testset/shiftx2_results/"+testset_df["ID"]+"
 testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
 testset_df.index = testset_df["ID"]
 
-NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
+#NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
 
-#i = "A001"
-#obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt")
-#preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
-#obs, preds = add_dummy_rows(obs, preds)
-#
-##### Create a probability matrix
-##obs1=obs.iloc[0]
-##pred1=preds.iloc[0]
-#log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
-#assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)
-#assign_df = check_assignment_consistency(assign_df)
-##assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
-#
-#plot_strips(assign_df.iloc[:, :])
+i = "A002"
+obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt")
+preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
+obs, preds = add_dummy_rows(obs, preds)
+
+#### Create a probability matrix
+#obs1=obs.iloc[0]
+#pred1=preds.iloc[0]
+log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
+assign_df = check_assignment_consistency(assign_df)
+alt_assignments, alt_assignment_scores = find_alt_assignments(log_prob_matrix, best_match_indexes)
+#assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
+
+plot_strips(assign_df.iloc[:, :])
 #plt = plot_seq_mismatch(assign_df)
 #plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
