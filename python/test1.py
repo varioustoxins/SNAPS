@@ -12,6 +12,7 @@ from plotnine import *
 from scipy.stats import norm
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
+from Bio.SeqUtils import seq1
 
 #"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
 
@@ -20,6 +21,7 @@ def import_obs_shifts(filename, remove_Pro=True):
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
     obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+    obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
     obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
     obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
     
