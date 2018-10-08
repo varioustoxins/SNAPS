@@ -215,40 +215,51 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     return(assign_df, [row_ind, col_ind])
 
 
-def find_alt_assignments(log_prob_matrix, best_match_indexes, by_res=True,  verbose=False):
+def find_alt_assignments(log_prob_matrix, best_match_indexes, N=1, by_res=True,  verbose=False):
     # Function to find the second best assignment for each residue or spin system
     # Does this by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
     # best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
+    # N is the number of alternative assignments to generate
     # If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
-    # Outputs a dataframe with the next best matching for each residue/spin system, and a list of their relative probabilities
+    # Outputs two lists:
+    # - first contains dataframes with the next best matching for each residue/spin system, 
+    # - second contains lists of the relative probabilities for each alternative matching
     
     # Calculate sum probability for the best matching
     best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
                                log_prob_matrix.columns[best_match_indexes[1]]))
     
     # Convert best_match_indexes into a list of (obs.index, preds.index) tuples
-    best_matching = list(zip(obs.index[best_match_indexes[0]], preds.index[best_match_indexes[1]]))
     
     if by_res:
-        # Create a dataframe to store the results
-        matching_df = pd.DataFrame(index=obs.index[best_match_indexes[0]], columns=preds.index)
-        rel_log_prob = pd.Series(index = preds.index) 
+        assignment_list = [pd.Series(index = preds.index) for i in range(N)]
+        matching_df_list = [pd.DataFrame(index=preds.index, columns=preds.index) for i in range(N)]
+        rel_log_prob_list = [pd.Series(index = preds.index) for i in range(N)]
         penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
         
-        for i in best_matching:
-            if verbose: print(i)
-            ss, res = i
-            tmp = log_prob_matrix.copy()
-            tmp.loc[ss, res] = penalty
-            row_ind, col_ind = linear_sum_assignment(tmp)
-            matching_df.loc[:,res] = preds.index[col_ind]
-            rel_log_prob[res] = sum(tmp.lookup(tmp.index[row_ind], tmp.columns[col_ind])) - best_sum_prob
-    
-    return(matching_df, rel_log_prob)
+        best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
+        alt_matching = pd.Series()
+        for res in preds["Res_name"]:
+            if verbose: print(res)
+            for i in range(N):
+                if i==0:
+                    ss = best_matching[res]
+                    tmp = log_prob_matrix.copy()
+                else:
+                    ss = alt_matching[res]
+                tmp.loc[ss, res] = penalty
+                row_ind, col_ind = linear_sum_assignment(tmp)
+                
+                alt_matching = pd.Series(obs.index[row_ind], index=preds.index[col_ind])
+                assignment_list[i][res] = alt_matching[res]
+                matching_df_list[i].loc[:,res] = alt_matching
+                rel_log_prob_list[i][res] = sum(tmp.lookup(tmp.index[row_ind], tmp.columns[col_ind])) - best_sum_prob
+         
+    return(assignment_list, matching_df_list, rel_log_prob_list)
 
 
 
-    def check_assignment_consistency(assign_df, threshold=0.1):
+def check_assignment_consistency(assign_df, threshold=0.1):
         # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
         # Any sequential residues with a difference greater than threshold count as mismatched
         
@@ -408,9 +419,9 @@ obs, preds = add_dummy_rows(obs, preds)
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
 assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
 assign_df = check_assignment_consistency(assign_df)
-alt_assignments, alt_assignment_scores = find_alt_assignments(log_prob_matrix, best_match_indexes)
+alt_assignments, alt_assignments_all, alt_assignment_scores = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
 #assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
 
 plot_strips(assign_df.iloc[:, :])
-#plt = plot_seq_mismatch(assign_df)
+plot_seq_mismatch(assign_df)
 #plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
