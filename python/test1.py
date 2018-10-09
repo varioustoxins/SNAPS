@@ -19,8 +19,13 @@ def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
     obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
-    if short_aa_names: obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
-    obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
+    # Convert residue type to single-letter code
+    if short_aa_names: 
+        obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
+        obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+    else:
+        obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+        obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
     obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
     
     # Convert from long to wide
@@ -139,11 +144,11 @@ def calc_match_probability(obs, pred1,
     # use_hadamac determines whether residue type information is used
     
     # Throw away any non-atom columns
-    obs = obs.loc[:, atom_set.intersection(obs.columns)]
-    pred1 = pred1.loc[atom_set.intersection(pred1.index)]
+    obs_reduced = obs.loc[:, atom_set.intersection(obs.columns)]
+    pred1_reduced = pred1.loc[atom_set.intersection(pred1.index)]
     
     # Calculate shift differences and probabilities for each observed spin system
-    delta = obs - pred1
+    delta = obs_reduced - pred1_reduced
     prob = delta.copy()
     prob.iloc[:,:] = 1
     
@@ -157,8 +162,14 @@ def calc_match_probability(obs, pred1,
     # In positions where data was missing, use a default probability
     prob[na_mask] = default_prob
     
-    
-    
+    # Calculate penalty for a HADAMAC mismatch
+    if use_hadamac:
+        # If the i-1 aa type of the predicted residue matches the HADAMAC group of the observation, probability is 1.
+        # Otherwise, probability defaults to 0.01
+        prob["HADAMACm1"] = 0.01
+        if type(pred1["Res_typem1"])==str:      # dummy residues have NaN
+            prob.loc[obs["HADAMACm1"].str.find(pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
+
     # Calculate overall probability of each row
     overall_prob = prob.prod(skipna=False, axis=1)
     return(overall_prob)
@@ -169,13 +180,14 @@ def calc_log_prob_matrix(obs, preds,
                             atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                             atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, verbose=False):
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, 
+                                     verbose=False, use_hadamac=False):
     # Calculate a matrix of -log10(match probabilities)
     prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
     
     for i in preds.index:
         if verbose: print(i)
-        prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob)
+        prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob, use_hadamac)
     
     # Calculate log of matrix
     log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
@@ -490,6 +502,7 @@ obs, preds = add_dummy_rows(obs, preds)
 #obs1=obs.iloc[0]
 #pred1=preds.iloc[0]
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+#log_prob_matrix2 = calc_log_prob_matrix(obs, preds, sf=2, verbose=False, use_hadamac=True)
 assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
 assign_df = check_assignment_consistency(assign_df)
 alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
