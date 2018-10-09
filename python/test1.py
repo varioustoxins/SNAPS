@@ -14,14 +14,12 @@ from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from Bio.SeqUtils import seq1
 
-#"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
-
-def import_obs_shifts(filename, remove_Pro=True):
+def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     #### Import the observed chemical shifts
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
     obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
-    obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
+    if short_aa_names: obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
     obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
     obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
     
@@ -46,7 +44,7 @@ def import_obs_shifts(filename, remove_Pro=True):
     
     obs.index = obs["SS_name"]
     
-    if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"]=="PRO"]) # Remove prolines, as they wouldn't be observed in a real spectrum
+    if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO","P"])]) # Remove prolines, as they wouldn't be observed in a real spectrum
     
     return(obs)
 
@@ -215,47 +213,115 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     return(assign_df, [row_ind, col_ind])
 
 
-def find_alt_assignments(log_prob_matrix, best_match_indexes, N=1, by_res=True,  verbose=False):
-    # Function to find the second best assignment for each residue or spin system
-    # Does this by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
-    # best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
-    # N is the number of alternative assignments to generate
-    # If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
-    # Outputs two lists:
-    # - first contains dataframes with the next best matching for each residue/spin system, 
-    # - second contains lists of the relative probabilities for each alternative matching
+def find_alt_assignments(log_prob_matrix, best_match_indexes, N=1, by_res=True,  verbose=False, return_full_assignments=False):
+    """ Find the next-best assignment(s) for each residue or spin system
     
+    This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+    
+    Arguments:
+    best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
+    N is the number of alternative assignments to generate
+    If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+    
+    Output:
+    If return_full_assignments is False, returns a DataFrame containing the next-best assignment for each residue or spin system, and the relative overall probability of that assignment
+    If return_full_assignments is True, the output is a list with two elements
+    - The first element is the DataFrame of assignments and probabilities, as before
+    - The second element is a list of DataFrames containing the complete alternative assignments for each residue.
+    """
     # Calculate sum probability for the best matching
     best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
                                log_prob_matrix.columns[best_match_indexes[1]]))
     
-    # Convert best_match_indexes into a list of (obs.index, preds.index) tuples
+    penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
     
     if by_res:
+        # Create data structures for storing results
         assignment_list = [pd.Series(index = preds.index) for i in range(N)]
-        matching_df_list = [pd.DataFrame(index=preds.index, columns=preds.index) for i in range(N)]
         rel_log_prob_list = [pd.Series(index = preds.index) for i in range(N)]
-        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        results_dict = {}
+        if return_full_assignments: 
+            matching_df_list = [pd.DataFrame(index=preds.index, columns=preds.index) for i in range(N)]
         
+        # Convert best_match_indexes to get a series of spin systems indexed by residue  
         best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
         alt_matching = pd.Series()
-        for res in preds["Res_name"]:
+        
+        for res in preds["Res_name"]:   # Consider each residue in turn
             if verbose: print(res)
             for i in range(N):
                 if i==0:
-                    ss = best_matching[res]
-                    tmp = log_prob_matrix.copy()
+                    ss = best_matching[res]         # Find the spin system that was matched to current residue in optimal matching
+                    tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
                 else:
-                    ss = alt_matching[res]
-                tmp.loc[ss, res] = penalty
+                    ss = alt_matching[res]          # Find the spin system that was matched to current residue in last round
+                
+                # Penalise the match found for this residue
+                if obs.loc[ss, "Dummy_SS"]:
+                    tmp.loc[obs["Dummy_SS"], res] = penalty     # If last match was a dummy spin system, penalise all dummies
+                else:
+                    tmp.loc[ss, res] = penalty
+                
                 row_ind, col_ind = linear_sum_assignment(tmp)
                 
+                # Extract the info we want from the optimisation results
                 alt_matching = pd.Series(obs.index[row_ind], index=preds.index[col_ind])
                 assignment_list[i][res] = alt_matching[res]
-                matching_df_list[i].loc[:,res] = alt_matching
-                rel_log_prob_list[i][res] = sum(tmp.lookup(tmp.index[row_ind], tmp.columns[col_ind])) - best_sum_prob
-         
-    return(assignment_list, matching_df_list, rel_log_prob_list)
+                if return_full_assignments: 
+                    matching_df_list[i].loc[:,res] = alt_matching
+                # Calculate the relative overall probability of this assignment, compared to the optimal assignment
+                rel_log_prob_list[i][res] = sum(tmp.lookup(alt_matching.values, alt_matching.index)) - best_sum_prob
+    else:
+        # Create data structures for storing results
+        assignment_list = [pd.Series(index = obs.index) for i in range(N)]
+        rel_log_prob_list = [pd.Series(index = obs.index) for i in range(N)]
+        results_dict = {}
+        if return_full_assignments: 
+            matching_df_list = [pd.DataFrame(index=obs.index, columns=obs.index) for i in range(N)]
+        
+        # Convert best_match_indexes to get a series of spin systems indexed by spin system  
+        best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+        alt_matching = pd.Series()
+        
+        for ss in obs["SS_name"]:   # Consider each spin system in turn
+            if verbose: print(ss)
+            for i in range(N):
+                if i==0:
+                    res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
+                    tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                else:
+                    res = alt_matching[ss]          # Find the residue that was matched to current spin system in last round
+                
+                # Penalise the match found for this residue
+                if preds.loc[res, "Dummy_res"]:
+                    tmp.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
+                else:
+                    tmp.loc[ss, res] = penalty
+                
+                row_ind, col_ind = linear_sum_assignment(tmp)
+                
+                # Extract the info we want from the optimisation results
+                alt_matching = pd.Series(preds.index[col_ind], index=obs.index[row_ind])
+                assignment_list[i][ss] = alt_matching[ss]
+                if return_full_assignments: 
+                    matching_df_list[i].loc[:,ss] = alt_matching
+                # Calculate the relative overall probability of this assignment, compared to the optimal assignment
+                rel_log_prob_list[i][ss] = sum(tmp.lookup(alt_matching.index, alt_matching.values)) - best_sum_prob            
+        
+    # Store the results as a dataframe
+    for i in range(N):
+        results_dict["Alt_assign_"+str(i+1)] = assignment_list[i]
+        results_dict["Alt_rel_prob"+str(i+1)] = rel_log_prob_list[i]
+    results_df = pd.DataFrame(results_dict)
+    if by_res:
+        results_df["Res_name"] = results_df.index
+    else:
+        results_df["SS_name"] = results_df.index
+        
+    if return_full_assignments:
+        return(results_df, matching_df_list)
+    else:
+        return(results_df)
 
 
 
@@ -409,7 +475,8 @@ testset_df.index = testset_df["ID"]
 #NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
 
 i = "A002"
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt")
+obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt", 
+                        short_aa_names=True)
 preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
 obs, preds = add_dummy_rows(obs, preds)
 
@@ -419,7 +486,10 @@ obs, preds = add_dummy_rows(obs, preds)
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
 assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
 assign_df = check_assignment_consistency(assign_df)
-alt_assignments, alt_assignments_all, alt_assignment_scores = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+#alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+#assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
+alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
+assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
 #assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
 
 plot_strips(assign_df.iloc[:, :])
