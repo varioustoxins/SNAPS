@@ -26,21 +26,27 @@ def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     # Convert from long to wide
     obs = obs_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
+    # Add the other columns back in
+    tmp = obs_long[["Res_N","Res_type","SS_name"]]
+    tmp = tmp.drop_duplicates(subset="SS_name")
+    tmp.index = tmp["Res_N"]
+    obs = pd.concat([tmp, obs], axis=1)
+    
+    # Add HADAMAC information
+    hadamac_groups = ["VIA","G","S","T","DN","FHYWC","REKPQML"]
+    obs["HADAMAC"]=obs["Res_type"]
+    for g in hadamac_groups:
+        obs["HADAMAC"] = obs["HADAMAC"].str.replace("["+g+"]", g)
+    
     # Make columns for the i-1 observed shifts of C, CA and CB
-    obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
+    obs_m1 = obs[list({"C","CA","CB", "HADAMAC"}.intersection(obs.columns))]
     obs_m1.index = obs_m1.index+1
     obs_m1.columns = obs_m1.columns + "m1"
     obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
     
     # Restrict to specific atom types
-    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-    obs = obs[list(atom_set.intersection(obs.columns))]
-    
-    # Add the other data back in
-    tmp = obs_long[["Res_N","Res_type","SS_name"]]
-    tmp = tmp.drop_duplicates(subset="SS_name")
-    tmp.index = tmp["Res_N"]
-    obs = pd.concat([tmp, obs], axis=1)
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","HADAMACm1"}
+    obs = obs[["Res_N","Res_type","SS_name"]+list(atom_set.intersection(obs.columns))]
     
     obs.index = obs["SS_name"]
     
@@ -61,22 +67,21 @@ def read_shiftx2(input_file, offset=0):
     # Convert from wide to long format
     preds = preds_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
-    # Make columns for the i-1 predicted shifts of C, CA and CB
-    preds_m1 = preds[list({"C","CA","CB"}.intersection(preds.columns))].copy()
-    preds_m1.index = preds_m1.index+1
-    preds_m1.columns = preds_m1.columns + "m1"
-    preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
-    # TODO: also do this for Res_type
-    
-    # Restrict to only certain atom types
-    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-    preds = preds[list(atom_set.intersection(preds.columns))]
-    
     # Add the other data back in
     tmp = preds_long[["Res_N","Res_type","Res_name"]]
     tmp = tmp.drop_duplicates(subset="Res_name")
     tmp.index = tmp["Res_N"]
     preds = pd.concat([tmp, preds], axis=1)
+    
+    # Make columns for the i-1 predicted shifts of C, CA and CB
+    preds_m1 = preds[list({"C","CA","CB","Res_type"}.intersection(preds.columns))].copy()
+    preds_m1.index = preds_m1.index+1
+    preds_m1.columns = preds_m1.columns + "m1"
+    preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
+    
+    # Restrict to only certain atom types
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+    preds = preds[["Res_name","Res_N","Res_type","Res_typem1"]+list(atom_set.intersection(preds.columns))]
     
     preds.index = preds["Res_name"]
     
@@ -125,14 +130,13 @@ def calc_match_probability(obs, pred1,
                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, use_hadamac=False):
     # Calculate match scores between all observed spin systems and a single predicted residue
     # default_prob is the probability assigned when an observation or prediction is missing
     # atom_set is a set used to restrict to only certain measurements
     # atom_sd is the expected standard deviation for each atom type
     # sf is a scaling factor for the entire atom_sd dictionary
-    
-    # Doesn't currently deal specially with prolines 
+    # use_hadamac determines whether residue type information is used
     
     # Throw away any non-atom columns
     obs = obs.loc[:, atom_set.intersection(obs.columns)]
@@ -152,6 +156,8 @@ def calc_match_probability(obs, pred1,
     
     # In positions where data was missing, use a default probability
     prob[na_mask] = default_prob
+    
+    
     
     # Calculate overall probability of each row
     overall_prob = prob.prod(skipna=False, axis=1)
@@ -486,10 +492,10 @@ obs, preds = add_dummy_rows(obs, preds)
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
 assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
 assign_df = check_assignment_consistency(assign_df)
-#alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
-#assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
-alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
-assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
+alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
+#alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
+#assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
 #assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
 
 plot_strips(assign_df.iloc[:, :])
