@@ -14,6 +14,8 @@ from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from Bio.SeqUtils import seq1
 
+#### Function definitions ####
+
 def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     #### Import the observed chemical shifts
     obs_long = pd.read_table(filename)
@@ -59,9 +61,147 @@ def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     
     return(obs)
 
+def import_hsqc_ccpn(filename, seq_hadamac_details=False):
+    """ Import an HSQC peaklist, as exported from the CCPN Analysis peak list dialogue.
+    
+    If seq_hadamac_details==True, it is assumed the details column contains a list of possible amino acid types for the i-1 residue.
+    """
+    
+    hsqc = pd.read_table(filename)      
+    
+    # Keep just the columns we need, and rename
+    if seq_hadamac_details:
+        hsqc = hsqc[["Assign F1","Position F1","Position F2","Details"]]
+        hsqc.columns = ["SS_name","H","N","HADAMACm1"]
+    else:
+        hsqc = hsqc[["Assign F1","Position F1","Position F2"]]
+        hsqc.columns = ["SS_name","H","N"]
+        hsqc["HADAMACm1"] = np.nan
+        
+    return (hsqc)
+
+
+def import_hnco_ccpn(filename):
+    """ Import an HSQC peaklist, as exported from the CCPN Analysis peak list dialogue."""
+    
+    hnco = pd.read_table(filename)
+    
+    # Work out which dimensions contain the H, N and C' shifts
+    dim = {}
+    for f in ["F1","F2","F3"]:
+        if hnco["Position "+f].mean() > 150:
+            dim["Cm1"] = f
+        elif hnco["Position "+f].mean() > 100:
+            dim["N"] = f
+        elif hnco["Position "+f].mean() < 16:
+            dim["H"] = f        
+        else: 
+            dim["Unknown"] = f
+    
+    # Check that all dimensions were identified
+    if set(dim.keys()) != set(["H","N","Cm1"]):
+        print("Error: couldn't identify HNCO columns.")
+        return(0)
+    
+    hnco = hnco[["Assign "+dim["H"], "Position "+dim["Cm1"]]]
+    hnco.columns = ["SS_name", "Cm1"]
+    
+    return(hnco)
+
+#a = import_hnco_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt")
+
+def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
+    """ Import a 3D peaklist, as exported from the CCPN Analysis peak list dialogue.
+    
+    spectrum can be one of "hnco", "hncaco", "hnca", "hncoca", "hncacb", "hncocacb"
+    """
+    peaks = pd.read_table(filename)
+    
+    # Work out which column contains which dimension
+    dim = {}
+    for f in ["F1","F2","F3"]:
+        if peaks["Position "+f].mean() > 150:
+            dim["CO"] = f
+        elif peaks["Position "+f].mean() > 100:
+            dim["N"] = f
+        elif peaks["Position "+f].mean() > 15:
+            dim["Cali"] = f
+        elif peaks["Position "+f].mean() > 6:
+            dim["H"] = f
+        elif peaks["Position "+f].mean() > 0:
+            dim["HA"] = f
+        else: 
+            dim["Unknown"] = f
+    
+    # Check that the correct dimensions were identified, and also that spectrum argument is valid
+    if spectrum in ["hnco", "hncaco"]:
+        if set(dim.keys()) != set(["H","N","CO"]):
+            print("Error: couldn't identify "+spectrum+" columns.")
+            return(0)    
+    elif spectrum in ["hnca","hncoca","hncacb","hncocacb"]:
+        if set(dim.keys()) != set(["H","N","Cali"]):
+            print("Error: couldn't identify "+spectrum+" columns.")
+            return(0)  
+    else:
+        print("Invalid value of argument: spectrum.")
+        return(0)
+    
+    # Spectrum specific processing
+    if spectrum in ["hnco", "hncaco", "hncoca", "hnca"]:    # Start with spectra where we only expect a single strong peak
+        # Filter and rename columns
+        if spectrum == "hnco":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["CO"], "Height"]]
+            peaks.columns = ["SS_name", "Cm1", "Height"]
+        elif spectrum == "hncaco":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["CO"], "Height"]]
+            peaks.columns = ["SS_name", "C", "Height"]
+        elif spectrum == "hncoca":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+            peaks.columns = ["SS_name", "CAm1", "Height"]
+        elif spectrum == "hnca":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+            peaks.columns = ["SS_name", "CA", "Height"]
+        # If there are multiple peaks for a spin system, just pick the strongest one
+        tmp = peaks.drop_duplicates(subset="SS_name", keep=False)   # Copy all the non-duplicated spin systems
+        for r in peaks.loc[peaks["SS_name"].duplicated(), "SS_name"]: # For each duplicated spin system...    
+            i = peaks.loc[peaks["SS_name"]==r,"Height"].idxmax()    # Work out which peak has the greatest height
+            tmp = tmp.append(peaks.iloc[i,:])
+        peaks = tmp.copy()
+    elif spectrum in ["hncacb", "hncocacb"]:    # Deal with spectra with two stron peaks
+        # Filter and rename columns
+        peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+        peaks.columns = ["SS_name", "Shift", "Height"]
+        
+        if spectrum == "hncacb":
+            # Test whether spectrum has both positive and negative peaks (it would be good if there was a way to manually overide this)
+            if neg_peaks==None:
+                if peaks["Height"].min() < 0 and peaks["Height"].max() > 0:   # This isn't a great test, but not sure of a better one
+                    # Work out whether positive peaks correspond to CA or CB
+                    if peaks.loc[peaks["Height"]>0,"Shift"].min() < peaks.loc[peaks["Height"]<0,"Shift"].min():
+                        neg_peaks = "CA"
+                    else:
+                        neg_peaks = "CB"
+                else:
+                    neg_peaks = "NA"
+            
+        if spectrum == "hncocacb":
+            # Uses a simple heuristic to guess whether peak is CA or CB:
+            # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
+            # - If there's more than 1 peak, only keep the two with highest (absolute) intensity. 
+            # - If both are above 48 ppm, the largest shift is assigned to CB. Otherwise, the smallest shift is CB
+            tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CAm1":np.nan, "CBm1":np.nan})
+            
+    peaks.drop("Height", axis=1)
+    
+    return(peaks)
+
+a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", "hncoca")
 
 def read_shiftx2(input_file, offset=0):
-    #### Import the predicted chemical shifts
+    """ Import predicted chemical shifts from a ShiftX2 results file (usually ends .cs).
+    
+    offset is an optional integer to add to the residue number from the shiftx2 file.
+    """
     preds_long = pd.read_csv(input_file)
     preds_long["NUM"] = preds_long["NUM"] + offset    # Apply any offset to residue numbering
     preds_long["Res_name"] = preds_long["NUM"].astype(str)+preds_long["RES"]
@@ -479,7 +619,7 @@ def NAPS_batch(file_df, out_path="../output", plot_path="../plots",
                     file_df.loc[i, "out_name"], out_path, plot_path, use_atoms, make_plots)
     return(1)
 
-#### Main
+#### Main ####
     
 #NAPS_single("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt", "~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs", "A002_6338")    
 
