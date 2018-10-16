@@ -109,7 +109,7 @@ def import_hnco_ccpn(filename):
     return(hnco)
 
 #a = import_hnco_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt")
-
+#%%
 def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
     """ Import a 3D peaklist, as exported from the CCPN Analysis peak list dialogue.
     
@@ -167,10 +167,36 @@ def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
             i = peaks.loc[peaks["SS_name"]==r,"Height"].idxmax()    # Work out which peak has the greatest height
             tmp = tmp.append(peaks.iloc[i,:])
         peaks = tmp.copy()
+        peaks = peaks.drop("Height", axis=1)
     elif spectrum in ["hncacb", "hncocacb"]:    # Deal with spectra with two stron peaks
         # Filter and rename columns
         peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
         peaks.columns = ["SS_name", "Shift", "Height"]
+        
+        if spectrum == "hncocacb":
+            # Uses a simple heuristic to guess whether peak is CA or CB:
+            # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
+            # - If there's more than 1 peak, only keep the two with highest (absolute) intensity. 
+            # - If both are above 48 ppm, the largest shift is assigned to CB. Otherwise, the smallest shift is CB
+            tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CAm1":np.nan, "CBm1":np.nan})
+            tmp.index = tmp["SS_name"]
+            for ss in tmp["SS_name"]:
+                tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                    if (tmp2.Shift>41).bool():  
+                        tmp.loc[ss, "CAm1"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                    else:
+                        tmp.loc[ss, "CBm1"] = tmp2.Shift.values[0]
+                else:
+                    tmp2.sort_values("Height", ascending=False, inplace=True)
+                    tmp2 = tmp2.iloc[0:2,:]     # Keep only the two largest peaks
+                    if (tmp2["Shift"]>48).all():
+                        tmp.loc[ss, "CAm1"] = tmp2["Shift"].min()
+                        tmp.loc[ss, "CBm1"] = tmp2["Shift"].max()
+                    else:
+                        tmp.loc[ss, "CAm1"] = tmp2["Shift"].max()
+                        tmp.loc[ss, "CBm1"] = tmp2["Shift"].min()
+            peaks = tmp
         
         if spectrum == "hncacb":
             # Test whether spectrum has both positive and negative peaks (it would be good if there was a way to manually overide this)
@@ -183,19 +209,62 @@ def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
                         neg_peaks = "CB"
                 else:
                     neg_peaks = "NA"
+            if neg_peaks == "NA":
+                # Uses the same heuristic as for the hncocacb.
+                tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CA":np.nan, "CB":np.nan})
+                tmp.index = tmp["SS_name"]
+                for ss in tmp["SS_name"]:
+                    tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                    if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                        if (tmp2.Shift>41).bool():  
+                            tmp.loc[ss, "CA"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                        else:
+                            tmp.loc[ss, "CB"] = tmp2.Shift.values[0]
+                    else:
+                        tmp2.sort_values("Height", ascending=False, inplace=True)
+                        tmp2 = tmp2.iloc[0:2,:]     # Keep only the two largest peaks
+                        if (tmp2["Shift"]>48).all():
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].min()
+                            tmp.loc[ss, "CB"] = tmp2["Shift"].max()
+                        else:
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].max()
+                            tmp.loc[ss, "CB"] = tmp2["Shift"].min()
+                peaks = tmp
+            else:
+                # Use a heuristic method to work out which peak is CA and CB
+                # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
+                # - If there's more than 1 peak, check if the strongest peak is consistent with glycine (41-48 ppm, and considerably stronger than next nearest peak) 
+                # - Otherwise, most intense positive peak is CA and most intense negative peak is CB (adjustable by parameter CA.pos)
+                tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CA":np.nan, "CB":np.nan})
+                tmp.index = tmp["SS_name"]
+                for ss in tmp["SS_name"]:
+                    tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                    if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                        if (tmp2.Shift>41).bool():  
+                            tmp.loc[ss, "CA"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                        else:
+                            tmp.loc[ss, "CB"] = tmp2.Shift.values[0]
+                    else:
+                        tmp2.sort_values("Height", ascending=False, inplace=True)
+                        if 41 <= tmp2["Shift"].iloc[0] <= 48 and \
+                                abs(tmp2["Height"].iloc[0]/tmp2["Height"].iloc[1])>=2:
+                            # If largest peak is consistent with glycine and is at least twice as large as the next largest peak
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].iloc[0]
+                        else:
+                            if neg_peaks=="CA":
+                                tmp.loc[ss, "CA"] = tmp2.loc[tmp2["Height"].idxmin() ,"Shift"]
+                                tmp.loc[ss, "CB"] = tmp2.loc[tmp2["Height"].idxmax() ,"Shift"]
+                            elif neg_peaks=="CB":
+                                tmp.loc[ss, "CA"] = tmp2.loc[tmp2["Height"].idxmax() ,"Shift"]
+                                tmp.loc[ss, "CB"] = tmp2.loc[tmp2["Height"].idxmin() ,"Shift"]
+
+                peaks = tmp
             
-        if spectrum == "hncocacb":
-            # Uses a simple heuristic to guess whether peak is CA or CB:
-            # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
-            # - If there's more than 1 peak, only keep the two with highest (absolute) intensity. 
-            # - If both are above 48 ppm, the largest shift is assigned to CB. Otherwise, the smallest shift is CB
-            tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CAm1":np.nan, "CBm1":np.nan})
-            
-    peaks.drop("Height", axis=1)
-    
+    peaks = peaks.sort_values("SS_name")
     return(peaks)
 
-a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", "hncoca")
+a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
+#%%
 
 def read_shiftx2(input_file, offset=0):
     """ Import predicted chemical shifts from a ShiftX2 results file (usually ends .cs).
@@ -632,25 +701,30 @@ testset_df.index = testset_df["ID"]
 
 #NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
 
-i = "A002"
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt", 
-                        short_aa_names=True)
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
-obs, preds = add_dummy_rows(obs, preds)
+#### Single test from testset
+#i = "A002"
+#obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt", 
+#                        short_aa_names=True)
+#preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
 
 #### Create a probability matrix
 #obs1=obs.iloc[0]
 #pred1=preds.iloc[0]
-log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
-#log_prob_matrix2 = calc_log_prob_matrix(obs, preds, sf=2, verbose=False, use_hadamac=True)
-assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
-assign_df = check_assignment_consistency(assign_df)
-alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
-assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
-#alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
-#assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
-#assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
-
-plot_strips(assign_df.iloc[:, :])
-plot_seq_mismatch(assign_df)
+#obs, preds = add_dummy_rows(obs, preds)
+#log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+#assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
+#assign_df = check_assignment_consistency(assign_df)
+#alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+#assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
+##alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
+##assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
+##assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
+#
+#plot_strips(assign_df.iloc[:, :])
+#plot_seq_mismatch(assign_df)
 #plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
+
+#### Test import from CCPN peak lists
+hsqc = import_hsqc_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hsqc HADAMAC.txt")
+hnco = import_hnco_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hnco.txt")
+hncoca = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", spectrum="hncoca")
