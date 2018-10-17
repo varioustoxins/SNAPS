@@ -78,6 +78,7 @@ def import_hsqc_ccpn(filename, seq_hadamac_details=False):
         hsqc.columns = ["SS_name","H","N"]
         hsqc["HADAMACm1"] = np.nan
         
+    hsqc.index = hsqc["SS_name"]
     return (hsqc)
 
 
@@ -106,6 +107,8 @@ def import_hnco_ccpn(filename):
     hnco = hnco[["Assign "+dim["H"], "Position "+dim["Cm1"]]]
     hnco.columns = ["SS_name", "Cm1"]
     
+    hnco.index = hnco["SS_name"]
+    hnco = hnco.drop("SS_name", axis=1)
     return(hnco)
 
 #a = import_hnco_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt")
@@ -261,9 +264,11 @@ def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
                 peaks = tmp
             
     peaks = peaks.sort_values("SS_name")
+    peaks.index = peaks["SS_name"]
+    peaks = peaks.drop("SS_name", axis=1)
     return(peaks)
 
-a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
+#a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
 #%%
 
 def read_shiftx2(input_file, offset=0):
@@ -428,11 +433,11 @@ def find_best_assignment(obs, preds, log_prob_matrix):
             })
     
     # Merge residue information, shifts and predicted shifts into assignment dataframe
-    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name")
+    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name", how="outer")
     assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", "Dummy_res"]]
-    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name")
+    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name", how="outer")
         # Above line raises an error about index/column confusion, which needs fixing.
-    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"))
+    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"), how="outer")
     
     assign_df = assign_df.sort_values(by="Res_N")
     assign_df["Log_prob"] = log_prob_matrix.lookup(log_prob_matrix.index[row_ind], log_prob_matrix.columns[col_ind])
@@ -726,5 +731,15 @@ testset_df.index = testset_df["ID"]
 
 #### Test import from CCPN peak lists
 hsqc = import_hsqc_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hsqc HADAMAC.txt")
-hnco = import_hnco_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hnco.txt")
-hncoca = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", spectrum="hncoca")
+hnco = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hnco.txt", "hnco")
+hncocacb = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", spectrum="hncocacb")
+hncacb = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hncacb.txt", spectrum="hncacb")
+obs = hsqc.join([hnco, hncocacb, hncacb], how="left")
+
+preds = read_shiftx2("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
+obs, preds = add_dummy_rows(obs, preds)
+log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
+assign_df = check_assignment_consistency(assign_df)
+alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
