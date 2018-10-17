@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>My First Heading</h1>
+<form onsubmit="return validateForm() method="post">
+<p>File: <input type="file" id="input_file" required></p>
+<p>Email: <input type="text" id="input_email" required</p>
+<p><input type="submit"></p>
+<p id="result"></p>
+<p>{{result}}</p>
+</body>
+
+<script>
+function validateForm() {
+	var result = document.getElementById("result");
+	result.innerHTML = "";
+
+	var isValid = true;
+	
+	if (document.getElementById("input_email").value == "")
+	{
+		result.innerHTML = "Enter email";
+		isValid = false;
+	}
+	
+	if (document.getElementById("input_file").value == "")
+	{
+		result.innerHTML += "\r\nSelect a file";
+		isValid = false;
+	}
+	
+	if (isValid)
+	{
+		var file = document.getElementById("input_file").files[0];
+		if (file) {
+			var reader = new FileReader();
+			reader.readAsText(file, "UTF-8");
+			reader.onload = function (evt) {
+				result.innerHTML = evt.target.result;
+			}
+			reader.onerror = function (evt) {
+				result.innerHTML = "error reading file";
+			}
+		}
+	}
+	
+	return isValid;
+}
+</script>
+
+</html>
