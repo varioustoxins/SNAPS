@@ -14,45 +14,268 @@ from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from Bio.SeqUtils import seq1
 
-#"~/GitHub/NAPS/data/testset/simplified_BMRB/4032.txt"
+#### Function definitions ####
 
-def import_obs_shifts(filename, remove_Pro=True):
+def import_obs_shifts(filename, remove_Pro=True, short_aa_names=True):
     #### Import the observed chemical shifts
     obs_long = pd.read_table(filename)
     obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
     obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
-    obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
-    obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]  # This needs to convert Res_type to single letter first
+    # Convert residue type to single-letter code
+    if short_aa_names: 
+        obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
+        obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+    else:
+        obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+        obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
     obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
     
     # Convert from long to wide
     obs = obs_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
-    # Make columns for the i-1 observed shifts of C, CA and CB
-    obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
-    obs_m1.index = obs_m1.index+1
-    obs_m1.columns = obs_m1.columns + "m1"
-    obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
-    
-    # Restrict to specific atom types
-    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-    obs = obs[list(atom_set.intersection(obs.columns))]
-    
-    # Add the other data back in
+    # Add the other columns back in
     tmp = obs_long[["Res_N","Res_type","SS_name"]]
     tmp = tmp.drop_duplicates(subset="SS_name")
     tmp.index = tmp["Res_N"]
     obs = pd.concat([tmp, obs], axis=1)
     
+    # Add HADAMAC information
+    hadamac_groups = ["VIA","G","S","T","DN","FHYWC","REKPQML"]
+    obs["HADAMAC"]=obs["Res_type"]
+    for g in hadamac_groups:
+        obs["HADAMAC"] = obs["HADAMAC"].str.replace("["+g+"]", g)
+    
+    # Make columns for the i-1 observed shifts of C, CA and CB
+    obs_m1 = obs[list({"C","CA","CB", "HADAMAC"}.intersection(obs.columns))]
+    obs_m1.index = obs_m1.index+1
+    obs_m1.columns = obs_m1.columns + "m1"
+    obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
+    
+    # Restrict to specific atom types
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","HADAMACm1"}
+    obs = obs[["Res_N","Res_type","SS_name"]+list(atom_set.intersection(obs.columns))]
+    
     obs.index = obs["SS_name"]
     
-    if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"]=="PRO"]) # Remove prolines, as they wouldn't be observed in a real spectrum
+    if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO","P"])]) # Remove prolines, as they wouldn't be observed in a real spectrum
     
     return(obs)
 
+def import_hsqc_ccpn(filename, seq_hadamac_details=False):
+    """ Import an HSQC peaklist, as exported from the CCPN Analysis peak list dialogue.
+    
+    If seq_hadamac_details==True, it is assumed the details column contains a list of possible amino acid types for the i-1 residue.
+    """
+    
+    hsqc = pd.read_table(filename)      
+    
+    # Keep just the columns we need, and rename
+    if seq_hadamac_details:
+        hsqc = hsqc[["Assign F1","Position F1","Position F2","Details"]]
+        hsqc.columns = ["SS_name","H","N","HADAMACm1"]
+    else:
+        hsqc = hsqc[["Assign F1","Position F1","Position F2"]]
+        hsqc.columns = ["SS_name","H","N"]
+        hsqc["HADAMACm1"] = np.nan
+        
+    hsqc.index = hsqc["SS_name"]
+    return (hsqc)
+
+
+def import_hnco_ccpn(filename):
+    """ Import an HSQC peaklist, as exported from the CCPN Analysis peak list dialogue."""
+    
+    hnco = pd.read_table(filename)
+    
+    # Work out which dimensions contain the H, N and C' shifts
+    dim = {}
+    for f in ["F1","F2","F3"]:
+        if hnco["Position "+f].mean() > 150:
+            dim["Cm1"] = f
+        elif hnco["Position "+f].mean() > 100:
+            dim["N"] = f
+        elif hnco["Position "+f].mean() < 16:
+            dim["H"] = f        
+        else: 
+            dim["Unknown"] = f
+    
+    # Check that all dimensions were identified
+    if set(dim.keys()) != set(["H","N","Cm1"]):
+        print("Error: couldn't identify HNCO columns.")
+        return(0)
+    
+    hnco = hnco[["Assign "+dim["H"], "Position "+dim["Cm1"]]]
+    hnco.columns = ["SS_name", "Cm1"]
+    
+    hnco.index = hnco["SS_name"]
+    hnco = hnco.drop("SS_name", axis=1)
+    return(hnco)
+
+#a = import_hnco_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt")
+#%%
+def import_3d_peaks_ccpn(filename, spectrum, neg_peaks=None):
+    """ Import a 3D peaklist, as exported from the CCPN Analysis peak list dialogue.
+    
+    spectrum can be one of "hnco", "hncaco", "hnca", "hncoca", "hncacb", "hncocacb"
+    """
+    peaks = pd.read_table(filename)
+    
+    # Work out which column contains which dimension
+    dim = {}
+    for f in ["F1","F2","F3"]:
+        if peaks["Position "+f].mean() > 150:
+            dim["CO"] = f
+        elif peaks["Position "+f].mean() > 100:
+            dim["N"] = f
+        elif peaks["Position "+f].mean() > 15:
+            dim["Cali"] = f
+        elif peaks["Position "+f].mean() > 6:
+            dim["H"] = f
+        elif peaks["Position "+f].mean() > 0:
+            dim["HA"] = f
+        else: 
+            dim["Unknown"] = f
+    
+    # Check that the correct dimensions were identified, and also that spectrum argument is valid
+    if spectrum in ["hnco", "hncaco"]:
+        if set(dim.keys()) != set(["H","N","CO"]):
+            print("Error: couldn't identify "+spectrum+" columns.")
+            return(0)    
+    elif spectrum in ["hnca","hncoca","hncacb","hncocacb"]:
+        if set(dim.keys()) != set(["H","N","Cali"]):
+            print("Error: couldn't identify "+spectrum+" columns.")
+            return(0)  
+    else:
+        print("Invalid value of argument: spectrum.")
+        return(0)
+    
+    # Spectrum specific processing
+    if spectrum in ["hnco", "hncaco", "hncoca", "hnca"]:    # Start with spectra where we only expect a single strong peak
+        # Filter and rename columns
+        if spectrum == "hnco":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["CO"], "Height"]]
+            peaks.columns = ["SS_name", "Cm1", "Height"]
+        elif spectrum == "hncaco":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["CO"], "Height"]]
+            peaks.columns = ["SS_name", "C", "Height"]
+        elif spectrum == "hncoca":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+            peaks.columns = ["SS_name", "CAm1", "Height"]
+        elif spectrum == "hnca":
+            peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+            peaks.columns = ["SS_name", "CA", "Height"]
+        # If there are multiple peaks for a spin system, just pick the strongest one
+        tmp = peaks.drop_duplicates(subset="SS_name", keep=False)   # Copy all the non-duplicated spin systems
+        for r in peaks.loc[peaks["SS_name"].duplicated(), "SS_name"]: # For each duplicated spin system...    
+            i = peaks.loc[peaks["SS_name"]==r,"Height"].idxmax()    # Work out which peak has the greatest height
+            tmp = tmp.append(peaks.iloc[i,:])
+        peaks = tmp.copy()
+        peaks = peaks.drop("Height", axis=1)
+    elif spectrum in ["hncacb", "hncocacb"]:    # Deal with spectra with two stron peaks
+        # Filter and rename columns
+        peaks = peaks[["Assign "+dim["H"], "Position "+dim["Cali"], "Height"]]
+        peaks.columns = ["SS_name", "Shift", "Height"]
+        
+        if spectrum == "hncocacb":
+            # Uses a simple heuristic to guess whether peak is CA or CB:
+            # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
+            # - If there's more than 1 peak, only keep the two with highest (absolute) intensity. 
+            # - If both are above 48 ppm, the largest shift is assigned to CB. Otherwise, the smallest shift is CB
+            tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CAm1":np.nan, "CBm1":np.nan})
+            tmp.index = tmp["SS_name"]
+            for ss in tmp["SS_name"]:
+                tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                    if (tmp2.Shift>41).bool():  
+                        tmp.loc[ss, "CAm1"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                    else:
+                        tmp.loc[ss, "CBm1"] = tmp2.Shift.values[0]
+                else:
+                    tmp2.sort_values("Height", ascending=False, inplace=True)
+                    tmp2 = tmp2.iloc[0:2,:]     # Keep only the two largest peaks
+                    if (tmp2["Shift"]>48).all():
+                        tmp.loc[ss, "CAm1"] = tmp2["Shift"].min()
+                        tmp.loc[ss, "CBm1"] = tmp2["Shift"].max()
+                    else:
+                        tmp.loc[ss, "CAm1"] = tmp2["Shift"].max()
+                        tmp.loc[ss, "CBm1"] = tmp2["Shift"].min()
+            peaks = tmp
+        
+        if spectrum == "hncacb":
+            # Test whether spectrum has both positive and negative peaks (it would be good if there was a way to manually overide this)
+            if neg_peaks==None:
+                if peaks["Height"].min() < 0 and peaks["Height"].max() > 0:   # This isn't a great test, but not sure of a better one
+                    # Work out whether positive peaks correspond to CA or CB
+                    if peaks.loc[peaks["Height"]>0,"Shift"].min() < peaks.loc[peaks["Height"]<0,"Shift"].min():
+                        neg_peaks = "CA"
+                    else:
+                        neg_peaks = "CB"
+                else:
+                    neg_peaks = "NA"
+            if neg_peaks == "NA":
+                # Uses the same heuristic as for the hncocacb.
+                tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CA":np.nan, "CB":np.nan})
+                tmp.index = tmp["SS_name"]
+                for ss in tmp["SS_name"]:
+                    tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                    if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                        if (tmp2.Shift>41).bool():  
+                            tmp.loc[ss, "CA"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                        else:
+                            tmp.loc[ss, "CB"] = tmp2.Shift.values[0]
+                    else:
+                        tmp2.sort_values("Height", ascending=False, inplace=True)
+                        tmp2 = tmp2.iloc[0:2,:]     # Keep only the two largest peaks
+                        if (tmp2["Shift"]>48).all():
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].min()
+                            tmp.loc[ss, "CB"] = tmp2["Shift"].max()
+                        else:
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].max()
+                            tmp.loc[ss, "CB"] = tmp2["Shift"].min()
+                peaks = tmp
+            else:
+                # Use a heuristic method to work out which peak is CA and CB
+                # - If there's only 1 peak, it's CA if shift is greater than 41 ppm, otherwise it's CB
+                # - If there's more than 1 peak, check if the strongest peak is consistent with glycine (41-48 ppm, and considerably stronger than next nearest peak) 
+                # - Otherwise, most intense positive peak is CA and most intense negative peak is CB (adjustable by parameter CA.pos)
+                tmp = pd.DataFrame({"SS_name":peaks["SS_name"].drop_duplicates(), "CA":np.nan, "CB":np.nan})
+                tmp.index = tmp["SS_name"]
+                for ss in tmp["SS_name"]:
+                    tmp2 = peaks.loc[peaks["SS_name"]==ss,:]
+                    if tmp2.shape[0] == 1:  # If there's only one peak for this spin system
+                        if (tmp2.Shift>41).bool():  
+                            tmp.loc[ss, "CA"] = tmp2.Shift.values[0]  # The syntax here looks weird because the single-row DataFrame is silently converted to a Series
+                        else:
+                            tmp.loc[ss, "CB"] = tmp2.Shift.values[0]
+                    else:
+                        tmp2.sort_values("Height", ascending=False, inplace=True)
+                        if 41 <= tmp2["Shift"].iloc[0] <= 48 and \
+                                abs(tmp2["Height"].iloc[0]/tmp2["Height"].iloc[1])>=2:
+                            # If largest peak is consistent with glycine and is at least twice as large as the next largest peak
+                            tmp.loc[ss, "CA"] = tmp2["Shift"].iloc[0]
+                        else:
+                            if neg_peaks=="CA":
+                                tmp.loc[ss, "CA"] = tmp2.loc[tmp2["Height"].idxmin() ,"Shift"]
+                                tmp.loc[ss, "CB"] = tmp2.loc[tmp2["Height"].idxmax() ,"Shift"]
+                            elif neg_peaks=="CB":
+                                tmp.loc[ss, "CA"] = tmp2.loc[tmp2["Height"].idxmax() ,"Shift"]
+                                tmp.loc[ss, "CB"] = tmp2.loc[tmp2["Height"].idxmin() ,"Shift"]
+
+                peaks = tmp
+            
+    peaks = peaks.sort_values("SS_name")
+    peaks.index = peaks["SS_name"]
+    peaks = peaks.drop("SS_name", axis=1)
+    return(peaks)
+
+#a = import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
+#%%
 
 def read_shiftx2(input_file, offset=0):
-    #### Import the predicted chemical shifts
+    """ Import predicted chemical shifts from a ShiftX2 results file (usually ends .cs).
+    
+    offset is an optional integer to add to the residue number from the shiftx2 file.
+    """
     preds_long = pd.read_csv(input_file)
     preds_long["NUM"] = preds_long["NUM"] + offset    # Apply any offset to residue numbering
     preds_long["Res_name"] = preds_long["NUM"].astype(str)+preds_long["RES"]
@@ -63,22 +286,21 @@ def read_shiftx2(input_file, offset=0):
     # Convert from wide to long format
     preds = preds_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
     
-    # Make columns for the i-1 predicted shifts of C, CA and CB
-    preds_m1 = preds[list({"C","CA","CB"}.intersection(preds.columns))].copy()
-    preds_m1.index = preds_m1.index+1
-    preds_m1.columns = preds_m1.columns + "m1"
-    preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
-    # TODO: also do this for Res_type
-    
-    # Restrict to only certain atom types
-    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-    preds = preds[list(atom_set.intersection(preds.columns))]
-    
     # Add the other data back in
     tmp = preds_long[["Res_N","Res_type","Res_name"]]
     tmp = tmp.drop_duplicates(subset="Res_name")
     tmp.index = tmp["Res_N"]
     preds = pd.concat([tmp, preds], axis=1)
+    
+    # Make columns for the i-1 predicted shifts of C, CA and CB
+    preds_m1 = preds[list({"C","CA","CB","Res_type"}.intersection(preds.columns))].copy()
+    preds_m1.index = preds_m1.index+1
+    preds_m1.columns = preds_m1.columns + "m1"
+    preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
+    
+    # Restrict to only certain atom types
+    atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+    preds = preds[["Res_name","Res_N","Res_type","Res_typem1"]+list(atom_set.intersection(preds.columns))]
     
     preds.index = preds["Res_name"]
     
@@ -127,21 +349,20 @@ def calc_match_probability(obs, pred1,
                            atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01):
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, use_hadamac=False):
     # Calculate match scores between all observed spin systems and a single predicted residue
     # default_prob is the probability assigned when an observation or prediction is missing
     # atom_set is a set used to restrict to only certain measurements
     # atom_sd is the expected standard deviation for each atom type
     # sf is a scaling factor for the entire atom_sd dictionary
-    
-    # Doesn't currently deal specially with prolines 
+    # use_hadamac determines whether residue type information is used
     
     # Throw away any non-atom columns
-    obs = obs.loc[:, atom_set.intersection(obs.columns)]
-    pred1 = pred1.loc[atom_set.intersection(pred1.index)]
+    obs_reduced = obs.loc[:, atom_set.intersection(obs.columns)]
+    pred1_reduced = pred1.loc[atom_set.intersection(pred1.index)]
     
     # Calculate shift differences and probabilities for each observed spin system
-    delta = obs - pred1
+    delta = obs_reduced - pred1_reduced
     prob = delta.copy()
     prob.iloc[:,:] = 1
     
@@ -155,6 +376,14 @@ def calc_match_probability(obs, pred1,
     # In positions where data was missing, use a default probability
     prob[na_mask] = default_prob
     
+    # Calculate penalty for a HADAMAC mismatch
+    if use_hadamac:
+        # If the i-1 aa type of the predicted residue matches the HADAMAC group of the observation, probability is 1.
+        # Otherwise, probability defaults to 0.01
+        prob["HADAMACm1"] = 0.01
+        if type(pred1["Res_typem1"])==str:      # dummy residues have NaN
+            prob.loc[obs["HADAMACm1"].str.find(pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
+
     # Calculate overall probability of each row
     overall_prob = prob.prod(skipna=False, axis=1)
     return(overall_prob)
@@ -165,13 +394,14 @@ def calc_log_prob_matrix(obs, preds,
                             atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
                             atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231, 
                                     'C':0.5330, 'CA':0.4412, 'CB':0.5163, 
-                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, verbose=False):
+                                    'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}, sf=1, default_prob=0.01, 
+                                     verbose=False, use_hadamac=False):
     # Calculate a matrix of -log10(match probabilities)
     prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
     
     for i in preds.index:
         if verbose: print(i)
-        prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob)
+        prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob, use_hadamac)
     
     # Calculate log of matrix
     log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
@@ -203,11 +433,11 @@ def find_best_assignment(obs, preds, log_prob_matrix):
             })
     
     # Merge residue information, shifts and predicted shifts into assignment dataframe
-    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name")
+    assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name", how="outer")
     assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", "Dummy_res"]]
-    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name")
+    assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name", how="outer")
         # Above line raises an error about index/column confusion, which needs fixing.
-    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"))
+    assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"), how="outer")
     
     assign_df = assign_df.sort_values(by="Res_N")
     assign_df["Log_prob"] = log_prob_matrix.lookup(log_prob_matrix.index[row_ind], log_prob_matrix.columns[col_ind])
@@ -215,40 +445,119 @@ def find_best_assignment(obs, preds, log_prob_matrix):
     return(assign_df, [row_ind, col_ind])
 
 
-def find_alt_assignments(log_prob_matrix, best_match_indexes, by_res=True,  verbose=False):
-    # Function to find the second best assignment for each residue or spin system
-    # Does this by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
-    # best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
-    # If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
-    # Outputs a dataframe with the next best matching for each residue/spin system, and a list of their relative probabilities
+def find_alt_assignments(log_prob_matrix, best_match_indexes, N=1, by_res=True,  verbose=False, return_full_assignments=False):
+    """ Find the next-best assignment(s) for each residue or spin system
     
+    This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+    
+    Arguments:
+    best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
+    N is the number of alternative assignments to generate
+    If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+    
+    Output:
+    If return_full_assignments is False, returns a DataFrame containing the next-best assignment for each residue or spin system, and the relative overall probability of that assignment
+    If return_full_assignments is True, the output is a list with two elements
+    - The first element is the DataFrame of assignments and probabilities, as before
+    - The second element is a list of DataFrames containing the complete alternative assignments for each residue.
+    """
     # Calculate sum probability for the best matching
     best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
                                log_prob_matrix.columns[best_match_indexes[1]]))
     
-    # Convert best_match_indexes into a list of (obs.index, preds.index) tuples
-    best_matching = list(zip(obs.index[best_match_indexes[0]], preds.index[best_match_indexes[1]]))
+    penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
     
     if by_res:
-        # Create a dataframe to store the results
-        matching_df = pd.DataFrame(index=obs.index[best_match_indexes[0]], columns=preds.index)
-        rel_log_prob = pd.Series(index = preds.index) 
-        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        # Create data structures for storing results
+        assignment_list = [pd.Series(index = preds.index) for i in range(N)]
+        rel_log_prob_list = [pd.Series(index = preds.index) for i in range(N)]
+        results_dict = {}
+        if return_full_assignments: 
+            matching_df_list = [pd.DataFrame(index=preds.index, columns=preds.index) for i in range(N)]
         
-        for i in best_matching:
-            if verbose: print(i)
-            ss, res = i
-            tmp = log_prob_matrix.copy()
-            tmp.loc[ss, res] = penalty
-            row_ind, col_ind = linear_sum_assignment(tmp)
-            matching_df.loc[:,res] = preds.index[col_ind]
-            rel_log_prob[res] = sum(tmp.lookup(tmp.index[row_ind], tmp.columns[col_ind])) - best_sum_prob
-    
-    return(matching_df, rel_log_prob)
+        # Convert best_match_indexes to get a series of spin systems indexed by residue  
+        best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
+        alt_matching = pd.Series()
+        
+        for res in preds["Res_name"]:   # Consider each residue in turn
+            if verbose: print(res)
+            for i in range(N):
+                if i==0:
+                    ss = best_matching[res]         # Find the spin system that was matched to current residue in optimal matching
+                    tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                else:
+                    ss = alt_matching[res]          # Find the spin system that was matched to current residue in last round
+                
+                # Penalise the match found for this residue
+                if obs.loc[ss, "Dummy_SS"]:
+                    tmp.loc[obs["Dummy_SS"], res] = penalty     # If last match was a dummy spin system, penalise all dummies
+                else:
+                    tmp.loc[ss, res] = penalty
+                
+                row_ind, col_ind = linear_sum_assignment(tmp)
+                
+                # Extract the info we want from the optimisation results
+                alt_matching = pd.Series(obs.index[row_ind], index=preds.index[col_ind])
+                assignment_list[i][res] = alt_matching[res]
+                if return_full_assignments: 
+                    matching_df_list[i].loc[:,res] = alt_matching
+                # Calculate the relative overall probability of this assignment, compared to the optimal assignment
+                rel_log_prob_list[i][res] = sum(tmp.lookup(alt_matching.values, alt_matching.index)) - best_sum_prob
+    else:
+        # Create data structures for storing results
+        assignment_list = [pd.Series(index = obs.index) for i in range(N)]
+        rel_log_prob_list = [pd.Series(index = obs.index) for i in range(N)]
+        results_dict = {}
+        if return_full_assignments: 
+            matching_df_list = [pd.DataFrame(index=obs.index, columns=obs.index) for i in range(N)]
+        
+        # Convert best_match_indexes to get a series of spin systems indexed by spin system  
+        best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+        alt_matching = pd.Series()
+        
+        for ss in obs["SS_name"]:   # Consider each spin system in turn
+            if verbose: print(ss)
+            for i in range(N):
+                if i==0:
+                    res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
+                    tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                else:
+                    res = alt_matching[ss]          # Find the residue that was matched to current spin system in last round
+                
+                # Penalise the match found for this residue
+                if preds.loc[res, "Dummy_res"]:
+                    tmp.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
+                else:
+                    tmp.loc[ss, res] = penalty
+                
+                row_ind, col_ind = linear_sum_assignment(tmp)
+                
+                # Extract the info we want from the optimisation results
+                alt_matching = pd.Series(preds.index[col_ind], index=obs.index[row_ind])
+                assignment_list[i][ss] = alt_matching[ss]
+                if return_full_assignments: 
+                    matching_df_list[i].loc[:,ss] = alt_matching
+                # Calculate the relative overall probability of this assignment, compared to the optimal assignment
+                rel_log_prob_list[i][ss] = sum(tmp.lookup(alt_matching.index, alt_matching.values)) - best_sum_prob            
+        
+    # Store the results as a dataframe
+    for i in range(N):
+        results_dict["Alt_assign_"+str(i+1)] = assignment_list[i]
+        results_dict["Alt_rel_prob"+str(i+1)] = rel_log_prob_list[i]
+    results_df = pd.DataFrame(results_dict)
+    if by_res:
+        results_df["Res_name"] = results_df.index
+    else:
+        results_df["SS_name"] = results_df.index
+        
+    if return_full_assignments:
+        return(results_df, matching_df_list)
+    else:
+        return(results_df)
 
 
 
-    def check_assignment_consistency(assign_df, threshold=0.1):
+def check_assignment_consistency(assign_df, threshold=0.1):
         # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
         # Any sequential residues with a difference greater than threshold count as mismatched
         
@@ -384,7 +693,7 @@ def NAPS_batch(file_df, out_path="../output", plot_path="../plots",
                     file_df.loc[i, "out_name"], out_path, plot_path, use_atoms, make_plots)
     return(1)
 
-#### Main
+#### Main ####
     
 #NAPS_single("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt", "~/GitHub/NAPS/data/testset/shiftx2_results/A002_1XMTA.cs", "A002_6338")    
 
@@ -397,20 +706,40 @@ testset_df.index = testset_df["ID"]
 
 #NAPS_batch(testset_df.iloc[:,:], "../output/testset", "../plots/testset", make_plots=True)
 
-i = "A002"
-obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt")
-preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
-obs, preds = add_dummy_rows(obs, preds)
+#### Single test from testset
+#i = "A002"
+#obs = import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/"+testset_df.BMRB[i].astype(str)+".txt", 
+#                        short_aa_names=True)
+#preds = read_shiftx2("~/GitHub/NAPS/data/testset/shiftx2_results/"+i+"_"+testset_df.PDB[i]+".cs")
 
 #### Create a probability matrix
 #obs1=obs.iloc[0]
 #pred1=preds.iloc[0]
+#obs, preds = add_dummy_rows(obs, preds)
+#log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
+#assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
+#assign_df = check_assignment_consistency(assign_df)
+#alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+#assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
+##alt_assignments2 = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2, by_res=False)
+##assign_df = assign_df.merge(alt_assignments2, on="SS_name", how="left")
+##assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
+#
+#plot_strips(assign_df.iloc[:, :])
+#plot_seq_mismatch(assign_df)
+#plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
+
+#### Test import from CCPN peak lists
+hsqc = import_hsqc_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hsqc HADAMAC.txt")
+hnco = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hnco.txt", "hnco")
+hncocacb = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", spectrum="hncocacb")
+hncacb = import_3d_peaks_ccpn("/Users/aph516/GitHub/NAPS/data/P3a_L273R/hncacb.txt", spectrum="hncacb")
+obs = hsqc.join([hnco, hncocacb, hncacb], how="left")
+
+preds = read_shiftx2("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
+obs, preds = add_dummy_rows(obs, preds)
 log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2, verbose=False)
 assign_df, best_match_indexes = find_best_assignment(obs, preds, log_prob_matrix)
 assign_df = check_assignment_consistency(assign_df)
-alt_assignments, alt_assignment_scores = find_alt_assignments(log_prob_matrix, best_match_indexes)
-#assign_df.to_csv("../output/A001_4032.txt", sep="\t", float_format="%.3f")
-
-plot_strips(assign_df.iloc[:, :])
-#plt = plot_seq_mismatch(assign_df)
-#plt.save("A001_4032_mismatch.pdf", path="../plots", height=210, width=297, units="mm")
+alt_assignments = find_alt_assignments(log_prob_matrix, best_match_indexes, N=2)
+assign_df = assign_df.merge(alt_assignments, on="Res_name", how="left")
