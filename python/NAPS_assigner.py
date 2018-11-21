@@ -20,6 +20,11 @@ class NAPS_assigner:
     preds = None
     log_prob_matrix = None
     assign_df = None
+    pars = {"shiftx2_offset": 0,
+            "atom_set": {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"},
+            "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
+                        'C':0.5330, 'CA':0.4412, 'CB':0.5163,
+                        'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}}
     
     # Functions
     def import_obs_shifts(self, filename, remove_Pro=True, short_aa_names=True):
@@ -69,11 +74,16 @@ class NAPS_assigner:
         return(self.obs)
     
     
-    def read_shiftx2(self, input_file, offset=0):
+    def read_shiftx2(self, input_file, offset=None):
         """ Import predicted chemical shifts from a ShiftX2 results file (usually ends .cs).
         
         offset is an optional integer to add to the residue number from the shiftx2 file.
         """
+        
+        # If nooffset value is defined, use the default one
+        if offset==None:
+            offset = self.pars["shiftx2_offset"]
+        
         preds_long = pd.read_csv(input_file)
         preds_long["NUM"] = preds_long["NUM"] + offset    # Apply any offset to residue numbering
         preds_long["Res_name"] = preds_long["NUM"].astype(str)+preds_long["RES"]
@@ -118,10 +128,10 @@ class NAPS_assigner:
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
         
         # Restrict atom types
-        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-        obs_metadata = list(set(obs.columns).difference(atom_set))
-        preds_metadata = list(set(preds.columns).difference(atom_set))
-        shared_atoms = list(atom_set.intersection(obs.columns).intersection(preds.columns))
+        # self.pars["atom_set"] is the list of atoms that will be used for the analysis
+        obs_metadata = list(set(obs.columns).difference(self.pars["atom_set"]))     
+        preds_metadata = list(set(preds.columns).difference(self.pars["atom_set"]))
+        shared_atoms = list(self.pars["atom_set"].intersection(obs.columns).intersection(preds.columns))
         obs = obs[obs_metadata+shared_atoms]
         preds = preds[preds_metadata+shared_atoms]
         
@@ -149,14 +159,18 @@ class NAPS_assigner:
         self.preds = preds
         return(self.obs, self.preds)
     
-    def calc_log_prob_matrix(self, atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
-                            atom_sd=None, sf=1, default_prob=0.01,verbose=False, use_hadamac=False):
+    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, use_hadamac=False):
         """Calculate a matrix of -log10(match probabilities)
         """
         
-        def calc_match_probability(obs, pred1,
-                                   atom_set=set(["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]), 
-                                   atom_sd=None, sf=1, default_prob=0.01, use_hadamac=False):
+        # Use default atom_sd values if not defined
+        if atom_sd==None:
+            atom_sd = self.pars["atom_sd"]
+#            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
+#                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
+#                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
+        
+        def calc_match_probability(obs, pred1):
             """ Calculate match scores between all observed spin systems and a single predicted residue
             
             default_prob is the probability assigned when an observation or prediction is missing
@@ -166,15 +180,9 @@ class NAPS_assigner:
             use_hadamac determines whether residue type information is used
             """
             
-            # Use default atom_sd values if not defined
-            if atom_sd==None:
-                atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
-                         'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-                         'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
-            
             # Throw away any non-atom columns
-            obs_reduced = obs.loc[:, atom_set.intersection(obs.columns)]
-            pred1_reduced = pred1.loc[atom_set.intersection(pred1.index)]
+            obs_reduced = obs.loc[:, self.pars["atom_set"].intersection(obs.columns)]
+            pred1_reduced = pred1.loc[self.pars["atom_set"].intersection(pred1.index)]
             
             # Calculate shift differences and probabilities for each observed spin system
             delta = obs_reduced - pred1_reduced
@@ -206,17 +214,11 @@ class NAPS_assigner:
         obs = self.obs
         preds = self.preds
         
-        # Use default atom_sd values if not defined
-        if atom_sd==None:
-            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
-                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
-        
         prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
         
         for i in preds.index:
             if verbose: print(i)
-            prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:], atom_set, atom_sd, sf, default_prob, use_hadamac)
+            prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:])
         
         # Calculate log of matrix
         log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
@@ -238,7 +240,7 @@ class NAPS_assigner:
         preds = self.preds
         log_prob_matrix = self.log_prob_matrix
         
-        valid_atoms = ["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"]
+        valid_atoms = list(self.pars["atom_set"])
         
         row_ind, col_ind = linear_sum_assignment(log_prob_matrix)
         
@@ -491,12 +493,12 @@ class NAPS_assigner:
         
 #### Testing 
 
-a = NAPS_assigner()
-a.import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
-a.read_shiftx2("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
-a.add_dummy_rows()
-a.calc_log_prob_matrix(sf=2, verbose=False)
-assign_df, best_match_indexes = a.find_best_assignment()
+#a = NAPS_assigner()
+#a.import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
+#a.read_shiftx2("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
+#a.add_dummy_rows()
+#a.calc_log_prob_matrix(sf=2, verbose=False)
+#assign_df, best_match_indexes = a.find_best_assignment()
 
 
 ## Import the observed and predicted shifts
