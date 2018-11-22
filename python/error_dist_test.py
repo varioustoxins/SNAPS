@@ -11,11 +11,11 @@ from scipy.stats import multivariate_normal
 from plotnine import *
 from NAPS_assigner import NAPS_assigner
 
-path = "/Users/aph516/GitHub/NAPS/"
-
+#path = "/Users/aph516/GitHub/NAPS/"
+path = "C:\\Users\\Alex\\GitHub\\NAPS\\"
 
 #%%
-#### Test all proteins in the testset
+#### Prepare to import all proteins in the testset
 
 testset_df = pd.read_table(path+"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
 testset_df["obs_file"] = path+"data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
@@ -62,7 +62,9 @@ tmp2 = tmp2.loc[~tmp2["Res_typem1_obs"].isin(["NA"]) & ~tmp2["Res_typem1_pred"].
 bad_res = pd.concat([tmp1, tmp2])
 bad_res = bad_res.drop_duplicates()
 
-# Import the actual data
+#%%
+
+#### Import the actual data
 obs_all = None
 for i in testset_df["ID"]:
 #for i in ["A063"]:
@@ -91,17 +93,25 @@ df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_
 df = df.dropna(axis=0, subset=["Res_type","Res_typem1"])
 # Make a normalised version of observed shift
 # Do this by subtracting the mean shift, separately for each residue type
+atoms_obs = [s+"_obs" for s in ["C","CA","CB","H","HA","N"]]
+atoms_pred = [s+"_pred" for s in ["C","CA","CB","H","HA","N"]]
+atoms_m1_obs = [s+"m1_obs" for s in ["C","CA","CB","H","HA","N"]]
+atoms_m1_pred = [s+"m1_pred" for s in ["C","CA","CB","H","HA","N"]]
 for r in df["Res_type"].unique():
-    mu = df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]].mean()
+    mu = df.loc[df["Res_type"]==r, atoms_obs].mean()
+    sig = df.loc[df["Res_type"]==r, atoms_obs].std()
     # i shifts
-    df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]] = df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]] - mu
-    mu.index = [s+"_pred" for s in ["C","CA","CB","H","HA","N"]]
-    df.loc[df["Res_type"]==r,[s+"_pred" for s in ["C","CA","CB","H","HA","N"]]] = df.loc[df["Res_type"]==r,[s+"_pred" for s in ["C","CA","CB","H","HA","N"]]] - mu
+    df.loc[df["Res_type"]==r, atoms_obs] = (df.loc[df["Res_type"]==r, atoms_obs] - mu)/sig
+    mu.index = atoms_pred
+    sig.index = atoms_pred
+    df.loc[df["Res_type"]==r, atoms_pred] = (df.loc[df["Res_type"]==r, atoms_pred] - mu)/sig
     # i-1 shifts
-    mu.index = [s+"m1_obs" for s in ["C","CA","CB","H","HA","N"]]
-    df.loc[df["Res_typem1"]==r,[s+"_obs" for s in ["Cm1","CAm1","CBm1"]]] = df.loc[df["Res_typem1"]==r,[s+"_obs" for s in ["Cm1","CAm1","CBm1"]]] - mu[[s+"m1_obs" for s in ["C","CA","CB"]]]
-    mu.index = [s+"m1_pred" for s in ["C","CA","CB","H","HA","N"]]
-    df.loc[df["Res_typem1"]==r,[s+"_pred" for s in ["Cm1","CAm1","CBm1"]]] = df.loc[df["Res_typem1"]==r,[s+"_pred" for s in ["Cm1","CAm1","CBm1"]]] - mu[[s+"m1_pred" for s in ["C","CA","CB"]]]
+    mu.index = atoms_m1_obs
+    sig.index = atoms_m1_obs
+    df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] - mu[atoms_m1_obs[0:3]])/sig[atoms_m1_obs[0:3]]
+    mu.index = atoms_m1_pred
+    sig.index = atoms_m1_pred
+    df.loc[df["Res_typem1"]==r,atoms_m1_pred[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_pred[0:3]] - mu[atoms_m1_pred[0:3]])/sig[atoms_m1_pred[0:3]]
         
 
 # Calculate the prediction errors
@@ -122,8 +132,25 @@ df2_cov = df2_cov.drop(index="Res_N", columns="Res_N")
 #df2_cov[abs(df2_cov)<0.1] = 0 # Can't set small covariances to zero because it makes matrix non-invertible, which causes error in multivariate_normal()
 
 
-mvn = multivariate_normal(df2_mean, df2_cov)
+mvn_full = multivariate_normal(df2_mean, df2_cov)
+mvn_obs = multivariate_normal(df2_mean.iloc[0:9], df2_cov.iloc[0:9, 0:9])   # The expected distribution of the observations
+mvn_d = multivariate_normal(df2_mean.iloc[9:18], df2_cov.iloc[9:18, 9:18])  # This is the marginal distribution of the errors over the observations
+
+# Test random variables drawn from distribution
+tmp = pd.DataFrame(mvn_full.rvs(size=10000), columns = df2_cov.columns)
+ggplot(data=tmp) + geom_point(aes(x="d_CBm1", y="CBm1_obs"))    # Distribution is more compressed than real one. I guess this is because the real distribution has longer tails than the normal
+c = tmp.cov()
+d = df2_cov - c     # The covariance of the results matches the original data fairly well at least
+
 # How to add in conditional probability?
+obs1 = [0]*18
+mvn_full.pdf(obs1)
+
+mvn_d.pdf(obs1[9:18])
+
+from math import exp
+e = exp(mvn_full.logpdf(obs1) - mvn_obs.logpdf(obs1[0:9]))
+
 
 #%%
 #### Exploratory analysis
