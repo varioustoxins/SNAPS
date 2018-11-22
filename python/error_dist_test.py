@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Nov 21 16:12:52 2018
+
+@author: aph516
+"""
+
+import pandas as pd
+from scipy.stats import multivariate_normal
+from plotnine import *
+from NAPS_assigner import NAPS_assigner
+
+path = "/Users/aph516/GitHub/NAPS/"
+
+
+#%%
+#### Test all proteins in the testset
+
+testset_df = pd.read_table(path+"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["obs_file"] = path+"data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
+testset_df["preds_file"] = path+"data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"
+testset_df.index = testset_df["ID"]
+
+a = NAPS_assigner()
+
+# Work out which residue types don't match between obs and preds
+seq_df = None
+for i in testset_df["ID"]:
+    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"])
+    # Change Bs to Cs
+    obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
+    
+    # Make columns for the i-1 predicted shifts of C, CA and CB
+    obs.index = obs["Res_N"]
+    obs_m1 = obs[["Res_type","Res_N"]].copy()
+    obs_m1.index = obs_m1.index+1
+    obs_m1.columns = obs_m1.columns + "m1"
+    obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
+    obs.index = obs["SS_name"]
+    
+    
+    preds = a.read_shiftx2(testset_df.loc[i, "preds_file"])
+    #Change Bs to Cs
+    preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_typem1"]=="B", "Res_typem1"] = "C"
+    
+    df = pd.merge(obs, preds, on=["Res_N"], how="outer", suffixes=["_obs","_pred"])
+    df["ID"] = i
+    if type(seq_df)!=type(df):
+        seq_df = df.copy()
+    else:
+        seq_df = pd.concat([seq_df, df], ignore_index=True)
+
+seq_df = seq_df[["ID","Res_N","Res_type_obs","Res_type_pred","Res_typem1_obs","Res_typem1_pred"]]
+seq_df = seq_df.fillna("NA")
+tmp1 = seq_df.loc[seq_df["Res_type_obs"]!=seq_df["Res_type_pred"],:]
+tmp1 = tmp1.loc[~tmp1["Res_type_obs"].isin(["NA"]) & ~tmp1["Res_type_pred"].isin(["NA"]),:]
+tmp2 = seq_df.loc[seq_df["Res_typem1_obs"]!=seq_df["Res_typem1_pred"],:]
+tmp2 = tmp2.loc[~tmp2["Res_typem1_obs"].isin(["NA"]) & ~tmp2["Res_typem1_pred"].isin(["NA"]),:]
+
+bad_res = pd.concat([tmp1, tmp2])
+bad_res = bad_res.drop_duplicates()
+
+# Import the actual data
+obs_all = None
+for i in testset_df["ID"]:
+#for i in ["A063"]:
+    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"])
+    preds = a.read_shiftx2(testset_df.loc[i, "preds_file"])
+    
+    #Change Bs to Cs
+    obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_typem1"]=="B", "Res_typem1"] = "C"
+    
+    obs["ID"] = i
+    preds["ID"] = i
+
+    if type(obs_all)!=type(obs):
+        obs_all = obs.copy()
+        preds_all = preds.copy()
+    else:
+        obs_all = pd.concat([obs_all, obs], ignore_index=True)
+        preds_all = pd.concat([preds_all, preds], ignore_index=True)
+
+df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type"], how="outer", suffixes=["_obs","_pred"])
+
+# Get rid of any residues with mismatching types, or where the type is NaN
+df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_N"].astype(str)),:]
+df = df.dropna(axis=0, subset=["Res_type","Res_typem1"])
+# Make a normalised version of observed shift
+# Do this by subtracting the mean shift, separately for each residue type
+for r in df["Res_type"].unique():
+    mu = df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]].mean()
+    # i shifts
+    df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]] = df.loc[df["Res_type"]==r,[s+"_obs" for s in ["C","CA","CB","H","HA","N"]]] - mu
+    mu.index = [s+"_pred" for s in ["C","CA","CB","H","HA","N"]]
+    df.loc[df["Res_type"]==r,[s+"_pred" for s in ["C","CA","CB","H","HA","N"]]] = df.loc[df["Res_type"]==r,[s+"_pred" for s in ["C","CA","CB","H","HA","N"]]] - mu
+    # i-1 shifts
+    mu.index = [s+"m1_obs" for s in ["C","CA","CB","H","HA","N"]]
+    df.loc[df["Res_typem1"]==r,[s+"_obs" for s in ["Cm1","CAm1","CBm1"]]] = df.loc[df["Res_typem1"]==r,[s+"_obs" for s in ["Cm1","CAm1","CBm1"]]] - mu[[s+"m1_obs" for s in ["C","CA","CB"]]]
+    mu.index = [s+"m1_pred" for s in ["C","CA","CB","H","HA","N"]]
+    df.loc[df["Res_typem1"]==r,[s+"_pred" for s in ["Cm1","CAm1","CBm1"]]] = df.loc[df["Res_typem1"]==r,[s+"_pred" for s in ["Cm1","CAm1","CBm1"]]] - mu[[s+"m1_pred" for s in ["C","CA","CB"]]]
+        
+
+# Calculate the prediction errors
+for atom in a.pars["atom_set"]:
+    df["d_"+atom] = df[atom+"_pred"] - df[atom+"_obs"]
+
+#%%
+#### Try out multivariate normal distribution
+df2 = df[["ID","SS_name","Res_N","Res_type","Res_typem1"]+[s+"_obs" for s in a.pars["atom_set"]]+["d_"+s for s in a.pars["atom_set"]]]
+
+b = abs(df2.corr())
+b[b<0.1]=-1
+
+df2_mean = df2.mean()
+df2_mean = df2_mean.drop("Res_N")
+df2_cov = df2.cov()
+df2_cov = df2_cov.drop(index="Res_N", columns="Res_N")
+#df2_cov[abs(df2_cov)<0.1] = 0 # Can't set small covariances to zero because it makes matrix non-invertible, which causes error in multivariate_normal()
+
+
+mvn = multivariate_normal(df2_mean, df2_cov)
+# How to add in conditional probability?
+
+#%%
+#### Exploratory analysis
+ggplot(data=df2) + geom_point(aes(x="d_CBm1", y="CBm1_obs", colour="Res_typem1"))# + facet_wrap("Res_type")
+#ggplot(data=df[df["Res_type"]!="C"])
+
+tmp = df2.loc[df2["CBm1_obs"]>7.5,:]
+
+
+leu = df.loc[df["Res_type"]=="L", ["d_"+atom for atom in a.pars["atom_set"]]]
+
+#ggplot(data=leu) + geom_point(aes(x="CB_obs", y="CB_pred"))
+
+leu_mean = leu.mean(axis=0)
+leu_cov = leu.cov()
+leu_corr = leu.corr()
+
+delta = df.loc[:, ["ID","Res_name","Res_type", "Res_typem1"]+["d_"+atom for atom in a.pars["atom_set"]]]
+d_mean = delta.mean(axis=0)
+d_cov = delta.cov()
+d_corr = delta.corr()
+
+ggplot(data=delta) + geom_point(aes(x="d_CAm1", y="d_CBm1", colour="Res_type"))
+
+
+
+tmp = delta.loc[abs(delta["d_CBm1"])>5,:]
+tmp2 = df.loc[(df["ID"]+df["Res_name"]).isin(tmp["ID"]+tmp["Res_name"]),:]
+

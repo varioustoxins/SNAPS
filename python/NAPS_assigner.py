@@ -9,7 +9,7 @@ Created on Mon Nov 19 10:36:07 2018
 import numpy as np
 import pandas as pd
 from plotnine import *
-from scipy.stats import norm
+from scipy.stats import norm, gennorm
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from Bio.SeqUtils import seq1
@@ -159,7 +159,8 @@ class NAPS_assigner:
         self.preds = preds
         return(self.obs, self.preds)
     
-    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, use_hadamac=False):
+    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, 
+                             use_hadamac=False, gaussian=True, cdf=True):
         """Calculate a matrix of -log10(match probabilities)
         """
         
@@ -193,8 +194,12 @@ class NAPS_assigner:
             na_mask = delta.isna()
             delta[na_mask] = 0
             for c in delta.columns:
-                # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
-                prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                if gaussian:
+                    if cdf:
+                        # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
+                        prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                    else:
+                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
             
             # In positions where data was missing, use a default probability
             prob[na_mask] = default_prob
