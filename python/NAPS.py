@@ -12,6 +12,13 @@ import argparse
 
 #### User input
 
+# For testing
+if False:
+    runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
+            args="../data/testset/simplified_BMRB/4032.txt "+
+            "../data/testset/shiftx2_results/A001_1KF3A.cs "+
+            "../output/test.txt")
+
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")
 parser.add_argument("pred_file")
@@ -50,7 +57,10 @@ a.read_shiftx2(args.pred_file)
 a.add_dummy_rows()
 a.calc_log_prob_matrix(sf=2, verbose=False)
 assign_df, best_match_indexes = a.find_best_assignment()
-assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
+a.check_assignment_consistency(threshold=0.1)
+a.assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
+
+tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
 
 
 #%%

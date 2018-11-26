@@ -341,6 +341,10 @@ class NAPS_assigner:
         - The second element is a list of DataFrames containing the complete alternative assignments for each residue.
         """
         
+        obs = self.obs
+        preds = self.preds
+        log_prob_matrix = self.log_prob_matrix
+        
         log_prob_matrix = self.log_prob_matrix
         
         # Calculate sum probability for the best matching
