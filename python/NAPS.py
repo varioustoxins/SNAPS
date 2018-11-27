@@ -66,7 +66,7 @@ a.check_assignment_consistency(threshold=0.1)
 a.assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
 
 #tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
-tmp = a.find_alt_assignments2(N=2, verbose=True)
+tmp = a.find_alt_assignments2(N=2, verbose=True, by_ss=False)
 
 
 #%%

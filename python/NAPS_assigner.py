@@ -163,8 +163,15 @@ class NAPS_assigner:
         return(self.obs, self.preds)
     
     def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, 
-                             use_hadamac=False, gaussian=True, cdf=True):
+                             use_hadamac=False, cdf=True, rescale_delta=False, 
+                             delta_correlation=False, shift_correlation=False):
         """Calculate a matrix of -log10(match probabilities)
+        
+        use_hadamac - if True, amino acid type information will contribute to the log probability
+        cdf - if True, use cdf in probability matrix. Otherwise use pdf (cdf uses chance of seeing a delta 'at least this great')
+        rescale_delta - if True, the shift differences between obs and pred are scaled so they are closer to the normal distribution
+        delta_correlation - if True, correlated errors between different atom types are accounted for in the probability 
+        shift_correlation - if True, the correlation between observed shift and prediction error is accounted for.
         """
         
         # Use default atom_sd values if not defined
@@ -201,6 +208,15 @@ class NAPS_assigner:
                     if cdf:
                         # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
                         prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                    elif rescale_delta:
+                        print("rescale_delta not yet implemented. Falling back to most basic method.")
+                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                    elif delta_correlation:
+                        print("delta_correlation not yet implemented. Falling back to most basic method.")
+                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                    elif shift_correlation:
+                        print("shift_correlation not yet implemented. Falling back to most basic method.")
+                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
                     else:
                         prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
             
@@ -444,7 +460,7 @@ class NAPS_assigner:
         else:
             return(results_df)
             
-    def find_alt_assignments2(self, N=1, verbose=False):
+    def find_alt_assignments2(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
         
         This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
@@ -452,7 +468,7 @@ class NAPS_assigner:
         Arguments:
         best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
         N is the number of alternative assignments to generate
-        If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+        If by_ss is true, calculate next best assignment for each spin system. Otherwise, calculate it for each residue.
         
         Output:
         A Dataframe containing the original assignments, and the alt_assignments by
@@ -474,34 +490,64 @@ class NAPS_assigner:
         self.alt_assign_df["Rank"] = 1
         self.alt_assign_df["Rel_prob"] = 0
        
-        # Convert best_match_indexes to get a series of spin systems indexed by spin system  
-        best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
-        
-        for ss in obs["SS_name"]:   # Consider each spin system in turn
-            if verbose: print(ss)
-            a = deepcopy(self)
-            for i in range(N):
-                if i==0:
-                    res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
-                    a.log_prob_matrix = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
-                else:
-                    res = alt_match          # Find the residue that was matched to current spin system in last round
-                
-                # Penalise the match found for this residue
-                if preds.loc[res, "Dummy_res"]:
-                    a.log_prob_matrix.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
-                else:
-                    a.log_prob_matrix.loc[ss, res] = penalty
-                
-                a.find_best_assignment()
-                a.assign_df.index = a.assign_df["SS_name"]
-                a.assign_df["Rank"] = i+2
-                alt_sum_prob = sum(a.log_prob_matrix.lookup(a.log_prob_matrix.index[a.best_match_indexes[0]], 
-                                   a.log_prob_matrix.columns[a.best_match_indexes[1]]))
-                a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
-                
-                alt_match = a.assign_df.loc[ss, "Res_name"] 
-                self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :])
+        if by_ss:
+            # Convert best_match_indexes to get a series of spin systems indexed by spin system  
+            best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+            
+            for ss in obs["SS_name"]:   # Consider each spin system in turn
+                if verbose: print(ss)
+                a = deepcopy(self)
+                for i in range(N):
+                    if i==0:
+                        res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
+                        #a.log_prob_matrix = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                    else:
+                        res = alt_match          # Find the residue that was matched to current spin system in last round
+                    
+                    # Penalise the match found for this residue
+                    if preds.loc[res, "Dummy_res"]:
+                        a.log_prob_matrix.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
+                    else:
+                        a.log_prob_matrix.loc[ss, res] = penalty
+                    
+                    a.find_best_assignment()
+                    a.assign_df.index = a.assign_df["SS_name"]
+                    a.assign_df["Rank"] = i+2
+                    alt_sum_prob = sum(a.log_prob_matrix.lookup(a.log_prob_matrix.index[a.best_match_indexes[0]], 
+                                       a.log_prob_matrix.columns[a.best_match_indexes[1]]))
+                    a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
+                    
+                    alt_match = a.assign_df.loc[ss, "Res_name"] 
+                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :])
+        else:
+            # Convert best_match_indexes to get a series of spin systems indexed by spin system  
+            best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
+            
+            for res in preds["Res_name"]:   # Consider each spin system in turn
+                if verbose: print(res)
+                a = deepcopy(self)
+                for i in range(N):
+                    if i==0:
+                        ss = best_matching[res]         # Find the spin system that was matched to current residue in optimal matching
+                        #a.log_prob_matrix = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                    else:
+                        ss = alt_match          # Find the spin system that was matched to current residue in last round
+                    
+                    # Penalise the match found for this residue
+                    if obs.loc[ss, "Dummy_SS"]:
+                        a.log_prob_matrix.loc[obs["Dummy_SS"], res] = penalty     # If last match was a dummy residue, penalise all dummies
+                    else:
+                        a.log_prob_matrix.loc[ss, res] = penalty
+                    
+                    a.find_best_assignment()
+                    a.assign_df.index = a.assign_df["Res_name"]
+                    a.assign_df["Rank"] = i+2
+                    alt_sum_prob = sum(a.log_prob_matrix.lookup(a.log_prob_matrix.index[a.best_match_indexes[0]], 
+                                       a.log_prob_matrix.columns[a.best_match_indexes[1]]))
+                    a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
+                    
+                    alt_match = a.assign_df.loc[res, "SS_name"] 
+                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[res, :])
                             
         
         return(self.alt_assign_df)
