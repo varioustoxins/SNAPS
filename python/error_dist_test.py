@@ -6,20 +6,21 @@ Created on Wed Nov 21 16:12:52 2018
 @author: aph516
 """
 
+import numpy as np
 import pandas as pd
-from scipy.stats import multivariate_normal
+from scipy.stats import norm, multivariate_normal
 from plotnine import *
 from NAPS_assigner import NAPS_assigner
-
+from pathlib import Path
 #path = "/Users/aph516/GitHub/NAPS/"
-path = "C:\\Users\\Alex\\GitHub\\NAPS\\"
+path = Path("C:/Users/Alex/GitHub/NAPS/")
 
 #%%
 #### Prepare to import all proteins in the testset
 
-testset_df = pd.read_table(path+"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
-testset_df["obs_file"] = path+"data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
-testset_df["preds_file"] = path+"data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"
+testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file for file in testset_df["BMRB"].astype(str)+".txt"]
+testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df.index = testset_df["ID"]
 
 a = NAPS_assigner()
@@ -117,6 +118,32 @@ for r in df["Res_type"].unique():
 # Calculate the prediction errors
 for atom in a.pars["atom_set"]:
     df["d_"+atom] = df[atom+"_pred"] - df[atom+"_obs"]
+
+#%%
+#### Try out Yeo-Johnson transformation
+# This should transform a distribution to be more normal
+
+from YeoJohnson import YeoJohnson
+
+yj = YeoJohnson()
+test_data = df["d_CA"]
+
+
+
+# To work out the best value of lambda, we'll need to find the maximum likelihood value of lambda.
+results = pd.DataFrame(columns=["lam", "log_prob"], index=np.linspace(0,2,50))
+for l in np.linspace(0,2,50):
+    x = yj.fit(df["C_obs"].dropna(), l)
+    mu, sig = norm.fit(x)
+    p = sum(np.log(norm.pdf(x, mu, sig)))
+    results.loc[l,:] = [l, p]
+ggplot(data=results) + geom_line(aes(x="lam", y="log_prob", group=1))
+    
+trans_data = pd.DataFrame( {"test":df["C_obs"], "trans" : yj.fit(df["C_obs"], 1.1) })
+trans_data = pd.DataFrame( {"test":df["d_C"], "trans" : yj.fit(df["d_C"], 1.1) })
+
+ggplot(data=trans_data) + geom_density(aes(x="test")) + geom_density(aes(x="trans"), colour="red")
+
 
 #%%
 #### Try out multivariate normal distribution

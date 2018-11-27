@@ -8,6 +8,7 @@ Created on Tue Nov 20 16:30:40 2018
 
 import pandas as pd
 from subprocess import run
+from pathlib import Path
 
 path = "/Users/aph516/GitHub/NAPS/"
 

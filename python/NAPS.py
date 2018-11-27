@@ -9,6 +9,7 @@ Created on Mon Nov 19 14:30:36 2018
 import pandas as pd
 from NAPS_assigner import NAPS_assigner
 import argparse
+from pathlib import Path
 
 #### User input
 
@@ -18,11 +19,12 @@ if False:
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt")
-    runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
+    
+    runfile(Path('C:/Users/Alex/GitHub/NAPS/python/NAPS.py'), wdir=Path('C:/Users/Alex/GitHub/NAPS/python'),
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt"+
-            "-c config.txt")
+            " -c config.txt")
 
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")
@@ -47,7 +49,7 @@ print(args.config_file)
 a = NAPS_assigner()
 
 # Import config file
-config = pd.read_table("/Users/aph516/GitHub/NAPS/python/config.txt", sep="\s+", comment="#", header=None,
+config = pd.read_table(args.config_file, sep="\s+", comment="#", header=None,
                        index_col=0, names=["Value"])
 a.pars["shiftx2_offset"] = int(config.loc["shiftx2_offset"].Value)
 a.pars["atom_set"] = {s.strip() for s in config.loc["atom_set"].Value.split(",")}

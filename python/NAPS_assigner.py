@@ -204,21 +204,20 @@ class NAPS_assigner:
             na_mask = delta.isna()
             delta[na_mask] = 0
             for c in delta.columns:
-                if gaussian:
-                    if cdf:
-                        # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
-                        prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
-                    elif rescale_delta:
-                        print("rescale_delta not yet implemented. Falling back to most basic method.")
-                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                    elif delta_correlation:
-                        print("delta_correlation not yet implemented. Falling back to most basic method.")
-                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                    elif shift_correlation:
-                        print("shift_correlation not yet implemented. Falling back to most basic method.")
-                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                    else:
-                        prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                if cdf:
+                    # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
+                    prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                elif rescale_delta:
+                    print("rescale_delta not yet implemented. Falling back to most basic method.")
+                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                elif delta_correlation:
+                    print("delta_correlation not yet implemented. Falling back to most basic method.")
+                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                elif shift_correlation:
+                    print("shift_correlation not yet implemented. Falling back to most basic method.")
+                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                else:
+                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
             
             # In positions where data was missing, use a default probability
             prob[na_mask] = default_prob
