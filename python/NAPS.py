@@ -21,7 +21,8 @@ if False:
     runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
-            "../output/test.txt")
+            "../output/test.txt"+
+            "-c config.txt")
 
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")
@@ -64,7 +65,8 @@ assign_df, best_match_indexes = a.find_best_assignment()
 a.check_assignment_consistency(threshold=0.1)
 a.assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
 
-tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
+#tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
+tmp = a.find_alt_assignments2(N=2, verbose=True)
 
 
 #%%
