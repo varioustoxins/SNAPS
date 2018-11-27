@@ -18,6 +18,10 @@ if False:
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt")
+    runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
+            args="../data/testset/simplified_BMRB/4032.txt "+
+            "../data/testset/shiftx2_results/A001_1KF3A.cs "+
+            "../output/test.txt")
 
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")

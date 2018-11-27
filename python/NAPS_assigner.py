@@ -13,13 +13,14 @@ from scipy.stats import norm, gennorm
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from Bio.SeqUtils import seq1
-
+L
 class NAPS_assigner:
     # Attributes
     obs = None
     preds = None
     log_prob_matrix = None
     assign_df = None
+    best_match_indexes = None
     pars = {"shiftx2_offset": 0,
             "atom_set": {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"},
             "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
@@ -271,7 +272,8 @@ class NAPS_assigner:
         assign_df = assign_df.sort_values(by="Res_N")
         assign_df["Log_prob"] = log_prob_matrix.lookup(log_prob_matrix.index[row_ind], log_prob_matrix.columns[col_ind])
         
-        self.assign_df = assign_df        
+        self.assign_df = assign_df
+        self.best_match_indexes = [row_ind, col_ind]
         return(assign_df, [row_ind, col_ind])
     
     def check_assignment_consistency(self, threshold=0.1):
@@ -324,7 +326,7 @@ class NAPS_assigner:
             self.assign_df = assign_df
             return(self.assign_df)
     
-    def find_alt_assignments(self, best_match_indexes, N=1, by_res=True,  verbose=False, return_full_assignments=False):
+    def find_alt_assignments(self, N=1, by_res=True,  verbose=False, return_full_assignments=False):
         """ Find the next-best assignment(s) for each residue or spin system
         
         This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
@@ -344,8 +346,7 @@ class NAPS_assigner:
         obs = self.obs
         preds = self.preds
         log_prob_matrix = self.log_prob_matrix
-        
-        log_prob_matrix = self.log_prob_matrix
+        best_match_indexes = self.best_match_indexes
         
         # Calculate sum probability for the best matching
         best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
@@ -425,6 +426,87 @@ class NAPS_assigner:
                         matching_df_list[i].loc[:,ss] = alt_matching
                     # Calculate the relative overall probability of this assignment, compared to the optimal assignment
                     rel_log_prob_list[i][ss] = sum(tmp.lookup(alt_matching.index, alt_matching.values)) - best_sum_prob            
+            
+        # Store the results as a dataframe
+        for i in range(N):
+            results_dict["Alt_assign_"+str(i+1)] = assignment_list[i]
+            results_dict["Alt_rel_prob"+str(i+1)] = rel_log_prob_list[i]
+        results_df = pd.DataFrame(results_dict)
+        if by_res:
+            results_df["Res_name"] = results_df.index
+        else:
+            results_df["SS_name"] = results_df.index
+            
+        if return_full_assignments:
+            return(results_df, matching_df_list)
+        else:
+            return(results_df)
+            
+    def find_alt_assignments2(self, N=1, verbose=False, return_full_assignments=False):
+        """ Find the next-best assignment(s) for each residue or spin system
+        
+        This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+        
+        Arguments:
+        best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
+        N is the number of alternative assignments to generate
+        If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+        
+        Output:
+        If return_full_assignments is False, returns a DataFrame containing the next-best assignment for each residue or spin system, and the relative overall probability of that assignment
+        If return_full_assignments is True, the output is a list with two elements
+        - The first element is the DataFrame of assignments and probabilities, as before
+        - The second element is a list of DataFrames containing the complete alternative assignments for each residue.
+        """
+        
+        obs = self.obs
+        preds = self.preds
+        log_prob_matrix = self.log_prob_matrix
+        best_match_indexes = self.best_match_indexes
+        
+        # Calculate sum probability for the best matching
+        best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
+                                   log_prob_matrix.columns[best_match_indexes[1]]))
+        
+        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        
+        
+        # Create data structures for storing results
+        assignment_list = [pd.Series(index = obs.index) for i in range(N)]
+        rel_log_prob_list = [pd.Series(index = obs.index) for i in range(N)]
+        results_dict = {}
+        if return_full_assignments: 
+            matching_df_list = [pd.DataFrame(index=obs.index, columns=obs.index) for i in range(N)]
+        
+        # Convert best_match_indexes to get a series of spin systems indexed by spin system  
+        best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+        alt_matching = pd.Series()
+        
+        for ss in obs["SS_name"]:   # Consider each spin system in turn
+            if verbose: print(ss)
+            for i in range(N):
+                if i==0:
+                    res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
+                    tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                else:
+                    res = alt_matching[ss]          # Find the residue that was matched to current spin system in last round
+                
+                # Penalise the match found for this residue
+                if preds.loc[res, "Dummy_res"]:
+                    tmp.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
+                else:
+                    tmp.loc[ss, res] = penalty
+                
+                row_ind, col_ind = linear_sum_assignment(tmp)
+                ## Instead of this, try creating a copy of the NAPS_assigner object, changing log_prob_matrix and running find_best_assignment()
+                
+                # Extract the info we want from the optimisation results
+                alt_matching = pd.Series(preds.index[col_ind], index=obs.index[row_ind])
+                assignment_list[i][ss] = alt_matching[ss]
+                if return_full_assignments: 
+                    matching_df_list[i].loc[:,ss] = alt_matching
+                # Calculate the relative overall probability of this assignment, compared to the optimal assignment
+                rel_log_prob_list[i][ss] = sum(tmp.lookup(alt_matching.index, alt_matching.values)) - best_sum_prob            
             
         # Store the results as a dataframe
         for i in range(N):
