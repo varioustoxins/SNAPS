@@ -8,12 +8,12 @@ Created on Wed Nov 21 16:12:52 2018
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm, multivariate_normal
+from scipy.stats import norm, multivariate_normal, linregress
 from plotnine import *
 from NAPS_assigner import NAPS_assigner
 from pathlib import Path
-#path = "/Users/aph516/GitHub/NAPS/"
-path = Path("C:/Users/Alex/GitHub/NAPS/")
+path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("C:/Users/Alex/GitHub/NAPS/")
 
 #%%
 #### Prepare to import all proteins in the testset
@@ -65,6 +65,8 @@ bad_res = bad_res.drop_duplicates()
 
 #%%
 
+a = NAPS_assigner()
+
 #### Import the actual data
 obs_all = None
 for i in testset_df["ID"]:
@@ -98,27 +100,64 @@ atoms_obs = [s+"_obs" for s in ["C","CA","CB","H","HA","N"]]
 atoms_pred = [s+"_pred" for s in ["C","CA","CB","H","HA","N"]]
 atoms_m1_obs = [s+"m1_obs" for s in ["C","CA","CB","H","HA","N"]]
 atoms_m1_pred = [s+"m1_pred" for s in ["C","CA","CB","H","HA","N"]]
-for r in df["Res_type"].unique():
-    mu = df.loc[df["Res_type"]==r, atoms_obs].mean()
-    sig = df.loc[df["Res_type"]==r, atoms_obs].std()
-    # i shifts
-    df.loc[df["Res_type"]==r, atoms_obs] = (df.loc[df["Res_type"]==r, atoms_obs] - mu)/sig
-    mu.index = atoms_pred
-    sig.index = atoms_pred
-    df.loc[df["Res_type"]==r, atoms_pred] = (df.loc[df["Res_type"]==r, atoms_pred] - mu)/sig
-    # i-1 shifts
-    mu.index = atoms_m1_obs
-    sig.index = atoms_m1_obs
-    df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] - mu[atoms_m1_obs[0:3]])/sig[atoms_m1_obs[0:3]]
-    mu.index = atoms_m1_pred
-    sig.index = atoms_m1_pred
-    df.loc[df["Res_typem1"]==r,atoms_m1_pred[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_pred[0:3]] - mu[atoms_m1_pred[0:3]])/sig[atoms_m1_pred[0:3]]
+#mu = {}
+#sig = {}
+#for r in df["Res_type"].unique():
+#    mu[r] = df.loc[df["Res_type"]==r, atoms_obs].mean()
+#    sig[r] = df.loc[df["Res_type"]==r, atoms_obs].std()
+#    # i shifts
+#    df.loc[df["Res_type"]==r, atoms_obs] = (df.loc[df["Res_type"]==r, atoms_obs] - mu[r])/sig[r]
+#    mu[r].index = atoms_pred
+#    sig[r].index = atoms_pred
+#    df.loc[df["Res_type"]==r, atoms_pred] = (df.loc[df["Res_type"]==r, atoms_pred] - mu[r])/sig[r]
+#    # i-1 shifts
+#    mu[r].index = atoms_m1_obs
+#    sig[r].index = atoms_m1_obs
+#    df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] - mu[r][atoms_m1_obs[0:3]])/sig[r][atoms_m1_obs[0:3]]
+#    mu[r].index = atoms_m1_pred
+#    sig[r].index = atoms_m1_pred
+#    df.loc[df["Res_typem1"]==r,atoms_m1_pred[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_pred[0:3]] - mu[r][atoms_m1_pred[0:3]])/sig[r][atoms_m1_pred[0:3]]
         
 
 # Calculate the prediction errors
 for atom in a.pars["atom_set"]:
     df["d_"+atom] = df[atom+"_pred"] - df[atom+"_obs"]
 
+# Fit linear model between d_atom and atom_obs, and subtract to form dd_atom
+atoms_m1 = pd.Series(["Cm1","CAm1","CBm1"])
+
+for atom in a.pars["atom_set"]:
+    df["dd_"+atom] = np.NaN
+    
+    for res in df["Res_type"].unique():
+        if atom in atoms_m1:
+            tmp = df.loc[df["Res_typem1"]==res, [atom+"_obs", "d_"+atom]].dropna(how="any")
+        else:
+            tmp = df.loc[df["Res_type"]==res, [atom+"_obs", "d_"+atom]].dropna(how="any")
+        try:
+            lm = linregress(tmp[atom+"_obs"], tmp["d_"+atom])
+            if atom in atoms_m1:
+                df.loc[df["Res_typem1"]==res, "dd_"+atom] = df.loc[df["Res_typem1"]==res, "d_"+atom] - lm[0]*df.loc[df["Res_typem1"]==res, atom+"_obs"] - lm[1]
+            else:
+                df.loc[df["Res_type"]==res, "dd_"+atom] = df.loc[df["Res_type"]==res, "d_"+atom] - lm[0]*df.loc[df["Res_type"]==res, atom+"_obs"] - lm[1]
+        except:
+            print("Error: ",res, atom)
+
+# Fit linear model between d_atom and atom_obs
+#fit_results = pd.DataFrame(columns=["Res_type","Atom_type","Grad","Offset","r2","p-value","stderr"])
+#for res in df["Res_type"].unique():
+#    for atom in atoms_obs:
+#        tmp = df.loc[df["Res_type"]==res, [atom, "d_"+atom.split("_")[0]]].dropna(how="any")
+#        try:
+#            lm = linregress(tmp[atom], tmp["d_"+atom.split("_")[0]])
+#            fit_results.loc[res+"_"+atom,:] = [res, atom, lm[0], lm[1], lm[2]**2, lm[3], lm[4]]
+#        except:
+#            print("Error: ",res, atom)
+#fit_results = fit_results.sort_values(by="Atom_type")
+#fit_results["Grad"] = fit_results["Grad"].astype(float)
+#ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
+
+    
 #%%
 #### Try out Yeo-Johnson transformation
 # This should transform a distribution to be more normal
@@ -181,6 +220,25 @@ e = exp(mvn_full.logpdf(obs1) - mvn_obs.logpdf(obs1[0:9]))
 
 #%%
 #### Exploratory analysis
+plt = ggplot(data=df)
+for a in ["C","CA","CB","H","HA","N","Cm1","CAm1","CBm1"]:
+    plt=plt + geom_density(aes(x="d_"+a))
+plt + ggtitle("Prediction error distribution (scaled)")
+
+plt = ggplot(data=df)
+for a in ["C","CA","CB","H","HA","N","Cm1","CAm1","CBm1"]:
+    plt=plt + geom_density(aes(x=a+"_obs"))
+plt + ggtitle("Observed shift distribution (scaled)")
+
+ggplot(data=df) + geom_point(aes(x="CB_obs", y="d_CB", colour="Res_type")) + geom_line(aes(x='x', y='y'), data=pd.DataFrame({'x':[-7,7],'y':[0.27*7+0.01, -0.27*7+0.01]}))
+
+ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
+
+ggplot(data=df) + geom_point(aes(x="N_obs", y="dd_N", colour="Res_type"))
+
+ggplot(data=df) + geom_density(aes(x="CA_obs", colour="Res_type"))
+ggplot(data=df) +geom_point(aes(x="CA_obs", y="d_CA", colour="Res_type"), alpha=0.2) + facet_wrap("Res_type")
+
 ggplot(data=df2) + geom_point(aes(x="d_CBm1", y="CBm1_obs", colour="Res_typem1"))# + facet_wrap("Res_type")
 #ggplot(data=df[df["Res_type"]!="C"])
 
