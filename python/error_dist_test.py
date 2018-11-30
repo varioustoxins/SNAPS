@@ -12,9 +12,9 @@ from scipy.stats import norm, multivariate_normal, linregress
 from plotnine import *
 from NAPS_assigner import NAPS_assigner
 from pathlib import Path
-#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS/")
-path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
+#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 #%%
 #### Prepare to import all proteins in the testset
 
@@ -226,7 +226,20 @@ ggplot(data=df) + geom_point(aes(x="CB_obs", y="d_CB", colour="Res_type")) + geo
 
 ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
 
-ggplot(data=df) + geom_point(aes(x="N_obs", y="dd_N", colour="Res_type"))
+ggplot(data=df) + geom_point(aes(x="N_obs", y="dd_N", colour="N_pred"))
+
+atom = "N"
+plt = ggplot(data=df) + geom_density(aes(x=atom+"_obs"))
+lo = df[atom+"_obs"].min()
+hi = df[atom+"_obs"].max()
+step = (hi-lo)/6
+plt = ggplot(aes(x="dd_"+atom)) + geom_density(data=df.loc[df[atom+"_obs"]<lo+step,:], colour="red") 
+plt = plt + geom_density(data=df.loc[df[atom+"_obs"].between(lo+step,lo+2*step),:], colour="orange")
+plt = plt + geom_density(data=df.loc[df[atom+"_obs"].between(lo+2*step,lo+3*step),:], colour="yellow")
+plt = plt + geom_density(data=df.loc[df[atom+"_obs"].between(lo+3*step,lo+4*step),:], colour="green")
+plt = plt + geom_density(data=df.loc[df[atom+"_obs"].between(lo+4*step,lo+5*step),:], colour="blue")
+plt = plt + geom_density(data=df.loc[df[atom+"_obs"]>lo+5*step,:], colour="magenta")
+plt
 
 ggplot(data=df) + geom_density(aes(x="CA_obs", colour="Res_type"))
 ggplot(data=df) +geom_point(aes(x="CA_obs", y="d_CA", colour="Res_type"), alpha=0.2) + facet_wrap("Res_type")
