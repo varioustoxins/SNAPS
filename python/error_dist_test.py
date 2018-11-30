@@ -12,9 +12,9 @@ from scipy.stats import norm, multivariate_normal, linregress
 from plotnine import *
 from NAPS_assigner import NAPS_assigner
 from pathlib import Path
-path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS/")
-
+path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 #%%
 #### Prepare to import all proteins in the testset
 
@@ -71,7 +71,7 @@ a = NAPS_assigner()
 obs_all = None
 for i in testset_df["ID"]:
 #for i in ["A063"]:
-    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"])
+    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"], remove_Pro=False)
     preds = a.read_shiftx2(testset_df.loc[i, "preds_file"])
     
     #Change Bs to Cs
@@ -94,38 +94,16 @@ df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type"], how="outer", suf
 # Get rid of any residues with mismatching types, or where the type is NaN
 df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_N"].astype(str)),:]
 df = df.dropna(axis=0, subset=["Res_type","Res_typem1"])
-# Make a normalised version of observed shift
-# Do this by subtracting the mean shift, separately for each residue type
-atoms_obs = [s+"_obs" for s in ["C","CA","CB","H","HA","N"]]
-atoms_pred = [s+"_pred" for s in ["C","CA","CB","H","HA","N"]]
-atoms_m1_obs = [s+"m1_obs" for s in ["C","CA","CB","H","HA","N"]]
-atoms_m1_pred = [s+"m1_pred" for s in ["C","CA","CB","H","HA","N"]]
-#mu = {}
-#sig = {}
-#for r in df["Res_type"].unique():
-#    mu[r] = df.loc[df["Res_type"]==r, atoms_obs].mean()
-#    sig[r] = df.loc[df["Res_type"]==r, atoms_obs].std()
-#    # i shifts
-#    df.loc[df["Res_type"]==r, atoms_obs] = (df.loc[df["Res_type"]==r, atoms_obs] - mu[r])/sig[r]
-#    mu[r].index = atoms_pred
-#    sig[r].index = atoms_pred
-#    df.loc[df["Res_type"]==r, atoms_pred] = (df.loc[df["Res_type"]==r, atoms_pred] - mu[r])/sig[r]
-#    # i-1 shifts
-#    mu[r].index = atoms_m1_obs
-#    sig[r].index = atoms_m1_obs
-#    df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_obs[0:3]] - mu[r][atoms_m1_obs[0:3]])/sig[r][atoms_m1_obs[0:3]]
-#    mu[r].index = atoms_m1_pred
-#    sig[r].index = atoms_m1_pred
-#    df.loc[df["Res_typem1"]==r,atoms_m1_pred[0:3]] = (df.loc[df["Res_typem1"]==r, atoms_m1_pred[0:3]] - mu[r][atoms_m1_pred[0:3]])/sig[r][atoms_m1_pred[0:3]]
         
-
 # Calculate the prediction errors
 for atom in a.pars["atom_set"]:
     df["d_"+atom] = df[atom+"_pred"] - df[atom+"_obs"]
 
+
+
 # Fit linear model between d_atom and atom_obs, and subtract to form dd_atom
 atoms_m1 = pd.Series(["Cm1","CAm1","CBm1"])
-
+lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset"])
 for atom in a.pars["atom_set"]:
     df["dd_"+atom] = np.NaN
     
@@ -136,12 +114,14 @@ for atom in a.pars["atom_set"]:
             tmp = df.loc[df["Res_type"]==res, [atom+"_obs", "d_"+atom]].dropna(how="any")
         try:
             lm = linregress(tmp[atom+"_obs"], tmp["d_"+atom])
+            lm_results.loc[atom+"_"+res,:] = [atom, res, lm[0], lm[1]]
             if atom in atoms_m1:
                 df.loc[df["Res_typem1"]==res, "dd_"+atom] = df.loc[df["Res_typem1"]==res, "d_"+atom] - lm[0]*df.loc[df["Res_typem1"]==res, atom+"_obs"] - lm[1]
             else:
                 df.loc[df["Res_type"]==res, "dd_"+atom] = df.loc[df["Res_type"]==res, "d_"+atom] - lm[0]*df.loc[df["Res_type"]==res, atom+"_obs"] - lm[1]
         except:
             print("Error: ",res, atom)
+# For some reason this isn't working on the m1 atoms...
 
 # Fit linear model between d_atom and atom_obs
 #fit_results = pd.DataFrame(columns=["Res_type","Atom_type","Grad","Offset","r2","p-value","stderr"])
@@ -157,32 +137,17 @@ for atom in a.pars["atom_set"]:
 #fit_results["Grad"] = fit_results["Grad"].astype(float)
 #ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
 
-    
-#%%
-#### Try out Yeo-Johnson transformation
-# This should transform a distribution to be more normal
+#%% Look at covariance among adjusted deltas (dd_atom)
 
-from YeoJohnson import YeoJohnson
+dd_df = df.loc[:,["dd_"+ atom for atom in a.pars["atom_set"]]]
 
-yj = YeoJohnson()
-test_data = df["d_CA"]
+abs_corr_matrix = abs(dd_df.corr())
 
+mvn = multivariate_normal(dd_df.mean(), dd_df.cov())
 
-
-# To work out the best value of lambda, we'll need to find the maximum likelihood value of lambda.
-results = pd.DataFrame(columns=["lam", "log_prob"], index=np.linspace(0,2,50))
-for l in np.linspace(0,2,50):
-    x = yj.fit(df["C_obs"].dropna(), l)
-    mu, sig = norm.fit(x)
-    p = sum(np.log(norm.pdf(x, mu, sig)))
-    results.loc[l,:] = [l, p]
-ggplot(data=results) + geom_line(aes(x="lam", y="log_prob", group=1))
-    
-trans_data = pd.DataFrame( {"test":df["C_obs"], "trans" : yj.fit(df["C_obs"], 1.1) })
-trans_data = pd.DataFrame( {"test":df["d_C"], "trans" : yj.fit(df["d_C"], 1.1) })
-
-ggplot(data=trans_data) + geom_density(aes(x="test")) + geom_density(aes(x="trans"), colour="red")
-
+tmp = pd.DataFrame(mvn.rvs(size=10000), columns = dd_df.columns)
+ggplot(data=tmp) + geom_point(aes(x="dd_HA", y="dd_CA"))
+ggplot(data=df) + geom_point(aes(x="dd_HA", y="dd_CA"))
 
 #%%
 #### Try out multivariate normal distribution
@@ -216,6 +181,33 @@ mvn_d.pdf(obs1[9:18])
 
 from math import exp
 e = exp(mvn_full.logpdf(obs1) - mvn_obs.logpdf(obs1[0:9]))
+
+
+#%%
+#### Try out Yeo-Johnson transformation
+# This should transform a distribution to be more normal
+
+from YeoJohnson import YeoJohnson
+
+yj = YeoJohnson()
+test_data = df["d_CA"]
+
+
+
+# To work out the best value of lambda, we'll need to find the maximum likelihood value of lambda.
+results = pd.DataFrame(columns=["lam", "log_prob"], index=np.linspace(0,2,50))
+for l in np.linspace(0,2,50):
+    x = yj.fit(df["C_obs"].dropna(), l)
+    mu, sig = norm.fit(x)
+    p = sum(np.log(norm.pdf(x, mu, sig)))
+    results.loc[l,:] = [l, p]
+ggplot(data=results) + geom_line(aes(x="lam", y="log_prob", group=1))
+    
+trans_data = pd.DataFrame( {"test":df["C_obs"], "trans" : yj.fit(df["C_obs"], 1.1) })
+trans_data = pd.DataFrame( {"test":df["d_C"], "trans" : yj.fit(df["d_C"], 1.1) })
+
+ggplot(data=trans_data) + geom_density(aes(x="test")) + geom_density(aes(x="trans"), colour="red")
+
 
 
 #%%

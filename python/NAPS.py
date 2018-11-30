@@ -25,12 +25,19 @@ if False:
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt"+
             " -c config.txt")
+    
+    runfile(Path('C:/Users/kheyam/Documents/GitHub/NAPS/python/NAPS.py'), wdir=Path('C:/Users/kheyam/Documents/GitHub/NAPS/python'),
+            args="../data/testset/simplified_BMRB/4032.txt "+
+            "../data/testset/shiftx2_results/A001_1KF3A.cs "+
+            "../output/test.txt"+
+            " -c config.txt")
 
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")
 parser.add_argument("pred_file")
 parser.add_argument("out_file")
-parser.add_argument("-c", "--config_file", default="/Users/aph516/GitHub/NAPS/python/config.txt")
+#parser.add_argument("-c", "--config_file", default="/Users/aph516/GitHub/NAPS/python/config.txt")
+parser.add_argument("-c", "--config_file", default=Path("C:/kheyam/Documents/GitHub/NAPS/python/config.txt"))
 
 
 args = parser.parse_args()
