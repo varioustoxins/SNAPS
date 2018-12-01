@@ -9,7 +9,7 @@ Created on Mon Nov 19 10:36:07 2018
 import numpy as np
 import pandas as pd
 from plotnine import *
-from scipy.stats import norm, gennorm
+from scipy.stats import norm, gennorm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from copy import deepcopy
@@ -185,7 +185,6 @@ class NAPS_assigner:
             """ Calculate match scores between all observed spin systems and a single predicted residue
             
             default_prob is the probability assigned when an observation or prediction is missing
-            atom_set is a set used to restrict to only certain measurements
             atom_sd is the expected standard deviation for each atom type
             sf is a scaling factor for the entire atom_sd dictionary
             use_hadamac determines whether residue type information is used
@@ -197,55 +196,71 @@ class NAPS_assigner:
             
             # Calculate shift differences and probabilities for each observed spin system
             delta = obs_reduced - pred1_reduced
-            prob = delta.copy()
-            prob.iloc[:,:] = 1
             
             # Make a note of NA positions in delta, and set them to zero (this avoids warnings when using norm.cdf later)
             na_mask = delta.isna()
             delta[na_mask] = 0
-            for c in delta.columns:
-                if cdf:
-                    # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
-                    prob[c] = 2*norm.cdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
-                elif rescale_delta:
-                    print("rescale_delta not yet implemented. Falling back to most basic method.")
-                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                elif delta_correlation:
-                    print("delta_correlation not yet implemented. Falling back to most basic method.")
-                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                elif shift_correlation:
-                    print("shift_correlation not yet implemented. Falling back to most basic method.")
-                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
-                else:
-                    prob[c] = norm.pdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
             
-            # In positions where data was missing, use a default probability
-            prob[na_mask] = default_prob
+            if delta_correlation:
+                overall_prob = pd.Series(index=delta.index)
+                overall_prob[:] = 1
+                
+                d_mean = pd.read_csv("../data/d_mean.csv", header=None, index_col=0).loc[delta.columns,1]
+                d_cov = pd.read_csv("../data/d_cov.csv", index_col=0).loc[delta.columns,delta.columns]
+                
+                mvn = multivariate_normal(d_mean, d_cov)
+                
+                overall_prob = mvn.logpdf(delta)
+                
+                # Penalise rows which have missing shifts
+                # Penalise for every shift that's missing, which isn't also missing in the predictions
+                overall_prob = overall_prob + log10(default_prob) * (na_mask.sum(axis=1) - pred1_reduced.isna().sum())
+                    
+            else:
+                prob = delta.copy()
+                prob.iloc[:,:] = 1
+                
+                for c in delta.columns:
+                    if cdf:
+                        # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
+                        prob[c] = log10(2) + norm.logcdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                    elif rescale_delta:
+                        print("rescale_delta not yet implemented. Falling back to most basic method.")
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)        
+                    elif shift_correlation:
+                        print("shift_correlation not yet implemented. Falling back to most basic method.")
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                    else:
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                
+                # In positions where data was missing, use a default probability
+                prob[na_mask] = log10(default_prob)
+                
+                # Calculate penalty for a HADAMAC mismatch
+                if use_hadamac:
+                    # If the i-1 aa type of the predicted residue matches the HADAMAC group of the observation, probability is 1.
+                    # Otherwise, probability defaults to 0.01
+                    prob["HADAMACm1"] = 0.01
+                    if type(pred1["Res_typem1"])==str:      # dummy residues have NaN
+                        prob.loc[obs["HADAMACm1"].str.find(pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
             
-            # Calculate penalty for a HADAMAC mismatch
-            if use_hadamac:
-                # If the i-1 aa type of the predicted residue matches the HADAMAC group of the observation, probability is 1.
-                # Otherwise, probability defaults to 0.01
-                prob["HADAMACm1"] = 0.01
-                if type(pred1["Res_typem1"])==str:      # dummy residues have NaN
-                    prob.loc[obs["HADAMACm1"].str.find(pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
-        
-            # Calculate overall probability of each row
-            overall_prob = prob.prod(skipna=False, axis=1)
+                # Calculate overall probability of each row
+                overall_prob = prob.sum(skipna=False, axis=1)
+                
             return(overall_prob)
         
         obs = self.obs
         preds = self.preds
         
-        prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
+        log_prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
         
         for i in preds.index:
             if verbose: print(i)
-            prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:])
+            log_prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:])
+        
         
         # Calculate log of matrix
-        log_prob_matrix = -prob_matrix[prob_matrix>0].applymap(log10)
-        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmax(log_prob_matrix.values)
+        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(log_prob_matrix.values)
         log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
@@ -265,7 +280,7 @@ class NAPS_assigner:
         
         valid_atoms = list(self.pars["atom_set"])
         
-        row_ind, col_ind = linear_sum_assignment(log_prob_matrix)
+        row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix)    # -1 because the algorithm minimises the sum, while we want to maximise it
         
         obs.index.name = "SS_index"
         preds.index.name = "Res_index"

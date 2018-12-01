@@ -137,9 +137,29 @@ for atom in a.pars["atom_set"]:
 #fit_results["Grad"] = fit_results["Grad"].astype(float)
 #ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
 
-#%% Look at covariance among adjusted deltas (dd_atom)
+#%% Calculate covariance matrixes with and without delta adjustment
 
+d_df = df.loc[:,["d_"+ atom for atom in a.pars["atom_set"]]]
 dd_df = df.loc[:,["dd_"+ atom for atom in a.pars["atom_set"]]]
+
+d_mean = d_df.mean()
+d_cov = d_df.cov()
+dd_mean = dd_df.mean()
+dd_cov = dd_df.cov()
+
+# Remove "d_" or "dd_" from index and column names
+d_mean.index = [s[2:] for s in d_mean.index]
+d_cov.index = [s[2:] for s in d_cov.index]
+d_cov.columns = [s[2:] for s in d_cov.columns]
+dd_mean.index = [s[3:] for s in dd_mean.index]
+dd_cov.index = [s[3:] for s in dd_cov.index]
+dd_cov.columns = [s[3:] for s in dd_cov.columns]
+
+# Save to files for use with NAPS_assigner
+d_mean.to_csv("../data/d_mean.csv")
+d_cov.to_csv("../data/d_cov.csv")
+dd_mean.to_csv("../data/dd_mean.csv")
+dd_cov.to_csv("../data/dd_cov.csv")
 
 abs_corr_matrix = abs(dd_df.corr())
 
