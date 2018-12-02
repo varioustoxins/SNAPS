@@ -30,7 +30,7 @@ if False:
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt"+
-            " -c config.txt --delta_correlation")
+            " -c config.txt")
 
 parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
 parser.add_argument("shift_file")

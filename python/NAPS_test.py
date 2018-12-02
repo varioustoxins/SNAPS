@@ -10,11 +10,12 @@ import pandas as pd
 from subprocess import run
 from pathlib import Path
 
-path = "/Users/aph516/GitHub/NAPS/"
+#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
-testset_df = pd.read_table(path+"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
-testset_df["obs_file"] = path+"data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"
-testset_df["preds_file"] = path+"data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"
+testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["obs_file"] = [path/x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
+testset_df["preds_file"] = [path/x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
 testset_df.index = testset_df["ID"]
 
@@ -23,8 +24,8 @@ testset_df.index = testset_df["ID"]
 
 for i in testset_df.index:
     print(testset_df.loc[i, "obs_file"])
-    args = [path+"python/NAPS.py", testset_df.loc[i, "obs_file"], testset_df.loc[i, "preds_file"], 
-            path+"output/testset/"+testset_df.loc[i, "out_name"]+".txt"]
+    args = [(path/"python/NAPS.py").as_posix(), testset_df.loc[i, "obs_file"].as_posix(), testset_df.loc[i, "preds_file"].as_posix(), 
+            (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix()]
     run(args)
 
 #%%
@@ -84,4 +85,11 @@ def check_assignment_accuracy(data_dir):
     
 assigns, summary = check_assignment_accuracy(path+"output/testset/")
 #%%
-#### Test alt assignments
+#### Test effect of accounting for correlated errors
+for i in testset_df.index:
+    print(testset_df.loc[i, "obs_file"])
+    args = [path+"python/NAPS.py", testset_df.loc[i, "obs_file"], testset_df.loc[i, "preds_file"], 
+            path+"output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt --delta_correlation"]
+    run(args)
+    
+assigns2, summary2 = check_assignment_accuracy(path+"output/delta_correlation/")
