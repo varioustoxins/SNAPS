@@ -36,12 +36,18 @@ parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shi
 parser.add_argument("shift_file")
 parser.add_argument("pred_file")
 parser.add_argument("out_file")
-#parser.add_argument("-c", "--config_file", default="/Users/aph516/GitHub/NAPS/python/config.txt")
-parser.add_argument("-c", "--config_file", default=Path("C:/kheyam/Documents/GitHub/NAPS/python/config.txt"))
+parser.add_argument("-c", "--config_file", default="/Users/aph516/GitHub/NAPS/python/config.txt")
+#parser.add_argument("-c", "--config_file", default=Path("C:/kheyam/Documents/GitHub/NAPS/python/config.txt"))
 parser.add_argument("--delta_correlation", action="store_true", 
                     help="If set, account for correlations between prediction errors of different atom types")
+parser.add_argument("-a", "--alt_assignments", default=0, type=int,
+                    help="The number of alternative assignments to generate, in addition to the highest ranked.")
 
-args = parser.parse_args()
+#args = parser.parse_args()
+#if False:
+args = parser.parse_args(("../data/testset/simplified_BMRB/4032.txt "+
+            "../data/testset/shiftx2_results/A001_1KF3A.cs "+
+            "../output/test.txt").split())
 
 print(args.config_file)
 
@@ -68,10 +74,14 @@ a.add_dummy_rows()
 a.calc_log_prob_matrix(sf=2, verbose=False)
 assign_df, best_match_indexes = a.find_best_assignment()
 a.check_assignment_consistency(threshold=0.1)
-a.assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
 
+if args.alt_assignments>0:
+    a.find_alt_assignments2(N=args.alt_assignments, verbose=False, by_ss=True)
+    a.alt_assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
+else:
+    a.assign_df.to_csv(args.out_file, sep="\t", float_format="%.3f")
 #tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
-tmp = a.find_alt_assignments2(N=2, verbose=True, by_ss=False)
+#tmp = a.find_alt_assignments2(N=2, verbose=True, by_ss=False)
 
 
 #%%

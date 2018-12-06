@@ -163,7 +163,7 @@ class NAPS_assigner:
         return(self.obs, self.preds)
     
     def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, 
-                             use_hadamac=False, cdf=True, rescale_delta=False, 
+                             use_hadamac=False, cdf=False, rescale_delta=False, 
                              delta_correlation=False, shift_correlation=False):
         """Calculate a matrix of -log10(match probabilities)
         

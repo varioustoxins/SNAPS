@@ -7,17 +7,18 @@ Created on Tue Nov 20 16:30:40 2018
 """
 
 import pandas as pd
-from subprocess import run
+from subprocess import run, Popen, PIPE
 from pathlib import Path
 
-#path = Path("/Users/aph516/GitHub/NAPS/")
-path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
+path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
 testset_df["obs_file"] = [path/x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
 testset_df["preds_file"] = [path/x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
 testset_df.index = testset_df["ID"]
+
 
 #%%
 #### Test all proteins in the testset
@@ -30,12 +31,14 @@ for i in testset_df.index:
 
 #%%
 #### Check out accurate the assignments are
-def check_assignment_accuracy(data_dir):
+def check_assignment_accuracy(data_dir, ranks=[1], prefix=""):
     # Nb. make sure data_dir ends with a forward slash
 
     assigns = None
     for i in testset_df.index:
-        tmp = pd.read_csv(data_dir+testset_df.loc[i, "out_name"]+".txt", sep="\t", index_col=0)
+        tmp = pd.read_csv(data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), sep="\t", index_col=0)
+        if "Rank" in tmp.columns:
+            tmp = tmp.loc[tmp["Rank"].isin(ranks),:]
         tmp["ID"] = i
         tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Dummy_SS","Dummy_res"]]
         # Convert Res_N column to integer
@@ -83,13 +86,24 @@ def check_assignment_accuracy(data_dir):
     
     return([assigns, summary])
     
-assigns, summary = check_assignment_accuracy(path+"output/testset/")
+assigns, summary = check_assignment_accuracy(path/"output/testset/")
 #%%
 #### Test effect of accounting for correlated errors
 for i in testset_df.index:
-    print(testset_df.loc[i, "obs_file"])
-    args = [path+"python/NAPS.py", testset_df.loc[i, "obs_file"], testset_df.loc[i, "preds_file"], 
-            path+"output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt --delta_correlation"]
+    print(testset_df.loc[i, "obs_file"])    
+    args = [(path/"python/NAPS.py").as_posix(), testset_df.loc[i, "obs_file"].as_posix(), testset_df.loc[i, "preds_file"].as_posix(), 
+            (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), "--delta_correlation"]
     run(args)
     
-assigns2, summary2 = check_assignment_accuracy(path+"output/delta_correlation/")
+assigns2, summary2 = check_assignment_accuracy(path/"output/delta_correlation/")
+
+#%%
+#### Test alternative assignments
+for i in testset_df.index:
+    print(testset_df.loc[i, "out_name"])    
+    args = [(path/"python/NAPS.py").as_posix(), testset_df.loc[i, "obs_file"].as_posix(), testset_df.loc[i, "preds_file"].as_posix(), 
+            (path/("output/testset/alt_"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), "--delta_correlation", "--alt_assignments", "2"]
+    p = Popen(args)
+    result = p.communicate()
+    
+assigns3, summary3 = check_assignment_accuracy(path/"output/testset/", prefix="alt_")
