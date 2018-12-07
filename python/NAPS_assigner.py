@@ -14,6 +14,7 @@ from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from copy import deepcopy
 from Bio.SeqUtils import seq1
+import logging
 
 class NAPS_assigner:
     # Attributes
@@ -124,8 +125,8 @@ class NAPS_assigner:
         Also throw away any atom types that aren't present in both obs and preds
         """
         
-        obs = self.obs
-        preds = self.preds
+        obs = self.obs.copy()
+        preds = self.preds.copy()
         
         # Delete any prolines in preds
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
@@ -135,13 +136,13 @@ class NAPS_assigner:
         obs_metadata = list(set(obs.columns).difference(self.pars["atom_set"]))     
         preds_metadata = list(set(preds.columns).difference(self.pars["atom_set"]))
         shared_atoms = list(self.pars["atom_set"].intersection(obs.columns).intersection(preds.columns))
-        obs = obs[obs_metadata+shared_atoms]
-        preds = preds[preds_metadata+shared_atoms]
+        obs = obs.loc[:,obs_metadata+shared_atoms]
+        preds = preds.loc[:,preds_metadata+shared_atoms]
         
         # Create columns to keep track of dummy status
         preds["Dummy_res"] = False
         obs["Dummy_SS"] = False
-        
+
         N = len(obs.index)
         M = len(preds.index)
         
@@ -157,9 +158,10 @@ class NAPS_assigner:
             obs = obs.append(dummies)
             #obs.loc[["dummy_"+str(i) for i in 1+np.arange(M-N)]] = np.NaN
             #obs.loc[obs.index[N:M], "SS_name"] = ["dummy_"+str(i) for i in 1+np.arange(M-N)]
+
+        self.obs = obs.copy()
+        self.preds = preds.copy()
         
-        self.obs = obs
-        self.preds = preds
         return(self.obs, self.preds)
     
     def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, 
