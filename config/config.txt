@@ -1,0 +1,4 @@
+# Configuration file for NAPS
+shiftx2_offset  0       # Residue numbering offset for shiftx2
+atom_set      "H, N, HA, CA, CB, C,CAm1,CBm1,Cm1"       # Which atom types to include. Comma separated, whitespace allowed
+atom_sd "H:0.1711, N:1.1169, HA:0.1231,C:0.5330,CA:0.4412,CB:0.5163,Cm1:0.5530,CAm1:0.4412,CBm1:0.5163"    # Atom standard deviations. Comma separated, whitespace allowed.

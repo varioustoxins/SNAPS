@@ -9,7 +9,7 @@ Created on Mon Nov 19 10:36:07 2018
 import numpy as np
 import pandas as pd
 from plotnine import *
-from scipy.stats import norm, gennorm, multivariate_normal
+from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
 from math import isnan, log10
 from copy import deepcopy

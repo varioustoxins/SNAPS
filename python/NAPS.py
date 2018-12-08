@@ -49,7 +49,10 @@ parser.add_argument("-a", "--alt_assignments", default=0, type=int,
 if False:
     args = parser.parse_args(("../data/testset/simplified_BMRB/4032.txt "+
                 "../data/testset/shiftx2_results/A001_1KF3A.cs "+
-                "../output/test.txt" + " -l ../output/log.txt").split())
+                "../output/test.txt " + 
+                "-c ../config/config.txt "+
+                "-l ../output/log.txt "+
+                "-a 2").split())
 else:
     args = parser.parse_args()
 
