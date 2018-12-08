@@ -386,7 +386,7 @@ class NAPS_assigner:
         best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
                                    log_prob_matrix.columns[best_match_indexes[1]]))
         
-        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        penalty = 2*log_prob_matrix.min().min()     # This is the value used to penalise the best match for each residue
         
         if by_res:
             # Create data structures for storing results
@@ -499,7 +499,7 @@ class NAPS_assigner:
         best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
                                    log_prob_matrix.columns[best_match_indexes[1]]))
         
-        penalty = 2*log_prob_matrix.max().max()     # This is the value used to penalise the best match for each residue
+        penalty = 2*log_prob_matrix.min().min()     # This is the value used to penalise the best match for each residue
                 
         # Initialise DataFrame for storing alt_assignments
         self.alt_assign_df = self.assign_df.copy()
@@ -534,7 +534,9 @@ class NAPS_assigner:
                     a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
                     
                     alt_match = a.assign_df.loc[ss, "Res_name"] 
-                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :])
+                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :], ignore_index=True)
+                self.alt_assign_df = self.alt_assign_df.sort_values(by=["SS_name"])
+                
         else:
             # Convert best_match_indexes to get a series of spin systems indexed by spin system  
             best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
@@ -563,8 +565,8 @@ class NAPS_assigner:
                     a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
                     
                     alt_match = a.assign_df.loc[res, "SS_name"] 
-                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[res, :])
-                            
+                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[res, :], ignore_index=True)
+                self.alt_assign_df = self.alt_assign_df.sort_values(by=["Res_name"])
         
         return(self.alt_assign_df)
 
