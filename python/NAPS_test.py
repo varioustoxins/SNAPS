@@ -46,7 +46,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
         if "Rank" in tmp.columns:
             tmp = tmp.loc[tmp["Rank"].isin(ranks),:]
         tmp["ID"] = i
-        tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Dummy_SS","Dummy_res"]]
+        tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob","Dummy_SS","Dummy_res"]]
         # Convert Res_N column to integer
         tmp["Res_N"] = tmp["Res_N"].fillna(-999)
         tmp["Res_N"] = tmp["Res_N"].astype(int)
@@ -140,5 +140,5 @@ if args.test in ("alt_assignments", "all"):
                 "--delta_correlation", "--alt_assignments", "2"]
         run(cmd)
         
-    assigns3, summary3 = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[2], N=args.N_tests)
+    assigns3, summary3 = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[1], N=args.N_tests)
     summary3.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")

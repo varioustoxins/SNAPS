@@ -79,6 +79,7 @@ a.pars["shiftx2_offset"] = int(config.loc["shiftx2_offset"].Value)
 a.pars["atom_set"] = {s.strip() for s in config.loc["atom_set"].Value.split(",")}
 tmp = [s.strip() for s in config.loc["atom_sd"].Value.split(",")]
 a.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
+logging.info("Read in configuration from %s.", args.config_file)
 
 
 a.import_obs_shifts(args.shift_file)
@@ -90,7 +91,7 @@ logging.info("Read in %d predicted residues from %s.", len(a.preds["Res_name"]),
 #### Do the analysis
 a.add_dummy_rows()
 a.calc_log_prob_matrix(sf=2, verbose=False)
-logging.info("Calculated log probability matrix.")
+logging.info("Calculated log probability matrix (%dx%d).", a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
 assign_df, best_match_indexes = a.find_best_assignment()
 logging.info("Calculated best assignment.")
 a.check_assignment_consistency(threshold=0.1)
