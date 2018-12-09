@@ -40,8 +40,10 @@ class NAPS_assigner:
         if short_aa_names: 
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
             obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+            obs_long["SS_name"] = [s.rjust(5) for s in obs_long["SS_name"]]
         else:
-            obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+            obs_long["SS_name"] = obs_long["Res_N"].astype(str).rjust(4) + obs_long["Res_type"]
+            obs_long["SS_name"] = [s.rjust(7) for s in obs_long["SS_name"]]
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
         obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
         
@@ -91,6 +93,7 @@ class NAPS_assigner:
         preds_long = pd.read_csv(input_file)
         preds_long["NUM"] = preds_long["NUM"] + offset    # Apply any offset to residue numbering
         preds_long["Res_name"] = preds_long["NUM"].astype(str)+preds_long["RES"]
+        preds_long["Res_name"] = [s.rjust(5) for s in preds_long["Res_name"]]
         if any(preds_long.columns == "CHAIN"):   preds_long = preds_long.drop("CHAIN", axis=1)     # Assuming that there's only one CHAIN in the predictions...
         preds_long = preds_long.reindex(columns=["NUM","RES","Res_name","ATOMNAME","SHIFT"])  
         preds_long.columns = ["Res_N","Res_type","Res_name","Atom_type","Shift"]
@@ -535,7 +538,7 @@ class NAPS_assigner:
                     
                     alt_match = a.assign_df.loc[ss, "Res_name"] 
                     self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :], ignore_index=True)
-                self.alt_assign_df = self.alt_assign_df.sort_values(by=["SS_name"])
+                self.alt_assign_df = self.alt_assign_df.sort_values(by=["SS_name", "Rank"])
                 
         else:
             # Convert best_match_indexes to get a series of spin systems indexed by spin system  
@@ -566,7 +569,7 @@ class NAPS_assigner:
                     
                     alt_match = a.assign_df.loc[res, "SS_name"] 
                     self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[res, :], ignore_index=True)
-                self.alt_assign_df = self.alt_assign_df.sort_values(by=["Res_name"])
+                self.alt_assign_df = self.alt_assign_df.sort_values(by=["Res_name", "Rank"])
         
         return(self.alt_assign_df)
 
