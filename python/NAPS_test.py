@@ -19,9 +19,13 @@ parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("-t", "--test", default="all", help="Specify a particular test to run.")
 parser.add_argument("-N", "--N_tests", default=61, type=int, help="only process the first N datasets")
-args = parser.parse_args()
+
 if False:
     args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
+    args = parser.parse_args("/Users/aph516/GitHub/NAPS/ -N 10".split())
+else:
+    args = parser.parse_args()
+
 path = Path(args.NAPS_path)
 #path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
@@ -107,14 +111,14 @@ if args.test in ("basic", "all"):
                 "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
-assigns, summary = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
-summary.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
+assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
+summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
 #%%
 #### Test effect of accounting for correlated errors
 if args.test in ("delta_correlation", "all"):
     for i in testset_df.index[0:args.N_tests]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, args.python_cmd, (path/"python/NAPS.py").as_posix(), 
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), 
                 testset_df.loc[i, "obs_file"].as_posix(), 
                 testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
@@ -123,8 +127,8 @@ if args.test in ("delta_correlation", "all"):
                 "--delta_correlation"]
         run(cmd)
         
-    assigns2, summary2 = check_assignment_accuracy(path/"output/delta_correlation/", N=args.N_tests)
-    summary2.to_csv(path/"output/delta_correlation_summary.txt", sep="\t", float_format="%.3f")
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation/", N=args.N_tests)
+    summary_dc.to_csv(path/"output/delta_correlation_summary.txt", sep="\t", float_format="%.3f")
 
 #%%
 #### Test alternative assignments
@@ -140,5 +144,15 @@ if args.test in ("alt_assignments", "all"):
                 "--delta_correlation", "--alt_assignments", "2"]
         run(cmd)
         
-    assigns3, summary3 = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[1], N=args.N_tests)
-    summary3.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")
+    assigns_alt, summary_alt = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[1], N=args.N_tests)
+    assigns_alt["Rank"] = 1
+    summary_alt["Rank"] = 1
+    for i in (2,3):
+        tmp1, tmp2 = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[i], N=args.N_tests)
+        tmp1["Rank"] = i
+        tmp2["Rank"] = i
+        assigns_alt = assigns_alt.append(tmp1)
+        summary_alt = summary_alt.append(tmp2)
+
+
+    summary_alt.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")

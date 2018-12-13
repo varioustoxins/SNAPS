@@ -244,7 +244,7 @@ plt + ggtitle("Observed shift distribution (scaled)")
 
 ggplot(data=df) + geom_point(aes(x="CB_obs", y="d_CB", colour="Res_type")) + geom_line(aes(x='x', y='y'), data=pd.DataFrame({'x':[-7,7],'y':[0.27*7+0.01, -0.27*7+0.01]}))
 
-ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
+#ggplot(data=fit_results) + geom_point(aes(y="Grad", colour="Res_type", x="Atom_type")) 
 
 ggplot(data=df) + geom_point(aes(x="N_obs", y="dd_N", colour="N_pred"))
 
@@ -290,3 +290,6 @@ ggplot(data=delta) + geom_point(aes(x="d_CAm1", y="d_CBm1", colour="Res_type"))
 tmp = delta.loc[abs(delta["d_CBm1"])>5,:]
 tmp2 = df.loc[(df["ID"]+df["Res_name"]).isin(tmp["ID"]+tmp["Res_name"]),:]
 
+
+
+ggplot(data=df) + geom_point(aes(x="CA_obs", y="d_CA")) + geom_smooth(aes(x="CA_obs", y="d_CA"), colour="red", method="mavg")
