@@ -12,6 +12,7 @@ import pandas as pd
 from subprocess import run, Popen, PIPE
 from pathlib import Path
 import argparse
+from plotnine import *
 
 # Set the path to the NAPS directory
 parser = argparse.ArgumentParser(description="Test script for NAPS (NMR Assignments from Predicted Shifts)")
@@ -21,8 +22,8 @@ parser.add_argument("-t", "--test", default="all", help="Specify a particular te
 parser.add_argument("-N", "--N_tests", default=61, type=int, help="only process the first N datasets")
 
 if False:
-    args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
-    args = parser.parse_args("/Users/aph516/GitHub/NAPS/ -N 10".split())
+    #args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
+    args = parser.parse_args("/Users/aph516/GitHub/NAPS/ -t alt_assignments".split())
 else:
     args = parser.parse_args()
 
@@ -46,23 +47,42 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
 
     assigns = None
     for i in testset_df.index[0:N]:
-        tmp = pd.read_csv(data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), sep="\t", index_col=0)
-        if "Rank" in tmp.columns:
-            tmp = tmp.loc[tmp["Rank"].isin(ranks),:]
-        tmp["ID"] = i
-        tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob","Dummy_SS","Dummy_res"]]
+        tmp_all = pd.read_csv(data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), sep="\t", index_col=0)
+        tmp_all["ID"] = i
+        
+        # Cysteines in disulphide bridges are often named B in this dataset. 
+        # We don't need to know this, so change to C
+        mask = tmp_all["Res_type"]=="B"
+        tmp_all.loc[mask,"Res_type"] = "C"
+        tmp_all.loc[mask, "Res_name"] = tmp_all.loc[mask,"Res_name"].str.replace("B","C")
+        
+        # Restrict to just the ranks being considered (ie. when output contains alternative assignments)
+        if "Rank" not in tmp_all.columns:
+            tmp_all["Rank"] = 1
+            tmp_all["Rel_prob"] = 0
+        
+        tmp = tmp_all.loc[tmp_all["Rank"].isin(ranks),:].copy()
+        tmp["Rank"] = tmp["Rank"].astype(str)
+        if "Max_mismatch_prev" in tmp.columns:
+            tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob","Rank","Rel_prob","Dummy_SS","Dummy_res","Max_mismatch_prev","Max_mismatch_next","Num_good_links_prev","Num_good_links_next"]]
+        else:
+            tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob","Rank","Rel_prob","Dummy_SS","Dummy_res"]]
+#        else:
+#            tmp = tmp_all
+#            tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob","Dummy_SS","Dummy_res"]]
+        
         # Convert Res_N column to integer
-        tmp["Res_N"] = tmp["Res_N"].fillna(-999)
-        tmp["Res_N"] = tmp["Res_N"].astype(int)
+        tmp.loc[:,"Res_N"] = tmp.loc[:,"Res_N"].fillna(-999)
+        tmp.loc[:,"Res_N"] = tmp.loc[:,"Res_N"].astype(int)
         # Cysteines in disulphide bridges are often named B in this dataset. 
         # We don't need to know this, so change to C
         mask = tmp["Res_type"]=="B"
         tmp.loc[mask,"Res_type"] = "C"
-        tmp.loc[mask, "Res_name"] = tmp.loc[mask,"Res_N"].astype(str)+tmp.loc[mask, "Res_type"]
+        tmp.loc[mask, "Res_name"] = tmp.loc[mask,"Res_name"].str.replace("B","C")
         # Add a column saying whether a match exists for the spin system 
         # (ie whether a correct assignment is possible)
-        tmp["SS_in_pred"] = tmp["SS_name"].isin(tmp["Res_name"])
-        tmp["Pred_in_SS"] = tmp["Res_name"].isin(tmp["SS_name"])
+        tmp["SS_in_pred"] = tmp["SS_name"].isin(tmp_all["Res_name"])
+        tmp["Pred_in_SS"] = tmp["Res_name"].isin(tmp_all["SS_name"])
         
         if type(assigns)!=type(tmp):
             assigns = tmp
@@ -85,15 +105,21 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
     assigns.loc[mask & assigns["Dummy_res"], "Status"] = "Correctly unassigned"
     
     assigns.loc[assigns["Dummy_SS"], "Status"] = "Dummy SS"
+    assigns.loc[:,"Status"] = assigns["Status"].astype("category")
     
     #assigns.groupby(["ID","Status"])["Status"].count()
-    summary = pd.DataFrame(columns=["Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned","N","N_SS","Pc_correct"])
-    summary = summary.append(assigns.groupby(["ID","Status"])["Status"].count().unstack(1), sort=False)
+#    if "Rank" in tmp_all.columns:
+    
+    summary = pd.DataFrame(columns=["Rank","Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned","N","N_SS","Pc_correct"])
+    summary = summary.append(assigns.groupby(["ID","Rank","Status"])["Status"].count().unstack(2), sort=False)
+#    else:
+#    summary = pd.DataFrame(columns=["Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned","N","N_SS","Pc_correct"])
+#    summary = summary.append(assigns.groupby(["ID","Status"])["Status"].count().unstack(1), sort=False)
         
     summary = summary.fillna(0).astype(int)
     summary["N"] = summary.apply(sum, axis=1)
     summary["N_SS"] = summary["N"] - summary["Dummy SS"]
-    summary = pd.concat([summary.sum(axis=0).to_frame("Sum").transpose(), summary])
+    summary = pd.concat([summary.sum(axis=0).to_frame("Sum").transpose(), summary], sort=False)
     summary["Pc_correct"] = (summary["Correctly assigned"]+summary["Correctly unassigned"]) / summary["N_SS"]
     
     return([assigns, summary])
@@ -107,12 +133,18 @@ if args.test in ("basic", "all"):
                 testset_df.loc[i, "obs_file"].as_posix(), 
                 testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                "-c", (path/"config/config.txt").as_posix(),
-                "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+                "-c", (path/"config/config_plot.txt").as_posix(),
+                "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
+                "-p", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
         
 assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
 summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
+
+plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm")
 #%%
 #### Test effect of accounting for correlated errors
 if args.test in ("delta_correlation", "all"):
@@ -122,14 +154,17 @@ if args.test in ("delta_correlation", "all"):
                 testset_df.loc[i, "obs_file"].as_posix(), 
                 testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                "-c", (path/"config/config.txt").as_posix(),
-                "-l", (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                "--delta_correlation"]
+                "-c", (path/"config/config_delta_corr.txt").as_posix(),
+                "-l", (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
     assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation/", N=args.N_tests)
     summary_dc.to_csv(path/"output/delta_correlation_summary.txt", sep="\t", float_format="%.3f")
-
+    
+    plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+    plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+    plt.save(path/"plots/delta_correlation_summary.pdf", height=210, width=297, units="mm")
 #%%
 #### Test alternative assignments
 if args.test in ("alt_assignments", "all"):
@@ -138,21 +173,30 @@ if args.test in ("alt_assignments", "all"):
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), 
                 testset_df.loc[i, "obs_file"].as_posix(), 
                 testset_df.loc[i, "preds_file"].as_posix(), 
-                (path/("output/testset/alt_"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
-                "-c", (path/"config/config.txt").as_posix(),
-                "-l", (path/("output/testset/alt_"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                "--delta_correlation", "--alt_assignments", "2"]
+                (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "-c", (path/"config/config_alt_assign.txt").as_posix(),
+                "-l", (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
-    assigns_alt, summary_alt = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[1], N=args.N_tests)
-    assigns_alt["Rank"] = 1
-    summary_alt["Rank"] = 1
-    for i in (2,3):
-        tmp1, tmp2 = check_assignment_accuracy(path/"output/testset/", prefix="alt_", ranks=[i], N=args.N_tests)
-        tmp1["Rank"] = i
-        tmp2["Rank"] = i
-        assigns_alt = assigns_alt.append(tmp1)
-        summary_alt = summary_alt.append(tmp2)
-
-
+    assigns_alt, summary_alt = check_assignment_accuracy(path/"output/alt_assign/", ranks=[1,2,3], N=args.N_tests)
+#    assigns_alt["Rank"] = 1
+#    summary_alt["Rank"] = 1
+#    for i in (2,3):
+#        print(i)
+#        tmp1, tmp2 = check_assignment_accuracy(path/"output/alt_assign/", ranks=[i], N=args.N_tests)
+#        tmp1["Rank"] = i
+#        tmp2["Rank"] = i
+#        print(tmp1.iloc[0:10, 0:5])
+#        assigns_alt = pd.concat([assigns_alt, tmp1], ignore_index=True)
+#        summary_alt = pd.concat([summary_alt,tmp2], ignore_index=True)
+    assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
+    
+    assigns_alt.to_csv(path/"output/alt_assign_all.txt", sep="\t", float_format="%.3f")
     summary_alt.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")
+    
+    plt = ggplot(data=assigns_alt) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt.save(path/"plots/alt_assign_summary.pdf", height=210, width=297, units="mm")
+    
+    
+    tmp1, tmp2 = check_assignment_accuracy(path/"output/alt_assign/", ranks=[1,2,3])
+    

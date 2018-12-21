@@ -206,7 +206,7 @@ class NAPS_assigner:
             na_mask = delta.isna()
             delta[na_mask] = 0
             
-            if delta_correlation:
+            if self.pars["prob_method"] == "delta_correlation":
                 overall_prob = pd.Series(index=delta.index)
                 overall_prob[:] = 1
                 
@@ -226,16 +226,16 @@ class NAPS_assigner:
                 prob.iloc[:,:] = 1
                 
                 for c in delta.columns:
-                    if cdf:
+                    if self.pars["prob_method"] == "cdf":
                         # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
                         prob[c] = log10(2) + norm.logcdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
-                    elif rescale_delta:
-                        print("rescale_delta not yet implemented. Falling back to most basic method.")
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)        
+                    elif self.pars["prob_method"] == "pdf":
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)       
                     elif shift_correlation:
-                        print("shift_correlation not yet implemented. Falling back to most basic method.")
+                        print("shift_correlation not yet implemented. Defaulting to pdf.")
                         prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
                     else:
+                        print("Method for calculating probability not recognised. Defaulting to pdf.")
                         prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
                 
                 # In positions where data was missing, use a default probability
