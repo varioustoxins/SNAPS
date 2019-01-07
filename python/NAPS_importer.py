@@ -8,6 +8,7 @@ Created on Wed Oct 17 19:08:55 2018
 import numpy as np
 import pandas as pd
 import itertools
+from pathlib import Path
 from Bio.SeqUtils import seq1
 
 class NAPS_importer:
@@ -16,13 +17,16 @@ class NAPS_importer:
     assignments = {}
     roots = None
     peaks = None
-    shifts = None
+    obs = None
     
     # Functions
     def import_hsqc_ccpn(self, filename):
-        """ Import an HSQC peaklist, as exported from the CCPN Analysis peak list dialogue.
+        """ Import a CCPN HSQC peaklist.
         
-        If seq_hadamac_details==True, it is assumed the details column contains a list of possible amino acid types for the i-1 residue.
+        The peaklist file should have been exported from the CCPN Analysis 
+        peak list window.
+        If seq_hadamac_details==True, it is assumed the details column contains
+        a list of possible amino acid types for the i-1 residue.
         """
         # TODO: Check that SS names are unique
         
@@ -38,10 +42,49 @@ class NAPS_importer:
         
         return (self)
     
-    def import_3d_peaks_ccpn(self, filename, spectrum):
-        """ Import a 3D peaklist, as exported from the CCPN Analysis peak list dialogue.
+    def import_hsqc_peaks(self, filename, filetype):
+        """ Import a peak list for an HSQC spectrum. 
         
-        spectrum can be one of "hnco", "hncaco", "hnca", "hncoca", "hncacb", "hncocacb"
+        filename: Path to file containing an HSQC peak list.
+        filetype: Allowed values are "ccpn", "sparky", "xeasy" or "nmrpipe"
+        """
+        # Import from file
+        if filetype=="ccpn":
+            hsqc = pd.read_table(filename) 
+            hsqc = hsqc[["Assign F1","Position F1","Position F2", "Height"]]
+            hsqc.columns = ["SS_name","H","N","Height"]      
+            #hsqc.index = hsqc["SS_name"]
+        elif filetype=="sparky":
+            hsqc = pd.read_table(filename, sep="\s+")
+            hsqc.columns = ["Name","H","N","Height"]
+            # If assigned, Name has format "A123HN-A123N"
+            # If unassigned, Name column contains "?-?"
+            # Get just the first part before the hyphen
+            tmp = list(zip(*hsqc["Name"].str.split("-")))[0]
+            # Keep only the part before the right-most "H"
+            hsqc["SS_name"] = [x[:x.rfind("H")] for x in tmp]
+            # Give arbitrary names to the unassigned peaks
+            hsqc.loc[hsqc["SS_name"]=="", "SS_name"] = list("x"+(10000+10*pd.Series(range(5))).astype(str))
+            
+        else:
+            print("import_hsqc_peaks: invalid filetype '%s'." % (filetype))
+            return(None)
+        
+        
+        hsqc.index = hsqc["SS_name"]
+        
+        self.peaklists["hsqc"] = hsqc
+        self.roots = hsqc
+        
+        return(self)
+    
+    def import_3d_peaks_ccpn(self, filename, spectrum):
+        """ Import a CCPN 3D peak list
+        
+        The peak list should have been exported from the CCPN Analysis peak 
+        list dialogue.
+        spectrum can be one of "hnco", "hncaco", "hnca", "hncoca", "hncacb" or
+        "hncocacb"
         """
         peaks = pd.read_table(filename)
         
@@ -61,15 +104,18 @@ class NAPS_importer:
             else: 
                 dim["Unknown"] = f
         
-        # Check that the correct dimensions were identified, and also that spectrum argument is valid
+        # Check that the correct dimensions were identified
+        # Also check that spectrum argument is valid
         if spectrum in ["hnco", "hncaco", "hnca","hncoca","hncacb","hncocacb"]:
             if set(dim.keys()) != set(["H","N","C"]):
                 print("Error: couldn't identify "+spectrum+" columns.") 
         else:
             print("Invalid value of argument: spectrum.")
         
-        # Choose and rename columns. Also, only keep spin systems that are in self.roots
-        peaks = peaks[["Assign "+dim["H"], "Position "+dim["H"], "Position "+dim["N"], "Position "+dim["C"], "Height"]]
+        # Choose and rename columns. 
+        # Also, only keep spin systems that are in self.roots
+        peaks = peaks[["Assign "+dim["H"], "Position "+dim["H"], 
+                       "Position "+dim["N"], "Position "+dim["C"], "Height"]]
         peaks.columns = ["SS_name", "H", "N", "C", "Height"]
         peaks["Spectrum"] = spectrum
         peaks = peaks.loc[peaks["SS_name"].isin(self.roots["SS_name"])]
@@ -97,12 +143,87 @@ class NAPS_importer:
                 i = ss_peaks.loc[ss_peaks["Spectrum"]=="hnco","Height"].idxmax()
                 ss_peaks.loc[i,"Atom_type"] = "Cm1"
 
-            self.peaks.loc[self.peaks["SS_name"]==ss,:] = ss_peaks   
+            self.peaks.loc[self.peaks["SS_name"]==ss,:] = ss_peaks
+            
+    def import_obs_shifts(self, filename, filetype, SS_num=False):
+        """ Import a chemical shift list
+        
+        filename: Path to text file containing chemical shifts.
+        filetype: Allowed values are "ccpn", "sparky", "xeasy" or "nmrpipe"
+            (The ccpn option is for importing a Resonance table exported from 
+            Analysis v2.x)
+        SS_num: If true, will extract the longest number from the SS_name and 
+        treat it as the residue number. Without this, it is not possible to get
+        the i-1 shifts for each spin system.
+            
+        """
+        # Import from file
+        if filetype=="ccpn":
+            obs = pd.read_table(filename)
+            obs = obs.loc[:,["Residue", "Assign Name", "Shift"]]
+            obs.columns = ["SS_name", "Atom_type", "Shift"]
+            obs["Atom_type"] = obs["Atom_type"].str.upper()
+        elif filetype=="sparky":
+            obs = pd.read_table(filename, sep="\s+")
+            obs = obs.loc[:,["Group", "Atom", "Shift"]]
+            obs.columns = ["SS_name", "Atom_type", "Shift"]
+            obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
+        elif filetype=="xeasy":
+            obs = pd.read_table(filename, sep="\s+", 
+                                header=None, na_values="999.000",
+                                names=["i","Shift","SD","Atom_type","SS_name"])
+            obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
+            obs["SS_name"] = obs["SS_name"].astype(str)
+            obs = obs.dropna(subset=["Shift"])
+            obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
+        elif filetype=="nmrpipe":
+            # Work out where the column names and data are
+            with open(filename, 'r') as f:
+                for num, line in enumerate(f, 1):
+                    if line.find("VARS")>-1:
+                        colnames_line = num
+            
+            obs = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1, 
+                                names=["SS_name","Res_type","Atom_type","Shift"])
+            obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
+            obs["SS_name"] = obs["SS_name"].astype(str)
+            obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
+        else:
+            print("import_obs_shifts: invalid filetype '%s'." % (filetype))
+            return(None)
+        
+        # Restrict to backbone atom types
+        obs = obs.loc[obs["Atom_type"].isin(["H","HA","N","C","CA","CB",
+                                             "Cm1","CAm1","CBm1"]),:]
+        
+        # Convert from long to wide
+        obs = obs.pivot(index="SS_name", columns="Atom_type", values="Shift")
+        obs.insert(0, "SS_name", obs.index.values)
+        
+        # Extract residue number from SS_name (if present), and get m1 shifts
+        if SS_num:
+            obs["Res_N"] = obs["SS_name"].str.extract(r"(\d+)").astype(int)
+            
+            obs.index = obs["Res_N"]
+            obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
+            obs_m1.index = obs_m1.index+1
+            obs_m1.columns = obs_m1.columns + "m1"
+            obs = pd.merge(obs, obs_m1, how="left", 
+                           left_index=True, right_index=True)
+            obs = obs.drop(columns="Res_N")
+        
+        self.obs = obs
+        return(self.obs)
+        
+        
+    
                     
 
+#%%
+
+
 def find_all_assignments(peaks, atoms):
-    """
-    Find all possible assignments of peaks to atoms, including where some or all atoms are unassigned
+    """ Find all possible assignments of peaks to atoms, including where some or all atoms are unassigned
     """
     if len(atoms)==0:   # Case where atoms list is empty
         return(None)
@@ -169,6 +290,11 @@ a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt", "hnco")
 a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", "hncocacb")
 a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
 #a.guess_peak_atom_types()
+
+tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/ccpn_resonances.txt", "ccpn", SS_num=True)
+tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/sparky shifts.txt", "sparky", SS_num=True)
+tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/Xeasy shifts.txt", "xeasy", SS_num=True)
+tmp = a.import_obs_shifts("/Users/aph516/GitHub/NAPS/data/P3a_L273R/nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
 
 roots = a.roots
 peaklists = a.peaklists
