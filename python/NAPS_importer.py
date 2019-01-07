@@ -61,22 +61,61 @@ class NAPS_importer:
             # If unassigned, Name column contains "?-?"
             # Get just the first part before the hyphen
             tmp = list(zip(*hsqc["Name"].str.split("-")))[0]
-            # Keep only the part before the right-most "H"
-            hsqc["SS_name"] = [x[:x.rfind("H")] for x in tmp]
-            # Give arbitrary names to the unassigned peaks
-            hsqc.loc[hsqc["SS_name"]=="", "SS_name"] = list("x"+(10000+10*pd.Series(range(5))).astype(str))
+            hsqc["Name"] = tmp
             
+            # Deal with assigned peaks first
+            # Split atom type from residue name
+            tmp = [x.rsplit("H", maxsplit=1) for x in 
+                   hsqc.loc[hsqc["Name"]!="?","Name"]]
+            # Only keep the backbone amides (Type = "N")
+            hsqc.loc[hsqc["Name"]!="?","SS_name"] = list(zip(*tmp))[0]
+            hsqc.loc[hsqc["Name"]!="?","Type"] = list(zip(*tmp))[1]
+            hsqc.loc[hsqc["Name"]=="?","Type"] = "unknown"
+            hsqc = hsqc.loc[hsqc["Type"].isin(["N", "unknown"]),:]
+            
+            # Now give arbitrary names to the unassigned peaks
+            N_unassigned = sum(hsqc["Name"]=="?")
+            hsqc.loc[hsqc["Name"]=="?", "SS_name"] = list("x"+
+                    (10000+10*pd.Series(range(N_unassigned))).astype(str))
+            
+            hsqc = hsqc[["SS_name", "N", "H", "Height"]]
+        elif filetype=="xeasy":
+            hsqc = pd.read_table(filename, sep="\s+", comment="#", header=None,
+                                 usecols=[0,1,2,5], 
+                                 names=["SS_name","H","N","Height"])
+            hsqc["SS_name"] = hsqc["SS_name"].astype(str)
+        elif filetype=="nmrpipe":
+            # Work out where the column names and data are
+            with open(filename, 'r') as f:
+                for num, line in enumerate(f, 1):
+                    if line.find("VARS")>-1:
+                        colnames_line = num
+                        colnames = line.split()[1:]
+            
+            hsqc = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+                                names=colnames)
+            hsqc = hsqc[["INDEX", "ASS", "X_PPM", "Y_PPM", "HEIGHT"]]
+            hsqc.columns = ["ID", "SS_name", "H", "N", "Height"]
+            # Use ASS as SS_name if available, otherwise use ID
+            hsqc.loc[hsqc["SS_name"]!=None,"SS_name"] = \
+                hsqc.loc[hsqc["SS_name"]!=None,"ID"].astype(str)
+            hsqc = hsqc[["SS_name", "H", "N", "Height"]]
         else:
             print("import_hsqc_peaks: invalid filetype '%s'." % (filetype))
             return(None)
         
+        # Check whether columns go mixed up somehow, and correct if so
+        if hsqc["H"].mean() > hsqc["N"].mean():
+            tmp = hsqc["N"]
+            hsqc["N"] = hsqc["H"]
+            hsqc["H"] = tmp
         
         hsqc.index = hsqc["SS_name"]
         
         self.peaklists["hsqc"] = hsqc
         self.roots = hsqc
         
-        return(self)
+        return(self.roots)
     
     def import_3d_peaks_ccpn(self, filename, spectrum):
         """ Import a CCPN 3D peak list
@@ -284,17 +323,23 @@ def score_plausibility(assignments):
 
 #### Test code
 
+#path = "/Users/aph516/GitHub/NAPS/data/P3a_L273/"
+path = "C:/Users/Alex/GitHub/NAPS/data/P3a_L273R/"
+
 a = NAPS_importer()
-a.import_hsqc_ccpn("~/GitHub/NAPS/data/P3a_L273R/hsqc HADAMAC.txt")
-a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hnco.txt", "hnco")
-a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt", "hncocacb")
-a.import_3d_peaks_ccpn("~/GitHub/NAPS/data/P3a_L273R/hncacb.txt", "hncacb")
+
+a.import_hsqc_ccpn(path+"hsqc HADAMAC.txt")
+a.import_3d_peaks_ccpn(path+"hnco.txt", "hnco")
+a.import_3d_peaks_ccpn(path+"cbcaconh.txt", "hncocacb")
+a.import_3d_peaks_ccpn(path+"hncacb.txt", "hncacb")
 #a.guess_peak_atom_types()
 
-tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/ccpn_resonances.txt", "ccpn", SS_num=True)
-tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/sparky shifts.txt", "sparky", SS_num=True)
-tmp = a.import_obs_shifts("~/GitHub/NAPS/data/P3a_L273R/Xeasy shifts.txt", "xeasy", SS_num=True)
-tmp = a.import_obs_shifts("/Users/aph516/GitHub/NAPS/data/P3a_L273R/nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
+tmp = a.import_hsqc_peaks(path+"nmrpipe_peaks.tab", "nmrpipe")
+
+tmp = a.import_obs_shifts(path+"ccpn_resonances.txt", "ccpn", SS_num=True)
+tmp = a.import_obs_shifts(path+"sparky shifts.txt", "sparky", SS_num=True)
+tmp = a.import_obs_shifts(path+"Xeasy shifts.txt", "xeasy", SS_num=True)
+tmp = a.import_obs_shifts(path+"nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
 
 roots = a.roots
 peaklists = a.peaklists
