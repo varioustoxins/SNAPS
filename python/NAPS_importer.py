@@ -56,29 +56,18 @@ class NAPS_importer:
             #hsqc.index = hsqc["SS_name"]
         elif filetype=="sparky":
             hsqc = pd.read_table(filename, sep="\s+")
-            hsqc.columns = ["Name","H","N","Height"]
+            hsqc.columns = ["SS_name","H","N","Height"]
             # If assigned, Name has format "A123HN-A123N"
             # If unassigned, Name column contains "?-?"
             # Get just the first part before the hyphen
-            tmp = list(zip(*hsqc["Name"].str.split("-")))[0]
-            hsqc["Name"] = tmp
+            tmp = list(zip(*hsqc["SS_name"].str.split("-")))[0]
+            hsqc["SS_name"] = tmp
             
-            # Deal with assigned peaks first
-            # Split atom type from residue name
-            tmp = [x.rsplit("H", maxsplit=1) for x in 
-                   hsqc.loc[hsqc["Name"]!="?","Name"]]
-            # Only keep the backbone amides (Type = "N")
-            hsqc.loc[hsqc["Name"]!="?","SS_name"] = list(zip(*tmp))[0]
-            hsqc.loc[hsqc["Name"]!="?","Type"] = list(zip(*tmp))[1]
-            hsqc.loc[hsqc["Name"]=="?","Type"] = "unknown"
-            hsqc = hsqc.loc[hsqc["Type"].isin(["N", "unknown"]),:]
-            
-            # Now give arbitrary names to the unassigned peaks
-            N_unassigned = sum(hsqc["Name"]=="?")
-            hsqc.loc[hsqc["Name"]=="?", "SS_name"] = list("x"+
+            # Give arbitrary names to the unassigned peaks
+            N_unassigned = sum(hsqc["SS_name"]=="?")
+            hsqc.loc[hsqc["SS_name"]=="?", "SS_name"] = list("x"+
                     (10000+10*pd.Series(range(N_unassigned))).astype(str))
             
-            hsqc = hsqc[["SS_name", "N", "H", "Height"]]
         elif filetype=="xeasy":
             hsqc = pd.read_table(filename, sep="\s+", comment="#", header=None,
                                  usecols=[0,1,2,5], 
@@ -167,7 +156,68 @@ class NAPS_importer:
 #            self.peaks = peaks
             
         return(self)
-    
+        
+    def import_3d_peaks(self, filename, filetype, spectrum):
+        """
+        """
+        if filetype == "ccpn":
+            peaks = pd.read_table(filename,
+                                  usecols=["Position F1","Position F2",
+                                           "Position F3","Assign F1",
+                                           "Assign F2","Assign F3",
+                                           "Height"])
+            peaks.columns = ["F1","F2","F3","A1","A2","A3","Height"]
+        elif filetype == "sparky":
+            peaks = pd.read_table(filename, sep="\s+")
+            peaks.columns=["Name","F1","F2","F3","Height"]
+            peaks["A1"], peaks["A2"], peaks["A3"] = list(zip(
+                                                *peaks["Name"].str.split("-")))
+            return(peaks)
+        else:
+            print("import_3d_peaks: invalid filetype '%s'." % (filetype))
+            return(None)
+            
+        # Work out which column contains which dimension
+        dim = {}
+        for i in ["1","2","3"]:
+            if peaks["F"+i].mean() > 150:
+                dim["C"] = i
+            elif peaks["F"+i].mean() > 100:
+                dim["N"] = i
+            elif peaks["F"+i].mean() > 15:
+                dim["C"] = i
+            elif peaks["F"+i].mean() > 6:
+                dim["H"] = i
+            elif peaks["F"+i].mean() > 0:
+                dim["HA"] = i
+            else: 
+                dim["Unknown"] = i
+        
+        # Check that the correct dimensions were identified
+        # Also check that spectrum argument is valid
+        if spectrum in ["hnco", "hncaco", "hnca","hncoca","hncacb","hncocacb"]:
+            if set(dim.keys()) != set(["H","N","C"]):
+                print("Error: couldn't identify "+spectrum+" columns.") 
+        else:
+            print("Invalid value of argument: spectrum.")
+        
+        # Choose and rename columns. 
+        # Also, only keep spin systems that are in self.roots
+        peaks = peaks[["A"+dim["H"], "F"+dim["H"], "F"+dim["N"], "F"+dim["C"], 
+                       "Height"]]
+        peaks.columns = ["SS_name", "H", "N", "C", "Height"]
+        peaks["Spectrum"] = spectrum
+        peaks = peaks.loc[peaks["SS_name"].isin(self.roots["SS_name"])]
+        
+        # Add peaks to the peaklist dataframe
+        self.peaklists[spectrum] = peaks
+#        if isinstance(self.peaks, pd.DataFrame):
+#            self.peaks = self.peaks.append(peaks, ignore_index=True)
+#        else:
+#            self.peaks = peaks
+            
+        return(self)
+        
     def guess_peak_atom_types(self):
         """ Makes a best guess of the atom type for all peaks in self.peaks
         """
@@ -323,10 +373,19 @@ def score_plausibility(assignments):
 
 #### Test code
 
-#path = "/Users/aph516/GitHub/NAPS/data/P3a_L273/"
-path = "C:/Users/Alex/GitHub/NAPS/data/P3a_L273R/"
+path = "/Users/aph516/GitHub/NAPS/data/P3a_L273R/"
+#path = "C:/Users/Alex/GitHub/NAPS/data/P3a_L273R/"
 
 a = NAPS_importer()
+
+tmp = a.import_hsqc_peaks(path+"hsqc_sparky.txt", "sparky")
+tmp = a.import_3d_peaks(path+"hncacb_sparky.txt", "sparky", "hncacb")
+
+tmp = a.import_obs_shifts(path+"ccpn_resonances.txt", "ccpn", SS_num=True)
+tmp = a.import_obs_shifts(path+"sparky shifts.txt", "sparky", SS_num=True)
+tmp = a.import_obs_shifts(path+"Xeasy shifts.txt", "xeasy", SS_num=True)
+tmp = a.import_obs_shifts(path+"nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
+
 
 a.import_hsqc_ccpn(path+"hsqc HADAMAC.txt")
 a.import_3d_peaks_ccpn(path+"hnco.txt", "hnco")
@@ -334,12 +393,6 @@ a.import_3d_peaks_ccpn(path+"cbcaconh.txt", "hncocacb")
 a.import_3d_peaks_ccpn(path+"hncacb.txt", "hncacb")
 #a.guess_peak_atom_types()
 
-tmp = a.import_hsqc_peaks(path+"nmrpipe_peaks.tab", "nmrpipe")
-
-tmp = a.import_obs_shifts(path+"ccpn_resonances.txt", "ccpn", SS_num=True)
-tmp = a.import_obs_shifts(path+"sparky shifts.txt", "sparky", SS_num=True)
-tmp = a.import_obs_shifts(path+"Xeasy shifts.txt", "xeasy", SS_num=True)
-tmp = a.import_obs_shifts(path+"nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
 
 roots = a.roots
 peaklists = a.peaklists

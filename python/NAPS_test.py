@@ -3,7 +3,7 @@
 """
 Script to test NAPS functionality
 Run with a single argument, the path to the NAPS directory
-eg "python NAPS_test.py /Users/aph516/Github/NAPS/"
+eg "python NAPS_test.py /Users/aph516/GitHub/NAPS/"
 
 @author: aph516
 """
@@ -135,7 +135,7 @@ if args.test in ("basic", "all"):
                 (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                 "-c", (path/"config/config_plot.txt").as_posix(),
                 "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                "-p", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
+                "--plot_stem", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
         
 assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)

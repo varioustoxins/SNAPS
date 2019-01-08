@@ -24,31 +24,42 @@ class NAPS_assigner:
     assign_df = None
     alt_assign_df = None
     best_match_indexes = None
-    pars = {"shiftx2_offset": 0,
+    pars = {"pred_offset": 0,
             "atom_set": {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"},
             "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
                         'C':0.5330, 'CA':0.4412, 'CB':0.5163,
                         'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}}
     
     # Functions
-    def import_obs_shifts(self, filename, remove_Pro=True, short_aa_names=True):
+    def import_obs_shifts(self, filename, remove_Pro=True, 
+                          short_aa_names=True):
+        """ Import observed chemical shifts
+        
+        This function is intended for use with test data, and may not be 
+        set up to handle "real" data.
+        """
         #### Import the observed chemical shifts
         obs_long = pd.read_table(filename)
-        obs_long = obs_long[["Residue_PDB_seq_code","Residue_label","Atom_name","Chem_shift_value"]]
+        obs_long = obs_long[["Residue_PDB_seq_code","Residue_label",
+                             "Atom_name","Chem_shift_value"]]
         obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
         # Convert residue type to single-letter code
         if short_aa_names: 
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
-            obs_long["SS_name"] = obs_long["Res_N"].astype(str) + obs_long["Res_type"]
+            obs_long["SS_name"] = (obs_long["Res_N"].astype(str) + 
+                    obs_long["Res_type"])
             obs_long["SS_name"] = [s.rjust(5) for s in obs_long["SS_name"]]
         else:
-            obs_long["SS_name"] = obs_long["Res_N"].astype(str).rjust(4) + obs_long["Res_type"]
+            obs_long["SS_name"] = (obs_long["Res_N"].astype(str).rjust(4) + 
+                    obs_long["Res_type"])
             obs_long["SS_name"] = [s.rjust(7) for s in obs_long["SS_name"]]
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
-        obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name","Atom_type","Shift"])
+        obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name",
+                                             "Atom_type","Shift"])
         
         # Convert from long to wide
-        obs = obs_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
+        obs = obs_long.pivot(index="Res_N", columns="Atom_type", 
+                             values="Shift")
         
         # Add the other columns back in
         tmp = obs_long[["Res_N","Res_type","SS_name"]]
@@ -63,43 +74,76 @@ class NAPS_assigner:
             obs["HADAMAC"] = obs["HADAMAC"].str.replace("["+g+"]", g)
         
         # Make columns for the i-1 observed shifts of C, CA and CB
-        obs_m1 = obs[list({"C","CA","CB", "HADAMAC"}.intersection(obs.columns))]
+        obs_m1 = obs[list({"C","CA","CB","HADAMAC"}.intersection(obs.columns))]
         obs_m1.index = obs_m1.index+1
         obs_m1.columns = obs_m1.columns + "m1"
-        obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
+        obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
+                       right_index=True)
         
         # Restrict to specific atom types
         atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","HADAMACm1"}
-        obs = obs[["Res_N","Res_type","SS_name"]+list(atom_set.intersection(obs.columns))]
+        obs = obs[["Res_N","Res_type","SS_name"]+
+                  list(atom_set.intersection(obs.columns))]
         
         obs.index = obs["SS_name"]
         
-        if remove_Pro:  obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO","P"])]) # Remove prolines, as they wouldn't be observed in a real spectrum
+        if remove_Pro:
+            # Remove prolines, as they wouldn't be observed in a real spectrum
+            obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO","P"])]) 
         
         self.obs = obs
         return(self.obs)
     
     
-    def read_shiftx2(self, input_file, offset=None):
-        """ Import predicted chemical shifts from a ShiftX2 results file (usually ends .cs).
+    def import_pred_shifts(self, input_file, filetype, offset=None):
+        """ Import predicted chemical shifts from a ShiftX2 results file.
         
-        offset is an optional integer to add to the residue number from the shiftx2 file.
+        filetype: either "shiftx2" or "sparta+"
+        offset: an optional integer to add to the ShiftX2 residue number.
         """
         
-        # If nooffset value is defined, use the default one
+        # If no offset value is defined, use the default one
         if offset==None:
-            offset = self.pars["shiftx2_offset"]
+            offset = self.pars["pred_offset"]
         
-        preds_long = pd.read_csv(input_file)
-        preds_long["NUM"] = preds_long["NUM"] + offset    # Apply any offset to residue numbering
-        preds_long["Res_name"] = preds_long["NUM"].astype(str)+preds_long["RES"]
+        if filetype == "shiftx2":
+            preds_long = pd.read_csv(input_file)
+            if any(preds_long.columns == "CHAIN"):
+                if len(preds_long["CHAIN"].unique())>1:
+                    print("Chain identifier dropped - if multiple chains are "+
+                          "present in the predictions, they will be merged.")
+                preds_long = preds_long.drop("CHAIN", axis=1)     
+            preds_long = preds_long.reindex(columns=["NUM","RES","ATOMNAME",
+                                                     "SHIFT"])  
+            preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+        elif filetype == "sparta+":
+            # Work out where the column names and data are
+            with open(input_file, 'r') as f:
+                for num, line in enumerate(f, 1):
+                    if line.find("VARS")>-1:
+                        colnames_line = num
+                        colnames = line.split()[1:]
+                        
+            preds_long = pd.read_table(input_file, sep="\s+", names=colnames,
+                                       skiprows=colnames_line+1)
+            preds_long = preds_long[["RESID","RESNAME","ATOMNAME","SHIFT"]]
+            preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+            
+            # Sparta+ uses HN for backbone amide proton - convert to H
+            preds_long.loc[preds_long["Atom_type"]=="HN", "Atom_type"] = "H"
+        else:
+            print("import_pred_shifts: invalid filetype '%s'." % (filetype))
+            return(None)
+        
+        # Add sequence number offset and create residue names
+        preds_long["Res_N"] = preds_long["Res_N"] + offset
+        preds_long.insert(1, "Res_name", (preds_long["Res_N"].astype(str) + 
+                  preds_long["Res_type"]))
         preds_long["Res_name"] = [s.rjust(5) for s in preds_long["Res_name"]]
-        if any(preds_long.columns == "CHAIN"):   preds_long = preds_long.drop("CHAIN", axis=1)     # Assuming that there's only one CHAIN in the predictions...
-        preds_long = preds_long.reindex(columns=["NUM","RES","Res_name","ATOMNAME","SHIFT"])  
-        preds_long.columns = ["Res_N","Res_type","Res_name","Atom_type","Shift"]
-        
+            
         # Convert from wide to long format
-        preds = preds_long.pivot(index="Res_N", columns="Atom_type", values="Shift")
+        preds = preds_long.pivot(index="Res_N", columns="Atom_type", 
+                                 values="Shift")
         
         # Add the other data back in
         tmp = preds_long[["Res_N","Res_type","Res_name"]]
@@ -108,14 +152,17 @@ class NAPS_assigner:
         preds = pd.concat([tmp, preds], axis=1)
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
-        preds_m1 = preds[list({"C","CA","CB","Res_type"}.intersection(preds.columns))].copy()
+        preds_m1 = preds[list({"C","CA","CB","Res_type"}.
+                              intersection(preds.columns))].copy()
         preds_m1.index = preds_m1.index+1
         preds_m1.columns = preds_m1.columns + "m1"
-        preds = pd.merge(preds, preds_m1, how="left", left_index=True, right_index=True)
+        preds = pd.merge(preds, preds_m1, how="left", 
+                         left_index=True, right_index=True)
         
         # Restrict to only certain atom types
         atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-        preds = preds[["Res_name","Res_N","Res_type","Res_typem1"]+list(atom_set.intersection(preds.columns))]
+        preds = preds[["Res_name","Res_N","Res_type","Res_typem1"]+
+                      list(atom_set.intersection(preds.columns))]
         
         preds.index = preds["Res_name"]
         
@@ -124,8 +171,9 @@ class NAPS_assigner:
     
     
     def add_dummy_rows(self):
-        """Add dummy rows to obs and preds to bring them to the same length
-        Also throw away any atom types that aren't present in both obs and preds
+        """Add dummy rows to obs and preds to bring them to the same length.
+        
+        Also discard any atom types that aren't present in both obs and preds.
         """
         
         obs = self.obs.copy()
@@ -135,10 +183,12 @@ class NAPS_assigner:
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
         
         # Restrict atom types
-        # self.pars["atom_set"] is the list of atoms that will be used for the analysis
+        # self.pars["atom_set"] is the set of atoms to be used in the analysis
         obs_metadata = list(set(obs.columns).difference(self.pars["atom_set"]))     
-        preds_metadata = list(set(preds.columns).difference(self.pars["atom_set"]))
-        shared_atoms = list(self.pars["atom_set"].intersection(obs.columns).intersection(preds.columns))
+        preds_metadata = list(set(preds.columns).
+                              difference(self.pars["atom_set"]))
+        shared_atoms = list(self.pars["atom_set"].intersection(obs.columns).
+                            intersection(preds.columns))
         obs = obs.loc[:,obs_metadata+shared_atoms]
         preds = preds.loc[:,preds_metadata+shared_atoms]
         
@@ -150,12 +200,14 @@ class NAPS_assigner:
         M = len(preds.index)
         
         if N>M:     # If there are more spin systems than predictions
-            dummies = pd.DataFrame(np.NaN, index=["dummy_res_"+str(i) for i in 1+np.arange(N-M)], columns = preds.columns)
+            dummies = pd.DataFrame(np.NaN, columns = preds.columns, 
+                        index=["dummy_res_"+str(i) for i in 1+np.arange(N-M)])
             dummies["Res_name"] = dummies.index
             dummies["Dummy_res"] = True
             preds = preds.append(dummies)        
         elif M>N:
-            dummies = pd.DataFrame(np.NaN, index=["dummy_SS_"+str(i) for i in 1+np.arange(M-N)], columns = obs.columns)
+            dummies = pd.DataFrame(np.NaN, columns = obs.columns, 
+                        index=["dummy_SS_"+str(i) for i in 1+np.arange(M-N)])
             dummies["SS_name"] = dummies.index
             dummies["Dummy_SS"] = True
             obs = obs.append(dummies)
@@ -167,16 +219,22 @@ class NAPS_assigner:
         
         return(self.obs, self.preds)
     
-    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01,verbose=False, 
+    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01, 
                              use_hadamac=False, cdf=False, rescale_delta=False, 
-                             delta_correlation=False, shift_correlation=False):
+                             delta_correlation=False, shift_correlation=False,
+                             verbose=False):
         """Calculate a matrix of -log10(match probabilities)
         
-        use_hadamac - if True, amino acid type information will contribute to the log probability
-        cdf - if True, use cdf in probability matrix. Otherwise use pdf (cdf uses chance of seeing a delta 'at least this great')
-        rescale_delta - if True, the shift differences between obs and pred are scaled so they are closer to the normal distribution
-        delta_correlation - if True, correlated errors between different atom types are accounted for in the probability 
-        shift_correlation - if True, the correlation between observed shift and prediction error is accounted for.
+        use_hadamac: if True, amino acid type information will contribute to 
+            the log probability
+        cdf: if True, use cdf in probability matrix. Otherwise use pdf (cdf 
+            uses chance of seeing a delta 'at least this great')
+        rescale_delta: if True, the shift differences between obs and pred are 
+            scaled so they are closer to the normal distribution
+        delta_correlation: if True, correlated errors between different atom 
+            types are accounted for in the probability 
+        shift_correlation: if True, the correlation between observed shift and
+            prediction error is accounted for.
         """
         
         # Use default atom_sd values if not defined
@@ -187,22 +245,27 @@ class NAPS_assigner:
 #                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
         
         def calc_match_probability(obs, pred1):
-            """ Calculate match scores between all observed spin systems and a single predicted residue
+            """ Calculate match scores between all observed spin systems and a 
+            single predicted residue
             
-            default_prob is the probability assigned when an observation or prediction is missing
-            atom_sd is the expected standard deviation for each atom type
-            sf is a scaling factor for the entire atom_sd dictionary
-            use_hadamac determines whether residue type information is used
+            default_prob: probability assigned when an observation or 
+                prediction is missing
+            atom_sd: expected standard deviation for each atom type
+            sf: scaling factor for the entire atom_sd dictionary
+            use_hadamac: determines whether residue type information is used
             """
             
             # Throw away any non-atom columns
-            obs_reduced = obs.loc[:, self.pars["atom_set"].intersection(obs.columns)]
-            pred1_reduced = pred1.loc[self.pars["atom_set"].intersection(pred1.index)]
+            obs_reduced = obs.loc[:, self.pars["atom_set"].
+                                  intersection(obs.columns)]
+            pred1_reduced = pred1.loc[self.pars["atom_set"].
+                                      intersection(pred1.index)]
             
-            # Calculate shift differences and probabilities for each observed spin system
+            # Calculate shift differences for each observed spin system
             delta = obs_reduced - pred1_reduced
             
-            # Make a note of NA positions in delta, and set them to zero (this avoids warnings when using norm.cdf later)
+            # Make a note of NA positions in delta, and set them to zero 
+            # (this avoids warnings when using norm.cdf later)
             na_mask = delta.isna()
             delta[na_mask] = 0
             
@@ -210,16 +273,18 @@ class NAPS_assigner:
                 overall_prob = pd.Series(index=delta.index)
                 overall_prob[:] = 1
                 
-                d_mean = pd.read_csv("../data/d_mean.csv", header=None, index_col=0).loc[delta.columns,1]
-                d_cov = pd.read_csv("../data/d_cov.csv", index_col=0).loc[delta.columns,delta.columns]
+                d_mean = pd.read_csv("../data/d_mean.csv", header=None, 
+                                     index_col=0).loc[delta.columns,1]
+                d_cov = (pd.read_csv("../data/d_cov.csv", index_col=0).
+                         loc[delta.columns,delta.columns])
                 
                 mvn = multivariate_normal(d_mean, d_cov)
                 
                 overall_prob = mvn.logpdf(delta)
                 
-                # Penalise rows which have missing shifts
-                # Penalise for every shift that's missing, which isn't also missing in the predictions
-                overall_prob = overall_prob + log10(default_prob) * (na_mask.sum(axis=1) - pred1_reduced.isna().sum())
+                # Penalise missing shifts, unless also missing in predictions
+                overall_prob = (overall_prob + log10(default_prob) * 
+                            (na_mask.sum(axis=1) - pred1_reduced.isna().sum()))
                     
             else:
                 prob = delta.copy()
@@ -227,27 +292,34 @@ class NAPS_assigner:
                 
                 for c in delta.columns:
                     if self.pars["prob_method"] == "cdf":
-                        # Use the cdf to calculate the probability of a delta *at least* as great as the actual one
-                        prob[c] = log10(2) + norm.logcdf(-1*abs(pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
+                        # Use the cdf to calculate the probability of a 
+                        # delta *at least* as great as the actual one
+                        prob[c] = log10(2) + norm.logcdf(-1*abs(
+                                pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
                     elif self.pars["prob_method"] == "pdf":
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)       
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
+                            scale=atom_sd[c]*sf)       
                     elif shift_correlation:
                         print("shift_correlation not yet implemented. Defaulting to pdf.")
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
+                            scale=atom_sd[c]*sf)
                     else:
                         print("Method for calculating probability not recognised. Defaulting to pdf.")
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), scale=atom_sd[c]*sf)
+                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
+                            scale=atom_sd[c]*sf)
                 
-                # In positions where data was missing, use a default probability
+                # In positions where data was missing, use default probability
                 prob[na_mask] = log10(default_prob)
                 
                 # Calculate penalty for a HADAMAC mismatch
                 if use_hadamac:
-                    # If the i-1 aa type of the predicted residue matches the HADAMAC group of the observation, probability is 1.
+                    # If the i-1 aa type of the predicted residue matches the 
+                    # HADAMAC group of the observation, probability is 1.
                     # Otherwise, probability defaults to 0.01
                     prob["HADAMACm1"] = 0.01
-                    if type(pred1["Res_typem1"])==str:      # dummy residues have NaN
-                        prob.loc[obs["HADAMACm1"].str.find(pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
+                    if type(pred1["Res_typem1"])==str:    # dummies have NaN
+                        prob.loc[obs["HADAMACm1"].str.find(
+                                pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
             
                 # Calculate overall probability of each row
                 overall_prob = prob.sum(skipna=False, axis=1)
@@ -257,15 +329,19 @@ class NAPS_assigner:
         obs = self.obs
         preds = self.preds
         
-        log_prob_matrix = pd.DataFrame(np.NaN, index=obs.index, columns=preds.index)    # Initialise matrix as NaN
+        # Initialise matrix as NaN
+        log_prob_matrix = pd.DataFrame(np.NaN, index=obs.index, 
+                                       columns=preds.index)    
         
         for i in preds.index:
             if verbose: print(i)
-            log_prob_matrix.loc[:, i] = calc_match_probability(obs, preds.loc[i,:])
+            log_prob_matrix.loc[:, i] = calc_match_probability(obs, 
+                                                               preds.loc[i,:])
         
         
         # Calculate log of matrix
-        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(log_prob_matrix.values)
+        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
+                                                        log_prob_matrix.values)
         log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
@@ -285,7 +361,8 @@ class NAPS_assigner:
         
         valid_atoms = list(self.pars["atom_set"])
         
-        row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix)    # -1 because the algorithm minimises the sum, while we want to maximise it
+        row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix)    
+        # -1 because the algorithm minimises sum, but we want to maximise it.
         
         obs.index.name = "SS_index"
         preds.index.name = "Res_index"
@@ -299,39 +376,58 @@ class NAPS_assigner:
                 "SS_name":obs_names
                 })
         
-        # Merge residue information, shifts and predicted shifts into assignment dataframe
-        assign_df = pd.merge(assign_df, preds[["Res_N","Res_type", "Res_name", "Dummy_res"]], on="Res_name", how="outer")
-        assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", "Dummy_res"]]
-        assign_df = pd.merge(assign_df, obs.loc[:, obs.columns.isin(valid_atoms+["SS_name","Dummy_SS"])], on="SS_name", how="outer")
-            # Above line raises an error about index/column confusion, which needs fixing.
-        assign_df = pd.merge(assign_df, preds.loc[:, preds.columns.isin(valid_atoms+["Res_name"])], on="Res_name", suffixes=("","_pred"), how="outer")
+        # Merge residue info, shifts and predicteds into assignment dataframe
+        assign_df = pd.merge(assign_df, 
+                             preds[["Res_N","Res_type", "Res_name", 
+                                    "Dummy_res"]], 
+                             on="Res_name", how="outer")
+        assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", 
+                               "Dummy_res"]]
+        assign_df = pd.merge(assign_df, 
+                             obs.loc[:, obs.columns.isin(
+                                     valid_atoms+["SS_name","Dummy_SS"])], 
+                             on="SS_name", how="outer")
+            # Above line raises an error about index/column confusion, which needs fixing. Now fixed?
+        assign_df = pd.merge(assign_df, 
+                             preds.loc[:, preds.columns.isin(
+                                     valid_atoms+["Res_name"])],
+                             on="Res_name", suffixes=("","_pred"), how="outer")
         
         assign_df = assign_df.sort_values(by="Res_N")
-        assign_df["Log_prob"] = log_prob_matrix.lookup(log_prob_matrix.index[row_ind], log_prob_matrix.columns[col_ind])
+        assign_df["Log_prob"] = log_prob_matrix.lookup(
+                                            log_prob_matrix.index[row_ind], 
+                                            log_prob_matrix.columns[col_ind])
         
         self.assign_df = assign_df
         self.best_match_indexes = [row_ind, col_ind]
         return(assign_df, [row_ind, col_ind])
     
     def check_assignment_consistency(self, threshold=0.1):
-        # Add columns to the assignment dataframe with the maximum mismatch to a sequential residue, and number of 'significant' mismatches
-        # Any sequential residues with a difference greater than threshold count as mismatched
+        """ Find maximum mismatch and number of 'significant' mismatches for 
+        each residue
+        
+        threshold: Minimum carbon shift difference for sequential residues to
+            count as mismatched
+        """
         
         assign_df = self.assign_df
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
         carbons_m1 = carbons + "m1"
-        seq_atoms = carbons[carbons.isin(assign_df.columns) & carbons_m1.isin(assign_df.columns)]
+        seq_atoms = carbons[carbons.isin(assign_df.columns) & 
+                            carbons_m1.isin(assign_df.columns)]
         seq_atoms_m1 = seq_atoms+"m1"
         #seq_atoms = list(seq_atoms)
     
         if seq_atoms.size==0:
             # You can't do a comparison
-            assign_df[["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
+            assign_df[["Max_mismatch_prev", "Max_mismatch_next", 
+                       "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
             return(assign_df)
         else:
-            # First, get the i and i-1 shifts for the preceeding and succeeding residues
+            # First, get the i and i-1 shifts for the preceeding and 
+            # succeeding residues
             tmp = assign_df.copy()
             tmp = tmp.loc[tmp["Dummy_res"]==False,]
             tmp.index = tmp["Res_N"]
@@ -347,18 +443,23 @@ class NAPS_assigner:
                 tmp["d"+atom+"_prev"] = tmp[atom+"m1"] - tmp[atom+"_prev"]
                 tmp["d"+atom+"_next"] = tmp[atom] - tmp[atom+"m1_next"]
             # Calculate maximum mismatch
-            tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, skipna=True)
-            tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1, skipna=True)
+            tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, 
+                                                                   skipna=True)
+            tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1,
+                                                                   skipna=True)
             
             # Calculate number of consistent matches
-            #
             tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
             tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
             #tmp["Num_good_links"] = tmp["Num_good_links_prev"] + tmp["Num_good_links_next"]
             
             # Join relevant columns back onto assign_df
             tmp["Res_N"] = tmp.index
-            assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", "Max_mismatch_next", "Num_good_links_prev", "Num_good_links_next"]], on="Res_N")
+            assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", 
+                                                  "Max_mismatch_next", 
+                                                  "Num_good_links_prev", 
+                                                  "Num_good_links_next"]], 
+                                       on="Res_N")
             
             self.assign_df = assign_df
             return(self.assign_df)
@@ -366,18 +467,24 @@ class NAPS_assigner:
     def find_alt_assignments(self, N=1, by_res=True,  verbose=False, return_full_assignments=False):
         """ Find the next-best assignment(s) for each residue or spin system
         
-        This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+        This works by setting the log probability to a very high value for each 
+        residue in turn, and rerunning the assignment
         
         Arguments:
-        best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
-        N is the number of alternative assignments to generate
-        If by_res is true, calculate next best assignment for each residue. Otherwise, calculate it for each spin system.
+        best_match_indexes: [row_ind, col_ind] output from find_best_assignment()
+        N: number of alternative assignments to generate
+        by_res: if true, calculate next best assignment for each residue. 
+            Otherwise, calculate it for each spin system.
         
         Output:
-        If return_full_assignments is False, returns a DataFrame containing the next-best assignment for each residue or spin system, and the relative overall probability of that assignment
-        If return_full_assignments is True, the output is a list with two elements
-        - The first element is the DataFrame of assignments and probabilities, as before
-        - The second element is a list of DataFrames containing the complete alternative assignments for each residue.
+        If return_full_assignments is False, returns a DataFrame containing the
+        next-best assignment for each residue or spin system, and the relative
+        overall probability of that assignment.
+        If return_full_assignments is True, the output is a list with two 
+        elements:
+        1) the DataFrame of assignments and probabilities, as before
+        2) a list of DataFrames containing the complete alternative assignments 
+        for each residue.
         """
         
         obs = self.obs
@@ -386,10 +493,12 @@ class NAPS_assigner:
         best_match_indexes = self.best_match_indexes
         
         # Calculate sum probability for the best matching
-        best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
-                                   log_prob_matrix.columns[best_match_indexes[1]]))
+        best_sum_prob = sum(log_prob_matrix.lookup(
+                              log_prob_matrix.index[best_match_indexes[0]],
+                              log_prob_matrix.columns[best_match_indexes[1]]))
         
-        penalty = 2*log_prob_matrix.min().min()     # This is the value used to penalise the best match for each residue
+        penalty = 2*log_prob_matrix.min().min()     
+        # This value is used to penalise the previous best match
         
         if by_res:
             # Create data structures for storing results
@@ -575,8 +684,10 @@ class NAPS_assigner:
 
      
     def plot_strips(self, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
-        # Make a strip plot of the assignment, using only the atoms in atom_list
+        """ Make a strip plot of the assignment
         
+        atom_list: only plot data for these atom types
+        """
         assign_df = self.assign_df
         
         # Narrow down atom list to those actually present
@@ -610,8 +721,9 @@ class NAPS_assigner:
         return(plt)
     
     def plot_seq_mismatch(self):
-        # Make a plot of the maximum sequential mismatch between i-1,i and i+1 residues
-        
+        """ Make a plot of the maximum sequential mismatch between i-1, i and 
+        i+1 residues
+        """
         assign_df = self.assign_df
         
         # Check that the assignment data frame has the right columns
@@ -636,7 +748,7 @@ class NAPS_assigner:
 
 #a = NAPS_assigner()
 #a.import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
-#a.read_shiftx2("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
+#a.import_pred_shifts("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
 #a.add_dummy_rows()
 #a.calc_log_prob_matrix(sf=2, verbose=False)
 #assign_df, best_match_indexes = a.find_best_assignment()
@@ -644,7 +756,7 @@ class NAPS_assigner:
 
 ## Import the observed and predicted shifts
 #    obs = import_obs_shifts(obs_file)
-#    preds = read_shiftx2(preds_file)
+#    preds = import_pred_shifts(preds_file)
 #    
 #    # Add dummy rows so that obs and preds are the same length
 #    obs, preds = add_dummy_rows(obs, preds)

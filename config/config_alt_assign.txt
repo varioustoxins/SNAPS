@@ -1,5 +1,5 @@
 # Configuration file for NAPS
-shiftx2_offset  0       # Residue numbering offset for shiftx2
+pred_offset  0       # Residue numbering offset for shiftx2
 prob_method     delta_correlation     # Method for calculating probability (options are cdf, pdf, delta_correlation and rescale_delta
 alt_assignments 2       # Number of alternative assignments to generate
 atom_set      "H, N, HA, CA, CB, C,CAm1,CBm1,Cm1"       # Which atom types to include. Comma separated, no spaces
