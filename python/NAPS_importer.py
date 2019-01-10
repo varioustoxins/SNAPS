@@ -10,6 +10,8 @@ import pandas as pd
 import itertools
 from pathlib import Path
 from Bio.SeqUtils import seq1
+from math import sqrt
+import nmrstarlib
 
 class NAPS_importer:
     # Attributes
@@ -66,13 +68,13 @@ class NAPS_importer:
             # Give arbitrary names to the unassigned peaks
             N_unassigned = sum(hsqc["SS_name"]=="?")
             hsqc.loc[hsqc["SS_name"]=="?", "SS_name"] = list("x"+
-                    (10000+10*pd.Series(range(N_unassigned))).astype(str))
+                    pd.Series(range(N_unassigned)).astype(str))
             
         elif filetype=="xeasy":
             hsqc = pd.read_table(filename, sep="\s+", comment="#", header=None,
                                  usecols=[0,1,2,5], 
                                  names=["SS_name","H","N","Height"])
-            hsqc["SS_name"] = hsqc["SS_name"].astype(str)
+            hsqc["SS_name"] = "x" + hsqc["SS_name"].astype(str)
         elif filetype=="nmrpipe":
             # Work out where the column names and data are
             with open(filename, 'r') as f:
@@ -157,8 +159,19 @@ class NAPS_importer:
             
         return(self)
         
-    def import_3d_peaks(self, filename, filetype, spectrum):
-        """
+    def import_3d_peaks(self, filename, filetype, spectrum, 
+                        assign_nearest_root=False):
+        """Import a 3D peak list in various formats
+        
+        filetype: one of "ccpn", "sparky", "xeasy" or "nmrpipe"
+        spectrum: one of "hnco", "hncaco", "hnca", "hncoca", "hncacb",
+            "hncocacb" or "hnha"
+        assign_nearest_root: If True, this will assign each peak to the spin 
+            system with the closest root (hsqc) peak. If False, peaks will be 
+            assigned to spin systems based on information in the original file. 
+            In this case, the proton assignment is used for CCPN and Sparky, 
+            while the ASS column is used for nmrPipe. Xeasy peaklists alone 
+            do not seem to contain assignment information.
         """
         if filetype == "ccpn":
             peaks = pd.read_table(filename,
@@ -172,7 +185,25 @@ class NAPS_importer:
             peaks.columns=["Name","F1","F2","F3","Height"]
             peaks["A1"], peaks["A2"], peaks["A3"] = list(zip(
                                                 *peaks["Name"].str.split("-")))
-            return(peaks)
+            #return(peaks)
+        elif filetype == "xeasy":
+            peaks = pd.read_table(filename, sep="\s+", comment="#", header=None,
+                                 usecols=[1,2,3,6], 
+                                 names=["F1","F2","F3","Height"])
+            peaks["SS_name"] = None
+        elif filetype == "nmrpipe":
+            # Work out where the column names and data are
+            with open(filename, 'r') as f:
+                for num, line in enumerate(f, 1):
+                    if line.find("VARS")>-1:
+                        colnames_line = num
+                        colnames = line.split()[1:]
+                        
+            peaks = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+                                names=colnames)
+            peaks = peaks[["ASS", "X_PPM", "Y_PPM", "Z_PPM", "HEIGHT"]]
+            peaks.columns = ["SS_name", "F1", "F2", "F3", "Height"]
+            
         else:
             print("import_3d_peaks: invalid filetype '%s'." % (filetype))
             return(None)
@@ -198,16 +229,37 @@ class NAPS_importer:
         if spectrum in ["hnco", "hncaco", "hnca","hncoca","hncacb","hncocacb"]:
             if set(dim.keys()) != set(["H","N","C"]):
                 print("Error: couldn't identify "+spectrum+" columns.") 
+        elif spectrum == "hnha":
+            if set(dim.keys()) != set(["H","N","HA"]):
+                print("Error: couldn't identify "+spectrum+" columns.")
         else:
             print("Invalid value of argument: spectrum.")
         
+        # Populate SS_name column
+        if filetype in ["ccpn", "sparky"]:
+            peaks["SS_name"] = peaks["A"+dim["H"]]
+        elif filetype == "nmrpipe":
+            peaks["SS_name"] = peaks["ASS"]
+
         # Choose and rename columns. 
-        # Also, only keep spin systems that are in self.roots
-        peaks = peaks[["A"+dim["H"], "F"+dim["H"], "F"+dim["N"], "F"+dim["C"], 
+        peaks = peaks[["SS_name", "F"+dim["H"], "F"+dim["N"], "F"+dim["C"], 
                        "Height"]]
         peaks.columns = ["SS_name", "H", "N", "C", "Height"]
         peaks["Spectrum"] = spectrum
-        peaks = peaks.loc[peaks["SS_name"].isin(self.roots["SS_name"])]
+        
+        # If assign_nearest_root, find closest root resonance for each peak 
+        # and set that as SS_name.
+        if assign_nearest_root or spectrum=="xeasy":
+            peaks["SS_name"] == None
+            
+            roots = self.roots
+            for i in peaks.index:
+                delta = ((roots["H"]-peaks.loc[i,"H"])**2 
+                         + (0.2*(roots["N"]-peaks.loc[i,"N"]))**2).apply(sqrt)
+                peaks.loc[i, "SS_name"] = roots.loc[delta.idxmin(), "SS_name"]
+
+        # Also, only keep spin systems that are in self.roots
+        #peaks = peaks.loc[peaks["SS_name"].isin(self.roots["SS_name"])]
         
         # Add peaks to the peaklist dataframe
         self.peaklists[spectrum] = peaks
@@ -216,7 +268,7 @@ class NAPS_importer:
 #        else:
 #            self.peaks = peaks
             
-        return(self)
+        return(self.peaklists[spectrum])
         
     def guess_peak_atom_types(self):
         """ Makes a best guess of the atom type for all peaks in self.peaks
@@ -277,6 +329,9 @@ class NAPS_importer:
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
             obs["SS_name"] = obs["SS_name"].astype(str)
             obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
+        elif filetype == "nmrstar":
+            tmp = nmrstarlib.read_files(filename)
+            return(tmp)
         else:
             print("import_obs_shifts: invalid filetype '%s'." % (filetype))
             return(None)
@@ -378,14 +433,16 @@ path = "/Users/aph516/GitHub/NAPS/data/P3a_L273R/"
 
 a = NAPS_importer()
 
-tmp = a.import_hsqc_peaks(path+"hsqc_sparky.txt", "sparky")
-tmp = a.import_3d_peaks(path+"hncacb_sparky.txt", "sparky", "hncacb")
+tmp1 = a.import_hsqc_peaks(path+"hsqc_sparky_unassigned.txt", "sparky")
+tmp2 = a.import_3d_peaks(path+"hncacb_sparky.txt", "sparky", "hncacb", 
+                         assign_nearest_root=True)
 
 tmp = a.import_obs_shifts(path+"ccpn_resonances.txt", "ccpn", SS_num=True)
 tmp = a.import_obs_shifts(path+"sparky shifts.txt", "sparky", SS_num=True)
 tmp = a.import_obs_shifts(path+"Xeasy shifts.txt", "xeasy", SS_num=True)
 tmp = a.import_obs_shifts(path+"nmrpipe_shifts.tab", "nmrpipe", SS_num=True)
-
+tmp = a.import_obs_shifts(path+"../testset/A001_bmr4032.str.corr.pdbresno",
+                          "nmrstar", SS_num=False)
 
 a.import_hsqc_ccpn(path+"hsqc HADAMAC.txt")
 a.import_3d_peaks_ccpn(path+"hnco.txt", "hnco")
