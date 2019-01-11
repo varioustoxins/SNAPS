@@ -15,11 +15,17 @@ import nmrstarlib
 
 class NAPS_importer:
     # Attributes
-    peaklists = {}
-    assignments = {}
-    roots = None
-    peaks = None
-    obs = None
+#    peaklists = {}
+#    assignments = {}
+#    roots = None
+#    peaks = None
+#    obs = None
+    
+    def __init__(self):
+        self.peaklists = {}
+        #assignments = {}
+        self.roots = None
+        self.obs = None
     
     # Functions
     def import_hsqc_ccpn(self, filename):
@@ -261,30 +267,113 @@ class NAPS_importer:
         # Also, only keep spin systems that are in self.roots
         #peaks = peaks.loc[peaks["SS_name"].isin(self.roots["SS_name"])]
         
-        # Add peaks to the peaklist dataframe
+        # Add peaks to the peaklist dictionary
         self.peaklists[spectrum] = peaks
-#        if isinstance(self.peaks, pd.DataFrame):
-#            self.peaks = self.peaks.append(peaks, ignore_index=True)
-#        else:
-#            self.peaks = peaks
             
         return(self.peaklists[spectrum])
+    
+    def find_shifts_from_peaks(self):
+        """ Work out chemical shifts for each spin system from peak lists
         
-    def guess_peak_atom_types(self):
-        """ Makes a best guess of the atom type for all peaks in self.peaks
+        Will use all spectra in the self.peaklists dictionary. The following
+        spectra are supported: hnco, hncaco, hnca, hncoca, hncacb, hncocacb.
         """
-        
-        self.peaks["Atom_type"] = "NA"
-        
-        for ss in self.roots["SS_name"]:
-            ss_peaks = self.peaks.loc[self.peaks["SS_name"]==ss,:]
+        # Possible extension: could put a parameter to control hncacb sign interpretation
+        obs = pd.DataFrame({"SS_name": self.roots["SS_name"]})
+        obs.index = obs["SS_name"]
+        for spec in self.peaklists.keys():
+            peaks = self.peaklists[spec]
+            for ss in obs["SS_name"]:
+                if ss in peaks["SS_name"].values:
+                    ss_peaks = peaks.loc[peaks["SS_name"]==ss,:]
+                    if spec=="hnco":
+                        # Set Cm1 shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "Cm1"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hncaco":
+                        # Set C shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "C"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hncoca":
+                        # Set CAm1 shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "CAm1"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hnca":
+                        # Set CA shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "CA"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hncocacb":
+                        # Use a simple heuristic to guess if peak is CA or CB:
+                        # - If only 1 peak, CA if shift >41 ppm, otherwise CB
+                        # - If >1 peak, only keep the two with highest 
+                        #   (absolute) intensity. 
+                        # - If both >48 ppm, the largest shift is CB. 
+                        #   Otherwise, the smallest shift is CB
+                        if sum(peaks["SS_name"]==ss)==1:
+                            if ss_peaks["C"].item()>41:
+                                obs.loc[ss, "CAm1"] = ss_peaks["C"].item()
+                            else:
+                                obs.loc[ss, "CBm1"] = ss_peaks["C"].item()
+                        else:
+                            ss_peaks["Abs_height"] = ss_peaks["Height"].abs()
+                            # Above line throws a SettingWithCopy warning, 
+                            # but I can't seem to fix it
+                            
+                            ss_peaks = ss_peaks.sort_values(by="Abs_height",
+                                                            ascending=False)
+                            ss_peaks = ss_peaks.iloc[0:2,:]
+                            C_max = ss_peaks["C"].max()
+                            C_min = ss_peaks["C"].min()
+                            if C_max>48 and C_min>48:
+                                obs.loc[ss,"CAm1"] = C_min
+                                obs.loc[ss,"CBm1"] = C_max
+                            else:
+                                obs.loc[ss,"CAm1"] = C_max
+                                obs.loc[ss,"CBm1"] = C_min
+                    elif spec=="hncacb":
+                        # Use a simple heuristic to guess if peak is CA or CB:
+                        # - If only 1 peak, CA if shift >41 ppm, otherwise CB
+                        # - If >1 peak, only keep the two with highest 
+                        #   (absolute) intensity. 
+                        # - If strongest peak is 41-48 ppm and >twice height of
+                        #   next highest, then it's glycine CA
+                        # - Else, if both >48 ppm, the largest shift is CB. 
+                        #   Otherwise, the smallest shift is CB
+                        if sum(peaks["SS_name"]==ss)==1:
+                            print(ss_peaks)
+                            print(ss_peaks["C"])
+                            print(ss_peaks["C"].item())
+                            if ss_peaks["C"].item()>41:
+                                obs.loc[ss, "CA"] = ss_peaks["C"].item()
+                            else:
+                                obs.loc[ss, "CB"] = ss_peaks["C"].item()
+                        else:
+                            ss_peaks["Abs_height"] = ss_peaks["Height"].abs()
+                            # Above line throws a SettingWithCopy warning, 
+                            # but I can't seem to fix it
+                            ss_peaks = ss_peaks.sort_values(by="Abs_height",
+                                                            ascending=False)
+                            ss_peaks = ss_peaks.iloc[0:2,:]
+                            C_max = ss_peaks["C"].max()
+                            C_min = ss_peaks["C"].min()
+                            if (ss_peaks.iloc[0,:]["C"]>41 and 
+                                ss_peaks.iloc[0,:]["C"]<48 and 
+                                ss_peaks.iloc[0,:]["Abs_height"] >
+                                2*ss_peaks.iloc[1,:]["Abs_height"]):
+                                
+                                obs.loc[ss,"CA"] = ss_peaks.iloc[0,:]["C"]
+                            elif C_max>48 and C_min>48:
+                                obs.loc[ss,"CA"] = C_min
+                                obs.loc[ss,"CB"] = C_max
+                            else:
+                                obs.loc[ss,"CA"] = C_max
+                                obs.loc[ss,"CB"] = C_min
+                    else:
+                        print("Spectrum type %s not recognised" % spec)
+                        break
             
-            if "hnco" in ss_peaks["Spectrum"].values:
-                # Take the strongest HNCO peak, and set its atom type to Cm1
-                i = ss_peaks.loc[ss_peaks["Spectrum"]=="hnco","Height"].idxmax()
-                ss_peaks.loc[i,"Atom_type"] = "Cm1"
-
-            self.peaks.loc[self.peaks["SS_name"]==ss,:] = ss_peaks
+        self.obs = obs
+        return(self.obs)
             
     def import_obs_shifts(self, filename, filetype, SS_num=False):
         """ Import a chemical shift list
@@ -433,9 +522,14 @@ path = "/Users/aph516/GitHub/NAPS/data/P3a_L273R/"
 
 a = NAPS_importer()
 
-tmp1 = a.import_hsqc_peaks(path+"hsqc_sparky_unassigned.txt", "sparky")
-tmp2 = a.import_3d_peaks(path+"hncacb_sparky.txt", "sparky", "hncacb", 
-                         assign_nearest_root=True)
+roots = a.import_hsqc_peaks(path+"hsqc.txt", "ccpn")
+#hncacb = a.import_3d_peaks(path+"hncacb_sparky.txt", "sparky", "hncacb", 
+#                         assign_nearest_root=True)
+hnco = a.import_3d_peaks(path+"hnco.txt", "ccpn", "hnco", assign_nearest_root=True)
+hncocacb = a.import_3d_peaks(path+"cbcaconh.txt", "ccpn", "hncocacb", assign_nearest_root=True)
+obs = a.find_shifts_from_peaks()
+
+#%%
 
 tmp = a.import_obs_shifts(path+"ccpn_resonances.txt", "ccpn", SS_num=True)
 tmp = a.import_obs_shifts(path+"sparky shifts.txt", "sparky", SS_num=True)
