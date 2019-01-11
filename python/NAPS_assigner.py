@@ -352,7 +352,8 @@ class NAPS_assigner:
         """ Use the Hungarian algorithm to find the highest probability matching 
         (ie. the one with the lowest log probability sum)
         
-        Return a data frame with matched observed and predicted shifts, and the raw matching
+        Return a data frame with matched observed and predicted shifts, and 
+        the raw matching
         """
         
         obs = self.obs
@@ -387,7 +388,8 @@ class NAPS_assigner:
                              obs.loc[:, obs.columns.isin(
                                      valid_atoms+["SS_name","Dummy_SS"])], 
                              on="SS_name", how="outer")
-            # Above line raises an error about index/column confusion, which needs fixing. Now fixed?
+            # Above line raises an error about index/column confusion, 
+            # which needs fixing. Now fixed?
         assign_df = pd.merge(assign_df, 
                              preds.loc[:, preds.columns.isin(
                                      valid_atoms+["Res_name"])],
@@ -451,7 +453,6 @@ class NAPS_assigner:
             # Calculate number of consistent matches
             tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
             tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
-            #tmp["Num_good_links"] = tmp["Num_good_links_prev"] + tmp["Num_good_links_next"]
             
             # Join relevant columns back onto assign_df
             tmp["Res_N"] = tmp.index
@@ -464,7 +465,8 @@ class NAPS_assigner:
             self.assign_df = assign_df
             return(self.assign_df)
     
-    def find_alt_assignments(self, N=1, by_res=True,  verbose=False, return_full_assignments=False):
+    def find_alt_assignments(self, N=1, by_res=True,  verbose=False, 
+                             return_full_assignments=False):
         """ Find the next-best assignment(s) for each residue or spin system
         
         This works by setting the log probability to a very high value for each 
@@ -506,36 +508,51 @@ class NAPS_assigner:
             rel_log_prob_list = [pd.Series(index = preds.index) for i in range(N)]
             results_dict = {}
             if return_full_assignments: 
-                matching_df_list = [pd.DataFrame(index=preds.index, columns=preds.index) for i in range(N)]
+                matching_df_list = [pd.DataFrame(index=preds.index, 
+                                                 columns=preds.index) for i in range(N)]
             
-            # Convert best_match_indexes to get a series of spin systems indexed by residue  
-            best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
+            # Convert best_match_indexes to get a series of spin systems 
+            # indexed by residue  
+            best_matching = pd.Series(obs.index[best_match_indexes[0]], 
+                                      index=preds.index[best_match_indexes[1]])
             alt_matching = pd.Series()
             
             for res in preds["Res_name"]:   # Consider each residue in turn
                 if verbose: print(res)
                 for i in range(N):
                     if i==0:
-                        ss = best_matching[res]         # Find the spin system that was matched to current residue in optimal matching
-                        tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                        # Find the spin system that was matched to current 
+                        # residue in optimal matching
+                        ss = best_matching[res]
+                        # Make a copy of the log_prob_matrix that can be safely 
+                        # modified
+                        tmp = log_prob_matrix.copy()    
                     else:
-                        ss = alt_matching[res]          # Find the spin system that was matched to current residue in last round
+                        # Find the spin system that was matched to current
+                        # residue in last round
+                        ss = alt_matching[res]          
                     
                     # Penalise the match found for this residue
                     if obs.loc[ss, "Dummy_SS"]:
-                        tmp.loc[obs["Dummy_SS"], res] = penalty     # If last match was a dummy spin system, penalise all dummies
+                        # If last match was a dummy spin system, penalise all 
+                        # dummies
+                        tmp.loc[obs["Dummy_SS"], res] = penalty     
                     else:
                         tmp.loc[ss, res] = penalty
                     
                     row_ind, col_ind = linear_sum_assignment(tmp)
                     
                     # Extract the info we want from the optimisation results
-                    alt_matching = pd.Series(obs.index[row_ind], index=preds.index[col_ind])
+                    alt_matching = pd.Series(obs.index[row_ind], 
+                                             index=preds.index[col_ind])
                     assignment_list[i][res] = alt_matching[res]
                     if return_full_assignments: 
                         matching_df_list[i].loc[:,res] = alt_matching
-                    # Calculate the relative overall probability of this assignment, compared to the optimal assignment
-                    rel_log_prob_list[i][res] = sum(tmp.lookup(alt_matching.values, alt_matching.index)) - best_sum_prob
+                    # Calculate the relative overall probability of this 
+                    # assignment, compared to the optimal assignment
+                    rel_log_prob_list[i][res] = sum(tmp.lookup(
+                            alt_matching.values, 
+                            alt_matching.index)) - best_sum_prob
         else:
             # Create data structures for storing results
             assignment_list = [pd.Series(index = obs.index) for i in range(N)]
@@ -544,34 +561,48 @@ class NAPS_assigner:
             if return_full_assignments: 
                 matching_df_list = [pd.DataFrame(index=obs.index, columns=obs.index) for i in range(N)]
             
-            # Convert best_match_indexes to get a series of spin systems indexed by spin system  
-            best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+            # Convert best_match_indexes to get a series of spin systems 
+            # indexed by spin system  
+            best_matching = pd.Series(preds.index[best_match_indexes[1]], 
+                                      index=obs.index[best_match_indexes[0]])
             alt_matching = pd.Series()
             
             for ss in obs["SS_name"]:   # Consider each spin system in turn
                 if verbose: print(ss)
                 for i in range(N):
                     if i==0:
-                        res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
-                        tmp = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                        # Find the residue that was matched to current spin 
+                        # system in optimal matching
+                        res = best_matching[ss]         
+                        # Make a copy of the log_prob_matrix that can be safely 
+                        # modified
+                        tmp = log_prob_matrix.copy()    
                     else:
-                        res = alt_matching[ss]          # Find the residue that was matched to current spin system in last round
+                        # Find the residue that was matched to current spin 
+                        # system in last round
+                        res = alt_matching[ss]          
                     
                     # Penalise the match found for this residue
                     if preds.loc[res, "Dummy_res"]:
-                        tmp.loc[ss, preds["Dummy_res"]] = penalty     # If last match was a dummy residue, penalise all dummies
+                        # If last match was a dummy residue, penalise all 
+                        # dummies
+                        tmp.loc[ss, preds["Dummy_res"]] = penalty     
                     else:
                         tmp.loc[ss, res] = penalty
                     
                     row_ind, col_ind = linear_sum_assignment(tmp)
                     
                     # Extract the info we want from the optimisation results
-                    alt_matching = pd.Series(preds.index[col_ind], index=obs.index[row_ind])
+                    alt_matching = pd.Series(preds.index[col_ind], 
+                                             index=obs.index[row_ind])
                     assignment_list[i][ss] = alt_matching[ss]
                     if return_full_assignments: 
                         matching_df_list[i].loc[:,ss] = alt_matching
-                    # Calculate the relative overall probability of this assignment, compared to the optimal assignment
-                    rel_log_prob_list[i][ss] = sum(tmp.lookup(alt_matching.index, alt_matching.values)) - best_sum_prob            
+                    # Calculate the relative overall probability of this 
+                    # assignment, compared to the optimal assignment
+                    rel_log_prob_list[i][ss] = sum(tmp.lookup(
+                            alt_matching.index, 
+                            alt_matching.values)) - best_sum_prob            
             
         # Store the results as a dataframe
         for i in range(N):
@@ -591,15 +622,18 @@ class NAPS_assigner:
     def find_alt_assignments2(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
         
-        This works by setting the log probability to a very high value for each residue in turn, and rerunning the assignment
+        This works by setting the log probability to a very high value for each 
+        residue in turn, and rerunning the assignment
         
         Arguments:
-        best_match_indexes is the [row_ind, col_ind] output from find_best_assignment()
-        N is the number of alternative assignments to generate
-        If by_ss is true, calculate next best assignment for each spin system. Otherwise, calculate it for each residue.
+        best_match_indexes: [row_ind, col_ind] output from find_best_assignment()
+        N: number of alternative assignments to generate
+        by_ss: if true, calculate next best assignment for each spin system. 
+            Otherwise, calculate it for each residue.
         
         Output:
-        A Dataframe containing the original assignments, and the alt_assignments by
+        A Dataframe containing the original assignments, and the 
+        alt_assignments by
         """
         
         obs = self.obs
@@ -608,10 +642,12 @@ class NAPS_assigner:
         best_match_indexes = self.best_match_indexes
         
         # Calculate sum probability for the best matching
-        best_sum_prob = sum(log_prob_matrix.lookup(log_prob_matrix.index[best_match_indexes[0]], 
-                                   log_prob_matrix.columns[best_match_indexes[1]]))
+        best_sum_prob = sum(log_prob_matrix.lookup(
+                log_prob_matrix.index[best_match_indexes[0]],
+                log_prob_matrix.columns[best_match_indexes[1]]))
         
-        penalty = 2*log_prob_matrix.min().min()     # This is the value used to penalise the best match for each residue
+        # Calculate the value used to penalise the best match for each residue
+        penalty = 2*log_prob_matrix.min().min()     
                 
         # Initialise DataFrame for storing alt_assignments
         self.alt_assign_df = self.assign_df.copy()
@@ -619,18 +655,23 @@ class NAPS_assigner:
         self.alt_assign_df["Rel_prob"] = 0
        
         if by_ss:
-            # Convert best_match_indexes to get a series of spin systems indexed by spin system  
-            best_matching = pd.Series(preds.index[best_match_indexes[1]], index=obs.index[best_match_indexes[0]])
+            # Convert best_match_indexes to get a series of spin systems 
+            # indexed by spin system  
+            best_matching = pd.Series(preds.index[best_match_indexes[1]], 
+                                      index=obs.index[best_match_indexes[0]])
             
             for ss in obs["SS_name"]:   # Consider each spin system in turn
                 if verbose: print(ss)
                 a = deepcopy(self)
                 for i in range(N):
                     if i==0:
-                        res = best_matching[ss]         # Find the residue that was matched to current spin system in optimal matching
-                        #a.log_prob_matrix = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                        # Find the residue that was matched to current spin 
+                        # system in optimal matching
+                        res = best_matching[ss]         
                     else:
-                        res = alt_match          # Find the residue that was matched to current spin system in last round
+                        # Find the residue that was matched to current spin 
+                        # system in last round
+                        res = alt_match          
                     
                     # Penalise the match found for this residue
                     if preds.loc[res, "Dummy_res"]:
@@ -641,48 +682,65 @@ class NAPS_assigner:
                     a.find_best_assignment()
                     a.assign_df.index = a.assign_df["SS_name"]
                     a.assign_df["Rank"] = i+2
-                    alt_sum_prob = sum(a.log_prob_matrix.lookup(a.log_prob_matrix.index[a.best_match_indexes[0]], 
-                                       a.log_prob_matrix.columns[a.best_match_indexes[1]]))
+                    alt_sum_prob = sum(a.log_prob_matrix.lookup(
+                            a.log_prob_matrix.index[a.best_match_indexes[0]],
+                            a.log_prob_matrix.columns[a.best_match_indexes[1]]))
                     a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
                     
                     alt_match = a.assign_df.loc[ss, "Res_name"] 
-                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[ss, :], ignore_index=True)
-                self.alt_assign_df = self.alt_assign_df.sort_values(by=["SS_name", "Rank"])
+                    self.alt_assign_df = self.alt_assign_df.append(
+                                    a.assign_df.loc[ss, :], ignore_index=True)
+                self.alt_assign_df = self.alt_assign_df.sort_values(
+                                                        by=["SS_name", "Rank"])
                 
         else:
-            # Convert best_match_indexes to get a series of spin systems indexed by spin system  
-            best_matching = pd.Series(obs.index[best_match_indexes[0]], index=preds.index[best_match_indexes[1]])
+            # Convert best_match_indexes to get a series of spin systems 
+            # indexed by spin system  
+            best_matching = pd.Series(obs.index[best_match_indexes[0]], 
+                                      index=preds.index[best_match_indexes[1]])
             
             for res in preds["Res_name"]:   # Consider each spin system in turn
                 if verbose: print(res)
                 a = deepcopy(self)
                 for i in range(N):
                     if i==0:
-                        ss = best_matching[res]         # Find the spin system that was matched to current residue in optimal matching
-                        #a.log_prob_matrix = log_prob_matrix.copy()    # Make a copy of the log_prob_matrix that can be safely modified
+                        # Find the spin system that was matched to current 
+                        # residue in optimal matching
+                        ss = best_matching[res]         
                     else:
-                        ss = alt_match          # Find the spin system that was matched to current residue in last round
+                        # Find the spin system that was matched to current 
+                        # residue in last round
+                        ss = alt_match          
                     
                     # Penalise the match found for this residue
                     if obs.loc[ss, "Dummy_SS"]:
-                        a.log_prob_matrix.loc[obs["Dummy_SS"], res] = penalty     # If last match was a dummy residue, penalise all dummies
+                        # If last match was a dummy residue, penalise all dummies
+                        a.log_prob_matrix.loc[obs["Dummy_SS"], res] = penalty     
                     else:
                         a.log_prob_matrix.loc[ss, res] = penalty
                     
                     a.find_best_assignment()
                     a.assign_df.index = a.assign_df["Res_name"]
                     a.assign_df["Rank"] = i+2
-                    alt_sum_prob = sum(a.log_prob_matrix.lookup(a.log_prob_matrix.index[a.best_match_indexes[0]], 
-                                       a.log_prob_matrix.columns[a.best_match_indexes[1]]))
+                    alt_sum_prob = sum(a.log_prob_matrix.lookup(
+                            a.log_prob_matrix.index[a.best_match_indexes[0]],
+                            a.log_prob_matrix.columns[a.best_match_indexes[1]]))
                     a.assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
                     
                     alt_match = a.assign_df.loc[res, "SS_name"] 
-                    self.alt_assign_df = self.alt_assign_df.append(a.assign_df.loc[res, :], ignore_index=True)
-                self.alt_assign_df = self.alt_assign_df.sort_values(by=["Res_name", "Rank"])
+                    self.alt_assign_df = self.alt_assign_df.append(
+                                    a.assign_df.loc[res, :], ignore_index=True)
+                self.alt_assign_df = self.alt_assign_df.sort_values(
+                                                    by=["Res_name", "Rank"])
         
         return(self.alt_assign_df)
 
-     
+    def output_peaklists(self, filepath, format="sparky", 
+                         spectra=["hsqc","hnco","hncaco","hncacb", "hncocacb"]):
+        """ Output assigned peaklists
+        """
+        return(0)
+    
     def plot_strips(self, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
         """ Make a strip plot of the assignment
         
@@ -694,14 +752,19 @@ class NAPS_assigner:
         atom_list = list(set(atom_list).intersection(assign_df.columns))
         
         # First, convert assign_df from wide to long
-        plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", "Dummy_res", "Dummy_SS"]+atom_list]
-        plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", "SS_name", "Dummy_res", "Dummy_SS"],
-                                   value_vars=atom_list, var_name="Atom_type", value_name="Shift")
+        plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", 
+                                   "Dummy_res", "Dummy_SS"]+atom_list]
+        plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", 
+                                        "SS_name", "Dummy_res", "Dummy_SS"],
+                                   value_vars=atom_list, var_name="Atom_type",
+                                   value_name="Shift")
         
         # Add columns with information to be plotted
-        plot_df["i"] = "0"     # This column determines if shift is from the i or i-1 residue
+        plot_df["i"] = "0"     # Track if shift is from the i or i-1 residue
         plot_df.loc[plot_df["Atom_type"].isin(["Cm1","CAm1","CBm1"]),"i"] = "-1"
-        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"Cm1":"C", "CAm1":"CA", "CBm1":"CB"}) # Simplify atom type
+        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"Cm1":"C", 
+                                                   "CAm1":"CA", "CBm1":"CB"}) 
+                                                    # Simplify atom type
         
         plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
         
@@ -710,11 +773,15 @@ class NAPS_assigner:
         plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
         
         # Make the plot
-        plt = ggplot(aes(x="x_name"), data=plot_df) + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
+        plt = ggplot(aes(x="x_name"), data=plot_df) 
+        plt = plt + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
         plt = plt + scale_y_reverse() + scale_shape_manual(values=["o","x"])
-        plt = plt + geom_line(aes(y="Shift", group="seq_group"), data=plot_df.loc[~plot_df["Dummy_res"],])        # Add lines connecting i to i-1 points
+        # Add lines connecting i to i-1 points
+        plt = plt + geom_line(aes(y="Shift", group="seq_group"), 
+                              data=plot_df.loc[~plot_df["Dummy_res"],])        
         plt = plt + geom_line(aes(y="Shift", group="x_name"), linetype="dashed")
-        plt = plt + facet_grid("Atom_type~.", scales="free") + scale_colour_brewer(type="Qualitative", palette="Set1") 
+        plt = plt + facet_grid("Atom_type~.", scales="free") 
+        plt = plt + scale_colour_brewer(type="Qualitative", palette="Set1") 
         plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
         plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
         
@@ -727,17 +794,20 @@ class NAPS_assigner:
         assign_df = self.assign_df
         
         # Check that the assignment data frame has the right columns
-        if not all(pd.Series(['Max_mismatch_prev', 'Max_mismatch_next']).isin(assign_df.columns)):
+        if not all(pd.Series(['Max_mismatch_prev', 'Max_mismatch_next']).
+                   isin(assign_df.columns)):
             return(None)
         else:
             # Pad Res_name column with spaces so that sorting works correctly
             assign_df["Res_name"] = assign_df["Res_name"].str.pad(6)
-            assign_df["x_name"] = assign_df["Res_name"] + "_(" + assign_df["SS_name"] + ")"
+            assign_df["x_name"] = (assign_df["Res_name"] + "_(" + 
+                                     assign_df["SS_name"] + ")")
             
             # Make the plot
             plt = ggplot(aes(x="x_name"), data=assign_df) 
             plt = plt + geom_col(aes(y="abs(Max_mismatch_prev)"))
-            plt = plt + xlab("Residue name") + ylab("Mismatch to previous residue (ppm)")
+            plt = plt + xlab("Residue name")
+            plt = plt + ylab("Mismatch to previous residue (ppm)")
             plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
                    
             return(plt)
