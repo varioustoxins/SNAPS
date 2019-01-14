@@ -1,0 +1,6 @@
+# Peaklist import summary file for NAPS
+spectrum        filename                                                filetype        SS_method
+hsqc            /Users/aph516/GitHub/NAPS/data/P3a_L273R/hsqc.txt       ccpn            root
+hnco            /Users/aph516/GitHub/NAPS/data/P3a_L273R/hnco.txt       ccpn            closest_root
+hncacb          /Users/aph516/GitHub/NAPS/data/P3a_L273R/hncacb.txt     ccpn            closest_root
+hncocacb        /Users/aph516/GitHub/NAPS/data/P3a_L273R/cbcaconh.txt   ccpn            from_peaklist

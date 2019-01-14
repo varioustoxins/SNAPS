@@ -28,4 +28,9 @@ tmp =assigns_all.loc[assigns_all["ID"]=="A002",:]
 tmp["Rank"] = tmp["Rank"].astype(str)
 plt = ggplot(data=tmp)
 plt = plt + geom_boxplot(aes(x="Rank", y="Log_prob", fill="Status"), position="dodge")+ theme(legend_position="top")
-plt
+
+#%%
+runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
+        args="peaks /Users/aph516/GitHub/NAPS/data/peaklists.txt "+
+        "/Users/aph516/GitHub/NAPS/output/test.txt "+
+        "-l /Users/aph516/GitHub/NAPS/output/log.txt")
