@@ -129,30 +129,32 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
 if args.test in ("basic", "all"):
     for i in testset_df.index[0:args.N_tests]:
         print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), 
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                testset_df.loc[i, "preds_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                 "-c", (path/"config/config_plot.txt").as_posix(),
                 "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
                 "--plot_stem", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
         
-assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
-summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
-
-plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
-plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
-plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
-plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm")
+    assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
+    summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
+    
+    plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+    plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+    plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm")
 #%%
 #### Test effect of accounting for correlated errors
 if args.test in ("delta_correlation", "all"):
     for i in testset_df.index[0:args.N_tests]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), 
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                testset_df.loc[i, "preds_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                 "-c", (path/"config/config_delta_corr.txt").as_posix(),
                 "-l", (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
@@ -170,9 +172,10 @@ if args.test in ("delta_correlation", "all"):
 if args.test in ("alt_assignments", "all"):
     for i in testset_df.index[0:args.N_tests]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), 
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                testset_df.loc[i, "preds_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
                 "-c", (path/"config/config_alt_assign.txt").as_posix(),
                 "-l", (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]

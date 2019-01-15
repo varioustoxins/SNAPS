@@ -35,24 +35,34 @@ if False:
             "../output/test.txt"+
             " -c config.txt")
 
-parser = argparse.ArgumentParser(description="NMR Assignments from Predicted Shifts")
-parser.add_argument("mode", choices=["peaks", "shifts"], help="Either peaks or shifts. Specifies whether the observed data is provided as peak lists or as a shift list.")
+parser = argparse.ArgumentParser(description="NAPS (NMR Assignments from Predicted Shifts)")
+parser.add_argument("mode", choices=["peaks", "shifts"], 
+                    help="""Either peaks or shifts. Specifies whether the 
+                    observed data is provided as peak lists or as a shift list.""")
 parser.add_argument("input_file", 
-                    help="""In 'peaks' mode, the input file should be a table containing details of peaklist files.
-                    In 'shifts' mode, input_file should be a table of observed chemical shifts.""")
+                    help="""In 'peaks' mode, the input file should be a table 
+                    containing details of peaklist files.
+                    In 'shifts' mode, input_file should be a table of observed 
+                    chemical shifts.""")
 parser.add_argument("output_file")
-parser.add_argument("--shift_type", default=None, 
-                    help="The format of the observed shift file (naps, ccpn, sparky, xeasy or nmrpipe). Only needed in shifts mode.")
+parser.add_argument("--shift_type", 
+                    choices=["naps", "ccpn", "sparky", 
+                             "xeasy", "nmrpipe", "test"], 
+                    default="naps", 
+                    help="""The format of the observed shift file. Only needed 
+                    in shifts mode.""")
 parser.add_argument("--pred_file")
-parser.add_argument("--pred_type", default="shiftx2", 
-                    help="The format of the predicted shifts (shiftx2 or sparta+)")
+parser.add_argument("--pred_type", 
+                    choices=["shiftx2", "sparta+"],
+                    default="shiftx2", 
+                    help="The file format of the predicted shifts")
 parser.add_argument("-c", "--config_file", 
                     default="/Users/aph516/GitHub/NAPS/python/config.txt")
 #parser.add_argument("-c", "--config_file", 
 #                    default=Path("C:/kheyam/Documents/GitHub/NAPS/python/config.txt"))
 parser.add_argument("-l", "--log_file", default=None)
-parser.add_argument("--delta_correlation", action="store_true", 
-                    help="If set, account for correlations between prediction errors of different atom types")
+#parser.add_argument("--delta_correlation", action="store_true", 
+#                    help="If set, account for correlations between prediction errors of different atom types")
 parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
                     help="The number of alternative assignments to generate, in addition to the highest ranked.")
 parser.add_argument("--plot_stem", 
@@ -112,9 +122,15 @@ if args.mode=="peaks":
             logging.info("Read in %d peaks from %s.", 
                  len(tmp["SS_name"]), peaklist_info.loc[i, "filename"])
     importer.find_shifts_from_peaks()
+    logging.info("Generated shift list with %d spin systems.", 
+                 len(importer.obs["SS_name"]))
     importer.export_obs_shifts(args.output_file)
+    logging.info("Exported chemical shift file in NAPS format to %s.", 
+                 args.output_file)
+    
+                 
                                   
-#### Shifts export mode
+#### Shifts import mode
 elif args.mode=="shifts":
     a = NAPS_assigner()
     
@@ -133,16 +149,19 @@ elif args.mode=="shifts":
     # Account for any command line arguments that overide config file
     if args.alt_assignments>=0:
         a.pars["alt_assignments"] = args.alt_assignments
-    if args.delta_correlation:
-        a.pars["prob_method"] = "delta_correlation"
+#    if args.delta_correlation:
+#        a.pars["prob_method"] = "delta_correlation"
     
     # Import observed and predicted shifts
     importer = NAPS_importer()
     
-    importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=false)
+    if args.shift_type=="test":
+        importer.import_testset_shifts(args.input_file)
+    else:
+        importer.import_obs_shifts(args.input_file, args.shift_type, SS_num=False)
     a.obs = importer.obs
     logging.info("Read in %d spin systems from %s.", 
-                 len(a.obs["SS_name"]), args.shift_file)
+                 len(a.obs["SS_name"]), args.input_file)
     
     
     a.import_pred_shifts(args.pred_file, args.pred_type)
