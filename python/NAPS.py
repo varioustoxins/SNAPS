@@ -200,5 +200,5 @@ elif args.mode=="shifts":
     # Make some plots
     if a.pars["plot_strips"]:
         plt = a.plot_strips()
-        plt.save(args.plot_stem+"_strips.pdf", height=210, width=297, units="mm")
+        plt.save(args.plot_stem+"_strips.pdf", height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), units="mm")
         logging.info("Wrote strip plot to %s", args.plot_stem+"_strips.pdf")
