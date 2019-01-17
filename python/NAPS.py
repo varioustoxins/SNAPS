@@ -18,18 +18,21 @@ import logging
 
 # For testing
 if False:
-    runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', wdir='/Users/aph516/GitHub/NAPS/python',
+    runfile('/Users/aph516/GitHub/NAPS/python/NAPS.py', 
+            wdir='/Users/aph516/GitHub/NAPS/python',
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt")
     
-    runfile(Path('C:/Users/Alex/GitHub/NAPS/python/NAPS.py'), wdir=Path('C:/Users/Alex/GitHub/NAPS/python'),
+    runfile(Path('C:/Users/Alex/GitHub/NAPS/python/NAPS.py'), 
+            wdir=Path('C:/Users/Alex/GitHub/NAPS/python'),
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt"+
             " -c config.txt")
     
-    runfile(Path('C:/Users/kheyam/Documents/GitHub/NAPS/python/NAPS.py'), wdir=Path('C:/Users/kheyam/Documents/GitHub/NAPS/python'),
+    runfile(Path('C:/Users/kheyam/Documents/GitHub/NAPS/python/NAPS.py'), 
+            wdir=Path('C:/Users/kheyam/Documents/GitHub/NAPS/python'),
             args="../data/testset/simplified_BMRB/4032.txt "+
             "../data/testset/shiftx2_results/A001_1KF3A.cs "+
             "../output/test.txt"+
@@ -64,7 +67,8 @@ parser.add_argument("-l", "--log_file", default=None)
 #parser.add_argument("--delta_correlation", action="store_true", 
 #                    help="If set, account for correlations between prediction errors of different atom types")
 parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
-                    help="The number of alternative assignments to generate, in addition to the highest ranked.")
+                    help="The number of alternative assignments to generate, "+
+                    "in addition to the highest ranked.")
 parser.add_argument("--plot_stem", 
                     default="/Users/aph516/GitHub/NAPS/plots/plot",
                     help="The base name for plots (do not include a file extension).")
@@ -182,7 +186,7 @@ elif args.mode=="shifts":
         a.find_alt_assignments2(N=a.pars["alt_assignments"], verbose=False, 
                                 by_ss=True)
         logging.info("Calculated the %d next best assignments for each spin system", 
-                     args.alt_assignments)
+                     a.pars["alt_assignments"])
         a.alt_assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                                index=False)
         logging.info("Wrote results to %s", args.output_file)

@@ -47,7 +47,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
 
     assigns = None
     for i in testset_df.index[0:N]:
-        tmp_all = pd.read_csv(data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), sep="\t", index_col=0)
+        tmp_all = pd.read_csv(data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), sep="\t", index_col=False)
         tmp_all["ID"] = i
         
         # Cysteines in disulphide bridges are often named B in this dataset. 
@@ -110,16 +110,28 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
     #assigns.groupby(["ID","Status"])["Status"].count()
 #    if "Rank" in tmp_all.columns:
     
+    
     summary = pd.DataFrame(columns=["Rank","Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned","N","N_SS","Pc_correct"])
     summary = summary.append(assigns.groupby(["ID","Rank","Status"])["Status"].count().unstack(2), sort=False)
+    
 #    else:
 #    summary = pd.DataFrame(columns=["Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned","N","N_SS","Pc_correct"])
 #    summary = summary.append(assigns.groupby(["ID","Status"])["Status"].count().unstack(1), sort=False)
-        
+    #cols=["Correctly assigned","Correctly unassigned","Dummy SS","Misassigned","Wrongly assigned","Wrongly unassigned"]
+    
     summary = summary.fillna(0).astype(int)
     summary["N"] = summary.apply(sum, axis=1)
     summary["N_SS"] = summary["N"] - summary["Dummy SS"]
-    summary = pd.concat([summary.sum(axis=0).to_frame("Sum").transpose(), summary], sort=False)
+    
+    # Unpack the hierarchical index
+    ind = summary.index.to_frame().astype(str)
+    summary = pd.merge(ind, summary, left_index=True, right_index=True)
+    summary.columns[0] = "ID"
+    
+    # Add a row with sums
+    sum_row = summary.sum(axis=0).to_frame("Sum").transpose()
+    
+    summary = pd.concat([sum_row, summary], sort=False, ignore_index=True)
     summary["Pc_correct"] = (summary["Correctly assigned"]+summary["Correctly unassigned"]) / summary["N_SS"]
     
     return([assigns, summary])
