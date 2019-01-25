@@ -10,8 +10,10 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm, multivariate_normal, linregress
 from plotnine import *
+from NAPS_importer import NAPS_importer
 from NAPS_assigner import NAPS_assigner
 from pathlib import Path
+from math import sqrt
 path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS/")
 #path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
@@ -23,12 +25,13 @@ testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file for file in t
 testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df.index = testset_df["ID"]
 
-a = NAPS_assigner()
+importer = NAPS_importer()
+assigner = NAPS_assigner()
 
 # Work out which residue types don't match between obs and preds
 seq_df = None
 for i in testset_df["ID"]:
-    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"])
+    obs = importer.import_testset_shifts(testset_df.loc[i, "obs_file"])
     # Change Bs to Cs
     obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
     
@@ -40,13 +43,12 @@ for i in testset_df["ID"]:
     obs = pd.merge(obs, obs_m1, how="left", left_index=True, right_index=True)
     obs.index = obs["SS_name"]
     
-    
-    preds = a.read_shiftx2(testset_df.loc[i, "preds_file"])
+    preds = assigner.import_pred_shifts(testset_df.loc[i, "preds_file"], filetype="shiftx2")
     #Change Bs to Cs
     preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
     preds.loc[preds["Res_typem1"]=="B", "Res_typem1"] = "C"
-    
-    df = pd.merge(obs, preds, on=["Res_N"], how="outer", suffixes=["_obs","_pred"])
+       
+    df = pd.merge(obs, preds, on="Res_N", how="outer", suffixes=["_obs","_pred"])
     df["ID"] = i
     if type(seq_df)!=type(df):
         seq_df = df.copy()
@@ -65,19 +67,31 @@ bad_res = bad_res.drop_duplicates()
 
 #%%
 
-a = NAPS_assigner()
+importer = NAPS_importer()
+assigner = NAPS_assigner()
+
+atom_set = {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"}
 
 #### Import the actual data
 obs_all = None
 for i in testset_df["ID"]:
 #for i in ["A063"]:
-    obs = a.import_obs_shifts(testset_df.loc[i, "obs_file"], remove_Pro=False)
-    preds = a.read_shiftx2(testset_df.loc[i, "preds_file"])
+    obs = importer.import_testset_shifts(testset_df.loc[i, "obs_file"], remove_Pro=False)
+    preds = assigner.import_pred_shifts(testset_df.loc[i, "preds_file"], filetype="shiftx2")
     
     #Change Bs to Cs
     obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
     preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
     preds.loc[preds["Res_typem1"]=="B", "Res_typem1"] = "C"
+    
+
+    #Convert wide to long
+    obs = obs.melt(id_vars=["SS_name", "Res_N", "Res_type"],
+                   value_vars=set(obs.columns).intersection(atom_set), 
+                   var_name="Atom_type", value_name="Shift")
+    preds = preds.melt(id_vars=["Res_name", "Res_N", "Res_type", "Res_typem1"],
+                   value_vars=set(preds.columns).intersection(atom_set), 
+                   var_name="Atom_type", value_name="Shift")
     
     obs["ID"] = i
     preds["ID"] = i
@@ -89,22 +103,94 @@ for i in testset_df["ID"]:
         obs_all = pd.concat([obs_all, obs], ignore_index=True)
         preds_all = pd.concat([preds_all, preds], ignore_index=True)
 
-df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type"], how="outer", suffixes=["_obs","_pred"])
+df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type", "Atom_type"], 
+              how="outer", suffixes=["_obs","_pred"])
 
 # Get rid of any residues with mismatching types, or where the type is NaN
 df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_N"].astype(str)),:]
 df = df.dropna(axis=0, subset=["Res_type","Res_typem1"])
+df = df[["ID","SS_name","Res_name","Res_N","Res_type","Res_typem1","Atom_type","Shift_obs","Shift_pred"]]
         
 # Calculate the prediction errors
-for atom in a.pars["atom_set"]:
-    df["d_"+atom] = df[atom+"_pred"] - df[atom+"_obs"]
+df["Error"] = df["Shift_pred"] - df["Shift_obs"]
 
+
+
+#%% Work out obs vs pred distance matrix.
+# Then calculate how many observations are closer to the prediction than the correct one
+
+# Stopgap scaling factors: need to find some better ones
+#scale = {"H":1,"N":6,"HA":1,"C":4,"CA":5,"CB":5,"Cm1":4,"CAm1":5,"CBm1":5}
+#scale = pd.DataFrame({"Atom_type":["H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"], 
+#                      "Scale":[1,6,1,4,5,5,4,5,5]})
+scale = (df.groupby("Atom_type").quantile(0.95) - 
+         df.groupby("Atom_type").quantile(0.05))
+scale["Atom_type"] = scale.index
+scale = scale.loc[:, ["Atom_type", "Shift_obs"]]
+scale.columns = ["Atom_type","Scale"]
+# Replace CB scale with CA, to avoid being skewed by Ser,Thr CB shifts.
+scale.loc["CB","Scale"] = scale.loc["CA","Scale"]
+scale.loc["CBm1","Scale"] = scale.loc["CAm1","Scale"]
+    
+
+
+rank_df = None
+
+for id in df["ID"].unique():
+    tmp = df.loc[df["ID"]==id, :]
+    res_list = tmp["Res_name"].unique()
+    dist_all = pd.DataFrame(index=res_list, columns=res_list)
+    dist_HN = pd.DataFrame(index=res_list, columns=res_list)
+    dist_HNCO = pd.DataFrame(index=res_list, columns=res_list)
+    dist_NCO = pd.DataFrame(index=res_list, columns=res_list)
+    for i in res_list:
+        pred = tmp.loc[tmp["Res_name"]==i, ["Atom_type", "Shift_pred"]]
+        pred = pd.merge(pred, scale, on="Atom_type")
+        print(id, i)
+        for j in res_list:
+            obs = tmp.loc[tmp["Res_name"]==j, ["Atom_type", "Shift_obs"]]
+            tmp2 = pd.merge(obs, pred, on="Atom_type")
+            tmp2["Delta2"] = ((tmp2["Shift_pred"] - tmp2["Shift_obs"])/tmp2["Scale"])**2
+            tmp2.index = tmp2["Atom_type"]
+            
+            dist_all.loc[i, j] = sqrt(tmp2.loc[:,"Delta2"].sum())
+            # What if you only had HSQC, HNCO or NCO?
+            dist_HN.loc[i, j] = sqrt(tmp2.loc[["H","N"],"Delta2"].sum())
+            dist_HNCO.loc[i, j] = sqrt(tmp2.loc[["H","N","Cm1"],"Delta2"].sum())
+            dist_NCO.loc[i,j] = sqrt(tmp2.loc[["Cm1","N"],"Delta2"].sum())
+            
+        
+    # Need to remove proline residues from ranking (for H detected spectra)
+    res_nonP = tmp.loc[tmp["Res_type"]!="P","Res_name"].unique()
+    dist_all = dist_all.loc[res_nonP, res_nonP]
+    dist_HN = dist_HN.loc[res_nonP, res_nonP]
+    dist_HNCO = dist_HNCO.loc[res_nonP, res_nonP]
+    
+    # For each spin system, work out the rank of the correct predicted residue
+    # ie. how many predictions were closer to this SS than the correct one?
+    rank_all = pd.Series(np.diag(dist_all.rank(axis=0)), index=dist_all.index)
+    rank_HN = pd.Series(np.diag(dist_HN.rank(axis=0)), index=dist_HN.index)
+    rank_HNCO = pd.Series(np.diag(dist_HNCO.rank(axis=0)), index=dist_HNCO.index)
+    rank_NCO = pd.Series(np.diag(dist_NCO.rank(axis=0)), index=dist_NCO.index)
+    
+    tmp3 = pd.DataFrame({"ID":id, "rank_all":rank_all, "rank_HN":rank_HN, 
+                         "rank_HNCO":rank_HNCO, "rank_NCO":rank_NCO})
+    tmp3["Res_name"] = tmp3.index
+    tmp3["N_aa"] = len(tmp3.index)
+    
+    if type(rank_df) != type(tmp3):
+        rank_df = tmp3
+    else:
+        rank_df = pd.concat([rank_df, tmp3], ignore_index=True)
+    
+
+#%% Not updated below this point to account for long vs wide dataframe, so won't work.
 
 
 # Fit linear model between d_atom and atom_obs, and subtract to form dd_atom
 atoms_m1 = pd.Series(["Cm1","CAm1","CBm1"])
 lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset"])
-for atom in a.pars["atom_set"]:
+for atom in atom_set:
     df["dd_"+atom] = np.NaN
     
     for res in df["Res_type"].unique():

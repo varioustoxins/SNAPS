@@ -22,8 +22,8 @@ parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("-t", "--test", default="all", 
                     help="Specify a particular test to run.")
-parser.add_argument("-N", "--N_tests", default=61, type=int, 
-                    help="only process the first N datasets")
+parser.add_argument("--ID_start", default="A001", help="Start at this ID")
+parser.add_argument("--ID_end", default="A069", help="Start at this ID")
 
 if False:
     #args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
@@ -167,10 +167,9 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
     
     return([assigns, summary])
 
-#%%
-#### Test all proteins in the using most basic settings
+#%% Test all proteins in the using most basic settings
 if args.test in ("basic", "all"):
-    for i in testset_df.index[0:args.N_tests]:
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -189,10 +188,10 @@ if args.test in ("basic", "all"):
     plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
     plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm")
-#%%
-#### Test effect of accounting for correlated errors
+
+#%% Test effect of accounting for correlated errors
 if args.test in ("delta_correlation", "all"):
-    for i in testset_df.index[0:args.N_tests]:
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -210,10 +209,10 @@ if args.test in ("delta_correlation", "all"):
     plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
     plt.save(path/"plots/delta_correlation_summary.pdf", height=210, width=297, units="mm")
-#%%
-#### Test alternative assignments
+
+#%% Test alternative assignments
 if args.test in ("alt_assignments", "all"):
-    for i in testset_df.index[0:args.N_tests]:
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -229,10 +228,7 @@ if args.test in ("alt_assignments", "all"):
     
     assigns_alt.to_csv(path/"output/alt_assign_all.txt", sep="\t", float_format="%.3f")
     summary_alt.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")
-    
-     
-    
-    
+
     plt = ggplot(data=assigns_alt) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
     plt.save(path/"plots/alt_assign_summary.pdf", height=210, width=297, units="mm")
     
@@ -242,6 +238,37 @@ if args.test in ("alt_assignments", "all"):
     tmp["Rank"] = tmp["Rank"].astype(str).astype(rank_cat)
     plt = ggplot(data=tmp) + geom_bar(aes(x="ID", y="Pc_correct", fill="Rank"), stat="identity")
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
-    plt = plt + scale_y_continuous(breaks=np.linspace[0,1,11])
+    plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
     plt.save(path/"plots/alt_assign_correct.pdf", height=210, width=297, units="mm")
     
+#%% Test alternative assignments with reduced atom types
+if args.test in ("alt_hnco", "all"):
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+                testset_df.loc[i, "obs_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/alt_hnco/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "-c", (path/"config/config_alt_hnco.txt").as_posix(),
+                "-l", (path/("output/alt_hnco/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+        
+    assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], N=args.N_tests)
+    assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
+    
+    assigns_alt_hnco.to_csv(path/"output/alt_hnco_all.txt", sep="\t", float_format="%.3f")
+    summary_alt_hnco.to_csv(path/"output/alt_hnco_summary.txt", sep="\t", float_format="%.3f")
+
+    plt = ggplot(data=assigns_alt_hnco) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt.save(path/"plots/alt_hnco_summary.pdf", height=210, width=297, units="mm")
+    
+    tmp = summary_alt_hnco
+    tmp["Pc_correct"] = tmp["Pc_correct"].astype(float)
+    rank_cat = pd.api.types.CategoricalDtype(categories=["3","2","1"], ordered=True)
+    tmp["Rank"] = tmp["Rank"].astype(str).astype(rank_cat)
+    plt = ggplot(data=tmp) + geom_bar(aes(x="ID", y="Pc_correct", fill="Rank"), stat="identity")
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+    plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
+    plt.save(path/"plots/alt_hnco_correct.pdf", height=210, width=297, units="mm")
+        

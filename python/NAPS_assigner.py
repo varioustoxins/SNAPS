@@ -360,8 +360,10 @@ class NAPS_assigner:
     
         if seq_atoms.size==0:
             # You can't do a comparison
-            assign_df[["Max_mismatch_prev", "Max_mismatch_next", 
-                       "Num_good_links_prev", "Num_good_links_next"]] = np.NaN
+            assign_df["Max_mismatch_prev"] = np.NaN
+            assign_df["Max_mismatch_next"] = np.NaN
+            assign_df["Num_good_links_prev"] = np.NaN
+            assign_df["Num_good_links_next"] = np.NaN
             return(assign_df)
         else:
             # First, get the i and i-1 shifts for the preceeding and 
@@ -584,7 +586,8 @@ class NAPS_assigner:
         
         # Calculate the value used to penalise the best match for each residue
         penalty = 2*log_prob_matrix.min().min()     
-                
+        logging.debug("Penalty value: %f", penalty)
+        
         # Initialise DataFrame for storing alt_assignments
         self.alt_assign_df = self.assign_df.copy()
         self.alt_assign_df["Rank"] = 1
@@ -597,6 +600,7 @@ class NAPS_assigner:
                                       index=obs.index[best_match_indexes[0]])
             
             for ss in obs["SS_name"]:   # Consider each spin system in turn
+                logging.debug("Finding alt assignments for spin system %s", ss)
                 if verbose: print(ss)
                 a = deepcopy(self)
                 for i in range(N):
