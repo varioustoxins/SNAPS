@@ -11,7 +11,7 @@ import pandas as pd
 from plotnine import *
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
-from math import isnan, log10
+from math import isnan, log10, sqrt
 from copy import deepcopy
 from Bio.SeqUtils import seq1
 import logging
@@ -352,6 +352,52 @@ class NAPS_assigner:
         
         self.log_prob_matrix = log_prob_matrix
         return(self.log_prob_matrix)
+    
+    def calc_dist_matrix(self, use_atoms=None, atom_scale=None, na_dist=0, rank=False):
+        """Calculate the Euclidian distance between each observation and 
+        prediction.
+        
+        use_atoms: limit the set of atoms considered. If None, uses 
+            pars["atom_set"]
+        atom_scale: how much the shift difference is scaled by
+        na_dist: shift differences which can't be calculated (eg due to 
+            missing data) are replaced with this value
+        rank: if True, returns the rank of the distance per observation
+        """
+        obs = self.obs
+        preds = self.preds
+        
+        # Use default atom_sd values if not defined
+        if atom_scale==None:
+            atom_scale = self.pars["atom_sd"]
+        
+        if use_atoms==None:
+            atoms = self.pars["atom_set"].intersection(obs.columns)
+        else:
+            atoms = set(use_atoms).intersection(obs.columns)
+        
+        delta2 = pd.DataFrame(0, index=obs.index, columns=preds.index)
+        
+        for atom in atoms:
+            obs_atom = (obs[atom].repeat(len(obs.index)).values.
+                        reshape([len(obs.index),-1]))
+            preds_atom = (preds[atom].repeat(len(preds.index)).values.
+                          reshape([len(preds.index),-1]).transpose())
+            
+            delta2_atom = ((preds_atom - obs_atom)/atom_scale[atom])**2
+            
+            # Make a note of NA positions in delta, and set them to default value 
+            na_mask = np.isnan(delta2_atom)
+            delta2_atom[na_mask] = na_dist
+            
+            delta2 = delta2 + delta2_atom
+            
+        dist_matrix = delta2.applymap(sqrt)
+        
+        if rank:
+            return (dist_matrix.rank(axis=1))
+        else:
+            return(dist_matrix)
     
     def find_best_assignment(self):
         """ Use the Hungarian algorithm to find the highest probability matching 

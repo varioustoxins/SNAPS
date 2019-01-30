@@ -11,7 +11,7 @@ import itertools
 from pathlib import Path
 from Bio.SeqUtils import seq1
 from math import sqrt
-import nmrstarlib
+#import nmrstarlib
 
 class NAPS_importer:
     # Attributes

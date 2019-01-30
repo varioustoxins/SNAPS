@@ -15,7 +15,8 @@ from distutils.util import strtobool
 from scipy.stats import norm
 from math import isnan, log10
 
-path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("C:/Users/Alex/GitHub/NAPS")
 
 a = NAPS_assigner()
     
@@ -30,16 +31,20 @@ tmp = [s.strip() for s in config.loc["atom_sd"].Value.split(",")]
 a.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
 a.pars["plot_strips"] = bool(strtobool(config.loc["plot_strips"].Value))
 
+testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file for file in testset_df["BMRB"].astype(str)+".txt"]
+testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
+testset_df.index = testset_df["ID"]
 
 # Import observed and predicted shifts
 importer = NAPS_importer()
 
 
-importer.import_testset_shifts(path/"data/testset/simplified_BMRB/4032.txt")
+importer.import_testset_shifts(testset_df.loc["A002", "obs_file"])
 
 a.obs = importer.obs
 
-a.import_pred_shifts(path/"data/testset/shiftx2_results/A001_1KF3A.cs", "shiftx2")
+a.import_pred_shifts(testset_df.loc["A002", "preds_file"], "shiftx2")
 
 # Do the analysis
 a.add_dummy_rows()
@@ -56,6 +61,13 @@ obs_H = obs["H"].repeat(len(obs.index)).values.reshape([len(obs.index),-1])
 preds_H = preds["H"].repeat(len(preds.index)).values.reshape([len(preds.index),-1]).transpose()
 delta_H = preds_H - obs_H
 prob_H = norm.logpdf(delta_H.to_numeric())
+
+dist_mat = a.calc_dist_matrix(use_atoms=["H","N"], rank=True)
+rank_dist = dist_mat.rank(axis=1)
+
+common_residues = list(rank_dist.index[rank_dist.index.isin(rank_dist.columns)])
+tmp = rank_dist.lookup(common_residues, common_residues)
+#tmp = pd.Series(np.diag(rank_dist), index=rank_dist.index)
 
 #%%
 def calc_log_prob_matrix2(assigner, default_prob=0.01):
