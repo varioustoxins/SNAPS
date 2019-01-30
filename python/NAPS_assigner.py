@@ -283,6 +283,75 @@ class NAPS_assigner:
         
         self.log_prob_matrix = log_prob_matrix
         return(self.log_prob_matrix)
+        
+    def calc_log_prob_matrix2(self, atom_sd=None, sf=1, default_prob=0.01, 
+                             use_hadamac=False, cdf=False, 
+                             delta_correlation=False, shift_correlation=False,
+                             verbose=False):
+        """Calculate a matrix of -log10(match probabilities)
+        
+        use_hadamac: if True, amino acid type information will contribute to 
+            the log probability
+        cdf: if True, use cdf in probability matrix. Otherwise use pdf (cdf 
+            uses chance of seeing a delta 'at least this great')
+        delta_correlation: if True, correlated errors between different atom 
+            types are accounted for in the probability 
+        shift_correlation: if True, the correlation between observed shift and
+            prediction error is accounted for.
+        """
+        
+        # Use default atom_sd values if not defined
+        if atom_sd==None:
+            atom_sd = self.pars["atom_sd"]
+#            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
+#                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
+#                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
+        
+        obs = self.obs
+        preds = self.preds
+        atoms = self.pars["atom_set"].intersection(obs.columns)
+    
+        log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
+        
+        for atom in atoms:
+            obs_atom = (obs[atom].repeat(len(obs.index)).values.
+                        reshape([len(obs.index),-1]))
+            preds_atom = (preds[atom].repeat(len(preds.index)).values.
+                          reshape([len(preds.index),-1]).transpose())
+            
+            delta_atom = preds_atom - obs_atom
+            
+            # Make a note of NA positions in delta, and set them to zero 
+            # (this avoids warnings when using norm.cdf later)
+            na_mask = np.isnan(delta_atom)
+            delta_atom[na_mask] = 0
+            
+            if self.pars["prob_method"] == "cdf":
+                # Use the cdf to calculate the probability of a 
+                # delta *at least* as great as the actual one
+                prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), scale=atom_sd[atom]),
+                                     index=obs.index, columns=preds.index)
+            elif self.pars["prob_method"] == "pdf":
+                prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
+                                     index=obs.index, columns=preds.index)
+            else:
+                print("Method for calculating probability not recognised. Defaulting to pdf.")
+                prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
+                                     index=obs.index, columns=preds.index)
+            
+            
+            prob_atom[na_mask] = log10(default_prob)
+            
+            log_prob_matrix = log_prob_matrix + prob_atom
+    
+        
+        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
+                                                        log_prob_matrix.values)
+        log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
+        log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
+        
+        self.log_prob_matrix = log_prob_matrix
+        return(self.log_prob_matrix)
     
     def find_best_assignment(self):
         """ Use the Hungarian algorithm to find the highest probability matching 

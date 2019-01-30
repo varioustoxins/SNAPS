@@ -27,7 +27,8 @@ parser.add_argument("--ID_end", default="A069", help="Start at this ID")
 
 if False:
     #args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
-    args = parser.parse_args("/Users/aph516/GitHub/NAPS/ -t alt_assignments".split())
+    args = parser.parse_args(("/Users/aph516/GitHub/NAPS/ -t alt_assignments "+
+                             "--ID_start A001 --ID_end A069").split())
 else:
     args = parser.parse_args()
 
@@ -254,7 +255,7 @@ if args.test in ("alt_hnco", "all"):
                 "-l", (path/("output/alt_hnco/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
-    assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], N=args.N_tests)
+    assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
     assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
     
     assigns_alt_hnco.to_csv(path/"output/alt_hnco_all.txt", sep="\t", float_format="%.3f")
@@ -272,3 +273,62 @@ if args.test in ("alt_hnco", "all"):
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
     plt.save(path/"plots/alt_hnco_correct.pdf", height=210, width=297, units="mm")
         
+if args.test in ("alt_hnco_hncacb", "all"):
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+                testset_df.loc[i, "obs_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/alt_hnco_hncacb/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "-c", (path/"config/config_alt_hnco_hncacb.txt").as_posix(),
+                "-l", (path/("output/alt_hnco_hncacb/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+        
+    assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output/alt_hnco_hncacb/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
+    assigns_alt_hnco_hncacb = assigns_alt_hnco_hncacb.sort_values(by=["ID", "SS_name", "Rank"])
+    
+    assigns_alt_hnco_hncacb.to_csv(path/"output/alt_hnco_hncacb_all.txt", sep="\t", float_format="%.3f")
+    summary_alt_hnco_hncacb.to_csv(path/"output/alt_hnco_hncacb_summary.txt", sep="\t", float_format="%.3f")
+
+    plt = ggplot(data=assigns_alt_hnco_hncacb) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt.save(path/"plots/alt_hnco_hncacb_summary.pdf", height=210, width=297, units="mm")
+    
+    tmp = summary_alt_hnco_hncacb
+    tmp["Pc_correct"] = tmp["Pc_correct"].astype(float)
+    rank_cat = pd.api.types.CategoricalDtype(categories=["3","2","1"], ordered=True)
+    tmp["Rank"] = tmp["Rank"].astype(str).astype(rank_cat)
+    plt = ggplot(data=tmp) + geom_bar(aes(x="ID", y="Pc_correct", fill="Rank"), stat="identity")
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+    plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
+    plt.save(path/"plots/alt_hnco_hncacb_correct.pdf", height=210, width=297, units="mm")
+    
+if args.test in ("alt_ca_co", "all"):
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+                testset_df.loc[i, "obs_file"].as_posix(), 
+                "--shift_type", "test",
+                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/alt_ca_co/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "-c", (path/"config/config_alt_ca_co.txt").as_posix(),
+                "-l", (path/("output/alt_ca_co/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+        
+    assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output/alt_ca_co/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
+    assigns_alt_ca_co = assigns_alt_ca_co.sort_values(by=["ID", "SS_name", "Rank"])
+    
+    assigns_alt_ca_co.to_csv(path/"output/alt_ca_co_all.txt", sep="\t", float_format="%.3f")
+    summary_alt_ca_co.to_csv(path/"output/alt_ca_co_summary.txt", sep="\t", float_format="%.3f")
+
+    plt = ggplot(data=assigns_alt_ca_co) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt.save(path/"plots/alt_ca_co_summary.pdf", height=210, width=297, units="mm")
+    
+    tmp = summary_alt_ca_co
+    tmp["Pc_correct"] = tmp["Pc_correct"].astype(float)
+    rank_cat = pd.api.types.CategoricalDtype(categories=["3","2","1"], ordered=True)
+    tmp["Rank"] = tmp["Rank"].astype(str).astype(rank_cat)
+    plt = ggplot(data=tmp) + geom_bar(aes(x="ID", y="Pc_correct", fill="Rank"), stat="identity")
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+    plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
+    plt.save(path/"plots/alt_ca_co_correct.pdf", height=210, width=297, units="mm")
