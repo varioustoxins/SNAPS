@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm, multivariate_normal, linregress
 from plotnine import *
+from plotnine.ggplot import save_as_pdf_pages
 from NAPS_importer import NAPS_importer
 from NAPS_assigner import NAPS_assigner
 from pathlib import Path
@@ -76,11 +77,15 @@ atom_set = {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"}
 obs_all = None
 for i in testset_df["ID"]:
 #for i in ["A063"]:
-    obs = importer.import_testset_shifts(testset_df.loc[i, "obs_file"], remove_Pro=False)
-    preds = assigner.import_pred_shifts(testset_df.loc[i, "preds_file"], filetype="shiftx2")
+    obs = importer.import_testset_shifts(testset_df.loc[i, "obs_file"], 
+                                         remove_Pro=False)
+    preds = assigner.import_pred_shifts(testset_df.loc[i, "preds_file"], 
+                                        filetype="shiftx2")
     
     #Change Bs to Cs
     obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_type"]=="B", "Res_name"] = (
+            preds.loc[preds["Res_type"]=="B", "Res_name"].str.replace("B","C"))
     preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
     preds.loc[preds["Res_typem1"]=="B", "Res_typem1"] = "C"
     
@@ -113,89 +118,217 @@ df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type", "Atom_type"],
 # Get rid of any residues with mismatching types, or where the type is NaN
 df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_N"].astype(str)),:]
 df = df.dropna(axis=0, subset=["Res_type","Res_typem1","SS_name", "Res_name"])
-df = df[["ID","SS_name","Res_name","Res_N","Res_type","Res_typem1","Atom_type","Shift_obs","Shift_pred"]]
+df["ID_Res"] = df["ID"]+ " " + df["Res_name"].astype(str)
+df = df[["ID_Res", "ID","Res_name","Res_N","Res_type","Res_typem1","Atom_type","Shift_obs","Shift_pred"]]
         
 # Calculate the prediction errors
-df["Error"] = df["Shift_pred"] - df["Shift_obs"]
-
+df["Delta"] = df["Shift_pred"] - df["Shift_obs"]
 
 
 #%% Work out obs vs pred distance matrix.
 # Then calculate how many observations are closer to the prediction than the correct one
 
 # Scaling factors
-scale = (df.groupby("Atom_type").quantile(0.95) - 
-         df.groupby("Atom_type").quantile(0.05))
+scale = (df.groupby("Atom_type").quantile(0.75) - 
+         df.groupby("Atom_type").quantile(0.25))
 scale = scale.loc[:, "Shift_obs"]
 # Replace CB scale with CA, to avoid being skewed by Ser,Thr CB shifts.
 scale["CB"] = scale["CA"]
 scale["CBm1"] = scale["CAm1"]
-    
-# Convert df from long to wide
-df.insert(0,"ID_Res_N", df["ID"]+ " " + df["Res_N"].astype(str))
-df_wide = df.drop(["Atom_type","Shift_obs", "Shift_pred", "Error"], axis="columns").drop_duplicates()
-df_wide.index = df_wide["ID_Res_N"]
+scale = scale/scale["H"]
+   
+# Make a wide data frame of the obs and preds values
+df_wide = df.drop(["Atom_type","Shift_obs", "Shift_pred", "Delta"], axis="columns").drop_duplicates()
+df_wide.index = df_wide["ID_Res"]
+df_wide = df_wide.drop("ID_Res", axis="columns")
 obs_wide = pd.concat([df_wide,
-                     df.pivot(index="ID_Res_N", 
+                     df.pivot(index="ID_Res", 
                               columns="Atom_type", 
                               values="Shift_obs")],axis=1)
 preds_wide = pd.concat([df_wide,
-                     df.pivot(index="ID_Res_N", 
+                     df.pivot(index="ID_Res", 
                               columns="Atom_type", 
                               values="Shift_pred")],axis=1)
-
+  
 rank_df = None
 
-for id in df["ID"].unique():
+def calc_dist_matrix(x1, x2, atoms, sf, na_value=np.nan):
+    """Calculate a (Euclidean) distance matrix between two sets of residues.
+    
+    x1 and x2: dataframes with chemical shift values in columns.
+    atoms: a list or set of atoms/columns to use
+    sf: a dictionary of floats, where the keys are atom names and the values 
+        are the amount to scale each dimension by (eg {"H":1, "N":5} would 
+        correspond to the normal values used for CSP measurements)
+    na_value: if data is missing for a particular obs/pred/atom combo, what 
+        value should be stored? (np.nan will give np.nan overall, 0 will 
+        silently ignore the missing data)
+    """
+    delta2={}
+    
+    for atom in atoms:
+        x1_atom = (x1[atom].repeat(len(x1.index)).values.
+                    reshape([len(x1.index),-1]))
+        x2_atom = (x2[atom].repeat(len(x2.index)).values.
+                      reshape([len(x2.index),-1]).transpose())
+        
+        
+        delta2[atom] = pd.DataFrame(((x2_atom - x1_atom)/sf[atom])**2, index=x1.index, columns=x2.index)
+        # Make a note of NA positions in delta, and set them to default value 
+        na_mask = np.isnan(delta2[atom])
+        delta2[atom][na_mask] = na_value
+    
+    dist_mat = sum(delta2.values()).applymap(sqrt)
+    
+    return(dist_mat)
+    
+
+for id in df_wide["ID"].unique():
     print(id)
-    obs_id = obs_wide.loc[obs_wide["ID"]==id,:]
-    preds_id = preds_wide.loc[preds_wide["ID"]==id,:]
+    obs_id = obs_wide.loc[(obs_wide["ID"]==id) & (obs_wide["Res_type"]!="P"),:]
+    preds_id = preds_wide.loc[(preds_wide["ID"]==id) & (preds_wide["Res_type"]!="P"),:]
     obs_id.index = obs_id["Res_name"]
     preds_id.index = preds_id["Res_name"]
     
-    res_list = obs_id["Res_name"].unique()
-    dist_all = pd.DataFrame(index=res_list, columns=res_list)
-    dist_HN = pd.DataFrame(index=res_list, columns=res_list)
-    dist_HNCO = pd.DataFrame(index=res_list, columns=res_list)
-    dist_CA_CO = pd.DataFrame(index=res_list, columns=res_list)
-    dist_NCO = pd.DataFrame(index=res_list, columns=res_list)
-        
-    for i in res_list:
-        
-        tmp = ((obs_id.loc[:,atom_set] - preds_id.loc[i,atom_set])/scale)**2
-        dist_all.loc[i,:] = tmp.sum(axis=1).apply(sqrt)
-        dist_HN.loc[i,:] = tmp.loc[:,["H","N"]].sum(axis=1).apply(sqrt)
-        dist_HNCO.loc[i,:] = tmp.loc[:,["H","N","Cm1"]].sum(axis=1).apply(sqrt)
-        dist_CA_CO.loc[i,:] = tmp.loc[:,["H","N","Cm1","C","CAm1","CA"]].sum(axis=1).apply(sqrt)
-        dist_NCO.loc[i,:] = tmp.loc[:,["N","Cm1"]].sum(axis=1).apply(sqrt)
-            
-        
-    # Need to remove proline residues from ranking (for H detected spectra)
-    res_nonP = obs_id.loc[obs_id["Res_type"]!="P","Res_name"].unique()
-    dist_all = dist_all.loc[res_nonP, res_nonP]
-    dist_HN = dist_HN.loc[res_nonP, res_nonP]
-    dist_HNCO = dist_HNCO.loc[res_nonP, res_nonP]
-    dist_CA_CO = dist_CA_CO.loc[res_nonP, res_nonP]
+    # calculate distance between each observation and prediction
+    dist_pred_HN = calc_dist_matrix(obs_id, preds_id, 
+                                 atoms={"H", "N"}, sf=scale)
+    dist_pred_HNCO = calc_dist_matrix(obs_id, preds_id, 
+                                   atoms={"H", "N", "Cm1"}, sf=scale)
+    dist_pred_CA_CO = calc_dist_matrix(obs_id, preds_id, 
+                                    atoms={"H","N","C","CA","Cm1","CAm1"}, 
+                                    sf=scale)
+    dist_pred_most = calc_dist_matrix(obs_id, preds_id, 
+                                   atoms={"H","N","C","CA","CB",
+                                          "Cm1","CAm1","CBm1"}, 
+                                   sf=scale)
+    
+    # Calculate distance between observations (penalise diagonal)
+    dist_obs_HN = calc_dist_matrix(obs_id, obs_id, atoms={"H", "N"}, sf=scale) + np.diag([10]*len(obs_id.index))
+    dist_obs_HNCO = calc_dist_matrix(obs_id, obs_id, atoms={"H", "N", "Cm1"}, sf=scale) + np.diag([10]*len(obs_id.index))
+    dist_obs_CA_CO = calc_dist_matrix(obs_id, obs_id, atoms={"H","N","C","CA","Cm1","CAm1"}, sf=scale) + np.diag([10]*len(obs_id.index))
+    dist_obs_most = calc_dist_matrix(obs_id, obs_id, atoms={"H","N","C","CA","CB","Cm1","CAm1","CBm1"}, sf=scale) + np.diag([10]*len(obs_id.index))
     
     # For each spin system, work out the rank of the correct predicted residue
     # ie. how many predictions were closer to this SS than the correct one?
-    rank_all = pd.Series(np.diag(dist_all.rank(axis=0)), index=dist_all.index)
-    rank_HN = pd.Series(np.diag(dist_HN.rank(axis=0)), index=dist_HN.index)
-    rank_HNCO = pd.Series(np.diag(dist_HNCO.rank(axis=0)), index=dist_HNCO.index)
-    rank_CA_CO = pd.Series(np.diag(dist_CA_CO.rank(axis=0)), index=dist_CA_CO.index)
-    rank_NCO = pd.Series(np.diag(dist_NCO.rank(axis=0)), index=dist_NCO.index)
-    
-    tmp = pd.DataFrame({"ID":id, "rank_all":rank_all, "rank_HN":rank_HN, 
-                         "rank_HNCO":rank_HNCO, "rank_CA_CO":rank_CA_CO, 
-                         "rank_NCO":rank_NCO})
-    tmp["Res_name"] = tmp.index
-    tmp["N_aa"] = len(tmp.index)
-    
+    # Also store the distance to the correct prediction, the
+    tmp = pd.DataFrame({"ID":id, "Res_name":dist_pred_HN.index, "N_aa":len(dist_pred_HN.index),
+                        "dist_correct_most":np.diag(dist_pred_most),
+                        "rank_most":np.diag(dist_pred_most.rank(axis=0)), 
+                        "nearest_pred_most":dist_pred_most.min(axis=0),
+                        "nearest_obs_most":dist_obs_most.min(axis=0),
+                        "dist_correct_HN":np.diag(dist_pred_HN),
+                        "rank_HN":np.diag(dist_pred_HN.rank(axis=0)),
+                        "nearest_pred_HN":dist_pred_HN.min(axis=0),
+                        "nearest_obs_HN":dist_obs_HN.min(axis=0),
+                        "dist_correct_HNCO":np.diag(dist_pred_HNCO),
+                        "rank_HNCO":np.diag(dist_pred_HNCO.rank(axis=0)),
+                        "nearest_pred_HNCO":dist_pred_HNCO.min(axis=0),
+                        "nearest_obs_HNCO":dist_obs_HNCO.min(axis=0),
+                        "dist_correct_CA_CO":np.diag(dist_pred_CA_CO),
+                        "rank_CA_CO":np.diag(dist_pred_CA_CO.rank(axis=0)),
+                        "nearest_pred_CA_CO":dist_pred_CA_CO.min(axis=0),
+                        "nearest_obs_CA_CO":dist_obs_CA_CO.min(axis=0)})
+        
     if type(rank_df) != type(tmp):
         rank_df = tmp
     else:
         rank_df = pd.concat([rank_df, tmp], ignore_index=True)
+
+#%%
+
+# With this dataframe, we can now look at the distribution of ranks
+(~rank_df.isna()).sum()     # Summarise non-na values
+
+# Plt histograms of prediction rank
+plt_base = (ggplot(data=rank_df.loc[~rank_df["dist_correct_most"].isna(),:], 
+                                    mapping=aes(y="100*stat(density)")) + 
+    xlim(0,50) + ylab("Percentage predictions with each rank"))
+save_as_pdf_pages(filename=path/"plots/rank histograms.pdf",
+                  plots=[plt_base + geom_histogram(aes(x="rank_HN"), binwidth=1),
+                         plt_base + geom_histogram(aes(x="rank_HNCO"), binwidth=1),
+                         plt_base + geom_histogram(aes(x="rank_CA_CO"), binwidth=1),
+                         plt_base + geom_histogram(aes(x="rank_most"), binwidth=1)])
+
+# Plot distribution of nearest neighbour vs prediction error 
+plt_base = ggplot(data=rank_df.loc[~rank_df["dist_correct_most"].isna(),:])  
+plt_base = plt_base + scale_colour_discrete(name="Distribution:", 
+                                            labels=["Dist to correct prediction",
+                                                    "Dist to nearest neighbour"])
+plt_base = plt_base + theme(legend_position=(0.7,0.8)) + xlab("Scaled combined shift difference")
+save_as_pdf_pages(filename=path/"plots/nearest neighbour vs prediction distributions.pdf",
+                  plots=[plt_base + geom_density(aes(x="dist_correct_HN", colour=True)) + geom_density(aes(x="nearest_obs_HN", colour=False)),
+                         plt_base + geom_density(aes(x="dist_correct_HNCO", colour=True)) + geom_density(aes(x="nearest_obs_HNCO", colour=False)),
+                         plt_base + geom_density(aes(x="dist_correct_CA_CO", colour=True)) + geom_density(aes(x="nearest_obs_CA_CO", colour=False)),
+                         plt_base + geom_density(aes(x="dist_correct_most", colour=True)) + geom_density(aes(x="nearest_obs_most", colour=False))])
+
+
     
+#plt_base = ggplot(data=rank_df.loc[~rank_df["dist_correct_most"].isna(),:])
+#plt_base + geom_density(aes(x="dist_correct_most", colour="ID"))
+#plt_base + geom_density(aes(x="dist_correct_CA_CO"), colour="black") + geom_density(aes(x="nearest_pred_CA_CO"), colour="red")
+#plt_base + geom_histogram(aes(x="dist_correct_most", y="stat(density)"), binwidth=0.1)
+#
+#plt_base + geom_point(aes(y="rank_HN", x="dist_correct_HNCO"), alpha=0.2)
+#
+#plt_base + geom_histogram(aes(x="rank_HN", y="stat(density)*100"), binwidth=1) + xlim(0,50)
+
+#%% Plot error distribution for each atom type
+plt = ggplot(data = df) + geom_density(aes(x="Delta", colour="Atom_type")) 
+plt = plt + facet_wrap("Atom_type", scales="free_y")
+plt = plt + xlim(-5,5) + xlab("Prediction error")
+plt = plt + ggtitle("Distribution of ShiftX2 prediction errors")
+plt.save(path/"plots/ShiftX2 error distribution.pdf")
+
+
+plt = ggplot(data = df) + geom_point(aes(x="Shift_obs", y="Delta", colour="Res_type"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt = plt + xlab("Observed shift") + ylab("Prediction error")
+plt = plt + ggtitle("Prediction error is inversely correlated to chemical shift")
+plt.save(path/"plots/Error vs obs shift.pdf", height=210, width=297, units="mm")
+
+plt = ggplot(data = df) + geom_point(aes(x="Shift_pred", y="Delta", colour="Atom_type"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt = plt + xlab("Predicted shift") + ylab("Prediction error")
+plt.save(path/"plots/Error vs pred shift.pdf", height=210, width=297, units="mm")
+
+
+#%% Make a "normalised" chemical shift that accounts for residue type and observed shift
+df2 = df.copy()
+
+df2["Res_norm"] = df2["Res_type"]
+df2.loc[df2["Atom_type"].isin(["Cm1","CAm1","CBm1"]),"Res_norm"] = df2.loc[df2["Atom_type"].isin(["Cm1","CAm1","CBm1"]),"Res_typem1"]
+
+df2["Delta_norm"] = np.nan
+lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset"])
+
+for atom in atom_set:
+    for res in df2["Res_norm"].unique():
+        mask = (df2["Atom_type"]==atom) & (df2["Res_norm"]==res)
+        tmp = df2.loc[mask, ["Shift_obs", "Delta"]].dropna(how="any")
+        try:
+            lm = linregress(tmp["Shift_obs"], tmp["Delta"])
+            lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1]]
+            df2.loc[mask,"Delta_norm"] = (df2.loc[mask,"Delta"] 
+                                          - lm[0]*df2.loc[mask,"Shift_obs"]
+                                          - lm[1])
+        except:
+            print("Error: ",res, atom)
+
+plt = ggplot(data = df2.loc[df2["Res_norm"]=="N",:]) 
+plt = plt + geom_point(aes(x="Shift_obs", y="Delta", colour="Res_norm"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+#plt = plt + xlab("Observed shift") + ylab("Prediction error")
+plt
+
+#%% Look at correlated errors bertween different atom types
+delta_wide = df2.pivot(index="ID_Res", columns="Atom_type", values="Delta")
+delta_corr = delta_wide.corr()
+
+# Something *really* weird is going on with the Delta values for A001 - they're 
+# clustering on only a few distinct values. Maybe shiftY is involved somehow? 
+
+ggplot(delta_wide) + geom_point(aes(x="CA", y="HA"))
 
 #%% Not updated below this point to account for long vs wide dataframe, so won't work.
 

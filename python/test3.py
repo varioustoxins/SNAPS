@@ -15,8 +15,8 @@ from distutils.util import strtobool
 from scipy.stats import norm
 from math import isnan, log10
 
-#path = Path("/Users/aph516/GitHub/NAPS/")
-path = Path("C:/Users/Alex/GitHub/NAPS")
+path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("C:/Users/Alex/GitHub/NAPS")
 
 a = NAPS_assigner()
     
