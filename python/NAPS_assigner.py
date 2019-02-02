@@ -424,8 +424,8 @@ class NAPS_assigner:
         pred_names = [log_prob_matrix.columns[c] for c in col_ind]
         
         assign_df = pd.DataFrame({
-                "Res_name":pred_names,
-                "SS_name":obs_names
+                "SS_name":obs_names,
+                "Res_name":pred_names
                 })
         
         # Merge residue info, shifts and predicteds into assignment dataframe
@@ -446,10 +446,11 @@ class NAPS_assigner:
                                      valid_atoms+["Res_name"])],
                              on="Res_name", suffixes=("","_pred"), how="outer")
         
-        assign_df = assign_df.sort_values(by="Res_N")
         assign_df["Log_prob"] = log_prob_matrix.lookup(
-                                            log_prob_matrix.index[row_ind], 
+                                            log_prob_matrix.index[row_ind],
                                             log_prob_matrix.columns[col_ind])
+        # Careful above not to get rows/columns confused
+        assign_df = assign_df.sort_values(by="Res_N")
         
         self.assign_df = assign_df
         self.best_match_indexes = [row_ind, col_ind]

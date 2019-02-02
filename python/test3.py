@@ -15,8 +15,8 @@ from distutils.util import strtobool
 from scipy.stats import norm
 from math import isnan, log10
 
-path = Path("/Users/aph516/GitHub/NAPS/")
-#path = Path("C:/Users/Alex/GitHub/NAPS")
+#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("C:/Users/Alex/GitHub/NAPS")
 
 a = NAPS_assigner()
     
@@ -37,20 +37,20 @@ testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file for file in
 testset_df.index = testset_df["ID"]
 
 # Import observed and predicted shifts
+id = "A003"
+
 importer = NAPS_importer()
-
-
-importer.import_testset_shifts(testset_df.loc["A002", "obs_file"])
-
+importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
 a.obs = importer.obs
-
-a.import_pred_shifts(testset_df.loc["A002", "preds_file"], "shiftx2")
+a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 
 # Do the analysis
 a.add_dummy_rows()
 a.calc_log_prob_matrix(sf=1, verbose=False)
 assign_df, best_match_indexes = a.find_best_assignment()
 a.check_assignment_consistency(threshold=0.1)
+assign_df = a. assign_df
+log_prob_matrix = a.log_prob_matrix
 
 #%% Test stuff
 
