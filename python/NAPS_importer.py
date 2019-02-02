@@ -380,7 +380,23 @@ class NAPS_importer:
         
         self.obs = obs
         return(self.obs)
+    
+    def import_aa_type_info(self, filename, offset="i_minus_1"):
+        """ Add amino acid type information to previously-imported observed 
+        shifts
         
+        filename: a file with amino acid information
+            This should have the format:
+            SS_name_1   AVI   in   # to set AVI as the only allowed aa types
+            SS_name_2   T     ex   # to exclude T from the allowed aa types
+        offset: either "i" or "i_minus_1". Whether the aa type restriction 
+            applies to the i spin system or to the preceeding i-1 spin system.
+        """
+        # Import file
+        pd.read_table(filename, sep="\s+", comment="#")
+        
+        return(self.obs)
+    
     def import_testset_shifts(self, filename, remove_Pro=True, 
                           short_aa_names=True):
         """ Import observed chemical shifts from testset data
@@ -419,19 +435,19 @@ class NAPS_importer:
         
         # Add HADAMAC information
         hadamac_groups = ["VIA","G","S","T","DN","FHYWC","REKPQML"]
-        obs["HADAMAC"]=obs["Res_type"]
+        obs["SS_class"]=obs["Res_type"]
         for g in hadamac_groups:
-            obs["HADAMAC"] = obs["HADAMAC"].str.replace("["+g+"]", g)
+            obs["SS_class"] = obs["SS_class"].str.replace("["+g+"]", g)
         
         # Make columns for the i-1 observed shifts of C, CA and CB
-        obs_m1 = obs[list({"C","CA","CB","HADAMAC"}.intersection(obs.columns))]
+        obs_m1 = obs[list({"C","CA","CB","SS_class"}.intersection(obs.columns))]
         obs_m1.index = obs_m1.index+1
         obs_m1.columns = obs_m1.columns + "m1"
         obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
                        right_index=True)
         
         # Restrict to specific atom types
-        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","HADAMACm1"}
+        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","SS_classm1"}
         obs = obs[["Res_N","Res_type","SS_name"]+
                   list(atom_set.intersection(obs.columns))]
         

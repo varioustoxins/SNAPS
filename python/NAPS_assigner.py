@@ -252,10 +252,10 @@ class NAPS_assigner:
                     # If the i-1 aa type of the predicted residue matches the 
                     # HADAMAC group of the observation, probability is 1.
                     # Otherwise, probability defaults to 0.01
-                    prob["HADAMACm1"] = 0.01
+                    prob["SS_classm1"] = 0.01
                     if type(pred1["Res_typem1"])==str:    # dummies have NaN
-                        prob.loc[obs["HADAMACm1"].str.find(
-                                pred1["Res_typem1"])>=0, "HADAMACm1"] = 1
+                        prob.loc[obs["SS_classm1"].str.find(
+                                pred1["Res_typem1"])>=0, "SS_classm1"] = 1
             
                 # Calculate overall probability of each row
                 overall_prob = prob.sum(skipna=False, axis=1)
@@ -343,7 +343,27 @@ class NAPS_assigner:
             prob_atom[na_mask] = log10(default_prob)
             
             log_prob_matrix = log_prob_matrix + prob_atom
-    
+        
+        if use_hadamac:
+            # For each type of residue type information that's available, make a 
+            # matrix showing the probability modifications due to type mismatch, 
+            # then add it to log_prob_matrix
+            # Maybe make SS_class mismatch a parameter in config file?
+            for ss_class in {"SS_class","SS_classm1"}.intersection(obs.columns):
+                print(ss_class)
+                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
+                                           columns=log_prob_matrix.columns)
+                for res in preds["Res_type"].unique():
+                    # Work out which spin systems could be this residue type 
+                    # (if SS_class==np.nan, defaults to allowed)
+                    allowed = obs[ss_class].str.contains(res).fillna(True)
+                    pred_list = preds.loc[preds["Res_typem1"]==res,"Res_name"]
+                    for p in pred_list:
+                        SS_class_matrix.loc[:,p] = (~allowed)*log10(0.01)
+            
+                log_prob_matrix = log_prob_matrix + SS_class_matrix
+                
+            
         
         log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
                                                         log_prob_matrix.values)

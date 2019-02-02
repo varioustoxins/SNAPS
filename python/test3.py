@@ -49,8 +49,11 @@ a.add_dummy_rows()
 a.calc_log_prob_matrix(sf=1, verbose=False)
 assign_df, best_match_indexes = a.find_best_assignment()
 a.check_assignment_consistency(threshold=0.1)
-assign_df = a. assign_df
+
+obs = a.obs
+preds = a.preds
 log_prob_matrix = a.log_prob_matrix
+assign_df = a. assign_df
 
 #%% Test stuff
 
