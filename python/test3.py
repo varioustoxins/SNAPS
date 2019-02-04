@@ -15,8 +15,8 @@ from distutils.util import strtobool
 from scipy.stats import norm
 from math import isnan, log10
 
-#path = Path("/Users/aph516/GitHub/NAPS/")
-path = Path("C:/Users/Alex/GitHub/NAPS")
+path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("C:/Users/Alex/GitHub/NAPS")
 
 a = NAPS_assigner()
     
@@ -41,6 +41,10 @@ id = "A003"
 
 importer = NAPS_importer()
 importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
+#importer.obs = importer.obs.drop("SS_classm1", axis=1)
+tmp = importer.import_aa_type_info(path/"data/SS_class_info.txt")
+
+
 a.obs = importer.obs
 a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 
@@ -55,6 +59,7 @@ preds = a.preds
 log_prob_matrix = a.log_prob_matrix
 assign_df = a. assign_df
 
+plt = a.plot_strips()
 #%% Test stuff
 
 obs = a.obs
@@ -72,6 +77,11 @@ common_residues = list(rank_dist.index[rank_dist.index.isin(rank_dist.columns)])
 tmp = rank_dist.lookup(common_residues, common_residues)
 #tmp = pd.Series(np.diag(rank_dist), index=rank_dist.index)
 
+#%% Write a file with HADAMAC info
+tmp = obs.loc[:,["SS_name", "SS_classm1"]]
+tmp["Type"] = "in"
+tmp = tmp.dropna()
+tmp.to_csv(path/"data/SS_class_info.txt", sep="\t", header=False, index=False)
 #%%
 def calc_log_prob_matrix2(assigner, default_prob=0.01):
     # Use default atom_sd values if not defined

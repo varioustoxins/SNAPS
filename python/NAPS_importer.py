@@ -392,8 +392,43 @@ class NAPS_importer:
         offset: either "i" or "i_minus_1". Whether the aa type restriction 
             applies to the i spin system or to the preceeding i-1 spin system.
         """
+        AA_str = "ACDEFGHIKLMNPQRSTVWY"
+        
+        if offset=="i":
+            col = "SS_class"
+        elif offset=="i_minus_1":
+            col = "SS_classm1"
+        else:
+            print("invalid value of offset: must be 'i' or 'i_minus_1'.")
+            return(None)
+        
         # Import file
-        pd.read_table(filename, sep="\s+", comment="#")
+        df = pd.read_table(filename, sep="\s+", comment="#", 
+                                    header=None, names=["SS_name","AA","Type"])
+        
+        # For rows with Type=="in", the SS_class is the same as AA
+        # For rows with Type=="ex", the SS_class is all aminos *except* AA
+        df[col] = df["AA"]
+        mask = (df["Type"]=="ex")
+        for i in df.index[mask]:
+            tmp = AA_str
+            for c in df.loc[i, "AA"]:
+                tmp = tmp.replace(c, "")
+            df.loc[i, col] = tmp
+        
+        df.index = df["SS_name"]
+        
+        # Create SS_class column in obs DataFrame if it doesn't already exist.
+        if col not in self.obs.columns:
+            self.obs[col] = AA_str
+        
+        # Write SS_class info into obs data frame. Overwrite any previous info 
+        # for these spin systems, but keep SS_class info for any spin systems 
+        # not in df
+        self.obs.loc[df.index, col] = df.loc[:, col]
+       
+        # Nan's can be any amino acid
+        self.obs[col] = self.obs[col].fillna(AA_str)
         
         return(self.obs)
     
@@ -414,9 +449,9 @@ class NAPS_importer:
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
             obs_long["SS_name"] = (obs_long["Res_N"].astype(str) + 
                     obs_long["Res_type"])
-            obs_long["SS_name"] = [s.rjust(5) for s in obs_long["SS_name"]]
+            obs_long["SS_name"] = [s.rjust(5,"_") for s in obs_long["SS_name"]]
         else:
-            obs_long["SS_name"] = (obs_long["Res_N"].astype(str).rjust(4) + 
+            obs_long["SS_name"] = (obs_long["Res_N"].astype(str).rjust(4,"_") + 
                     obs_long["Res_type"])
             obs_long["SS_name"] = [s.rjust(7) for s in obs_long["SS_name"]]
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
