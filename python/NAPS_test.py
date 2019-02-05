@@ -231,6 +231,7 @@ if args.test in ("alt_assignments", "all"):
     summary_alt.to_csv(path/"output/alt_assign_summary.txt", sep="\t", float_format="%.3f")
 
     plt = ggplot(data=assigns_alt) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt = plt + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/alt_assign_summary.pdf", height=210, width=297, units="mm")
     
     tmp = summary_alt
@@ -262,6 +263,7 @@ if args.test in ("alt_hnco", "all"):
     summary_alt_hnco.to_csv(path/"output/alt_hnco_summary.txt", sep="\t", float_format="%.3f")
 
     plt = ggplot(data=assigns_alt_hnco) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt = plt + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/alt_hnco_summary.pdf", height=210, width=297, units="mm")
     
     tmp = summary_alt_hnco
@@ -292,6 +294,7 @@ if args.test in ("alt_hnco_hncacb", "all"):
     summary_alt_hnco_hncacb.to_csv(path/"output/alt_hnco_hncacb_summary.txt", sep="\t", float_format="%.3f")
 
     plt = ggplot(data=assigns_alt_hnco_hncacb) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt = plt + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/alt_hnco_hncacb_summary.pdf", height=210, width=297, units="mm")
     
     tmp = summary_alt_hnco_hncacb
@@ -322,6 +325,7 @@ if args.test in ("alt_ca_co", "all"):
     summary_alt_ca_co.to_csv(path/"output/alt_ca_co_summary.txt", sep="\t", float_format="%.3f")
 
     plt = ggplot(data=assigns_alt_ca_co) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True)) + facet_grid("Rank ~ .")
+    plt = plt + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/alt_ca_co_summary.pdf", height=210, width=297, units="mm")
     
     tmp = summary_alt_ca_co

@@ -373,6 +373,21 @@ plt = plt + facet_wrap("Atom_type", scales="free")
 plt = plt + xlab("Predicted shift") + ylab("Prediction error")
 plt.save(path/"plots/Error vs pred shift.pdf", height=210, width=297, units="mm")
 
+plt = ggplot(data=df)
+plt = plt + geom_density(aes(x="Delta", colour="ID"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+#plt.save(path/"plots/Error distribution per ID.pdf", height=210, width=297, units="mm")
+
+def error_boxplots():
+    for a in atom_set:
+        plt = ggplot(df[df["Atom_type"]==a])
+        plt = plt + geom_boxplot(aes(y="Delta", x="ID"))
+        plt = plt + theme(axis_text_x = element_text(angle=90))
+        plt = plt + ggtitle("Error distribution for atom "+a)
+        yield(plt)
+save_as_pdf_pages(filename=path/"plots/Error distribution per ID.pdf",
+                  plots=error_boxplots())
+
 
 #%% Make a "corrected" predicted shift that accounts for residue type and observed shift
 
