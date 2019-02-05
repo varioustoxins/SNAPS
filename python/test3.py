@@ -37,7 +37,7 @@ testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file for file in
 testset_df.index = testset_df["ID"]
 
 # Import observed and predicted shifts
-id = "A003"
+id = "A001"
 
 importer = NAPS_importer()
 importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
