@@ -114,9 +114,32 @@ preds2 = b.preds
 b.add_dummy_rows()
 b.calc_log_prob_matrix(sf=1, verbose=False)
 
-assign_df, best_match_indexes = b.find_best_assignment()
+def find_matching_constrained(assigner, inc=None, exc=None):
+    """Find the best assignment, given constraints
+    
+    Returns a data frame of SS_names and Res_names of the best matching
+    
+    inc: a list of (SS, Res) tuples which must be part of the assignment.
+    exc: a list of (SS, Res) tuples which may not be part of the assignment.
+    """
+    obs = assigner.obs
+    preds = assigner.preds
+    log_prob_matrix = assigner.log_prob_matrix
+    
+    # Check that inc and exc lists are consistent
+    
+    # Removed fixed assignments from probability matrix
+    inc_SS, inc_res = zip(*inc)     # Make lists of SS and residues that are fixed
+    log_prob_matrix_reduced = log_prob_matrix.drop(index=list(inc_SS)).drop(columns=list(inc_res))
+    
+    # Penalise excluded SS,Res pairs
+    
+    # Construct results dataframe
+    fixed_assignments = pd.DataFrame({"SS_name":inc_SS, "Res_name":inc_res})    
+    pass
 
-assign_df = b.check_assignment_consistency(threshold=0.1)
+#assign_df, best_match_indexes = b.find_best_assignment()
+#assign_df = b.check_assignment_consistency(threshold=0.1)
 
 # Make a strip plot
 plt = a.plot_strips()
@@ -136,8 +159,4 @@ logging.info("Wrote strip plot to %s", args.plot_file)
 #                       index=False)
 #    logging.info("Wrote results to %s", args.output_file)
 
-## Make some plots
-#if a.pars["plot_strips"]:
-#    plt = a.plot_strips()
-#    plt.save(args.plot_stem+"_strips.pdf", height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), units="mm")
-#    logging.info("Wrote strip plot to %s", args.plot_stem+"_strips.pdf")
+
