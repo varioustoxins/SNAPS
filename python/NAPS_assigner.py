@@ -101,6 +101,7 @@ class NAPS_assigner:
                       list(atom_set.intersection(preds.columns))]
         
         preds.index = preds["Res_name"]
+        preds.index.name = None
         
         self.preds = preds
         return(self.preds)
@@ -475,8 +476,102 @@ class NAPS_assigner:
         self.assign_df = assign_df
         self.best_match_indexes = [row_ind, col_ind]
         return(assign_df, [row_ind, col_ind])
+        
+    def find_best_assignment2(self, 
+                              inc=pd.DataFrame(columns=["SS_name","Res_name"]), 
+                              exc=pd.DataFrame(columns=["SS_name","Res_name"])):
+        """ Use the Hungarian algorithm to find the highest probability matching 
+        (ie. the one with the lowest log probability sum), with constraints.
+        
+        Returns a data frame with the SS_names and Res_names of the matching. 
+        (Doesn't change the internal state of the NAPS_assigner instance.)
+        
+        inc: a DataFrame of (SS,Res) pairs which must be part of the assignment. 
+            First column has the SS_names, second has the Res_names .
+        exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
+        """
+        
+        obs = self.obs
+        preds = self.preds
+        log_prob_matrix = self.log_prob_matrix
+        
+        # Check constraints are consistent
+        # Get rid of any entries in exc which share a Res or SS with inc
+        exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
+        if any(exc_in_inc):
+            print("Some values in exc are also found in inc, so are redundant.")
+            exc = exc.loc[~exc_in_inc, :]
+        # Check for conflicting entries in inc
+        conflicts = inc["SS_name"].duplicated(keep=False) | inc["Res_name"].duplicated(keep=False)
+        if any(conflicts):
+            print("Error: entries in inc conflict with one another - dropping conflicts")
+            print(inc[conflicts])
+            inc = inc[~conflicts]
+        
+        # Removed fixed assignments from probability matrix
+        log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
     
-    def check_assignment_consistency(self, threshold=0.1):
+        # Penalise excluded SS,Res pairs
+        penalty = 2*log_prob_matrix.min().min()
+        for index, row in exc.iterrows():
+            # Need to account for dummy residues or spin systems
+            if preds.loc[row["Res_name"], "Dummy_res"]:
+                log_prob_matrix_reduced.loc[row["SS_name"], 
+                                preds.loc[preds["Dummy_res"],"Res_name"]] = penalty
+            elif obs.loc[row["SS_name"], "Dummy_SS"]:
+                log_prob_matrix_reduced.loc[obs.loc[obs["Dummy_SS"],"SS_name"], 
+                                            row["Res_name"]] = penalty
+            else:
+                log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
+        
+        row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix_reduced)
+        # -1 because the algorithm minimises sum, but we want to maximise it.
+        
+        # Construct results dataframe
+        matching_reduced = pd.DataFrame({"SS_name":log_prob_matrix_reduced.index[row_ind],
+                                           "Res_name":log_prob_matrix_reduced.columns[col_ind]})
+
+        matching = pd.concat([inc, matching_reduced]) 
+        
+        return(matching)
+    
+    def make_assign_df(self, matching, set_assign_df=False):
+        """Make a dataframe with full assignment information, given a dataframe 
+        of SS_name and Res_name 
+        """
+        obs = self.obs
+        preds = self.preds
+        log_prob_matrix = self.log_prob_matrix
+        valid_atoms = list(self.pars["atom_set"])
+        
+        assign_df = pd.merge(matching, 
+                             preds.loc[:,["Res_N","Res_type", "Res_name", 
+                                    "Dummy_res"]], 
+                             on="Res_name", how="outer")
+        assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", 
+                               "Dummy_res"]]
+        assign_df = pd.merge(assign_df, 
+                             obs.loc[:, obs.columns.isin(
+                                     valid_atoms+["SS_name","Dummy_SS"])], 
+                             on="SS_name", how="outer")
+        assign_df = pd.merge(assign_df, 
+                             preds.loc[:, preds.columns.isin(
+                                     valid_atoms+["Res_name"])],
+                             on="Res_name", suffixes=("","_pred"), how="outer")
+        
+        assign_df["Log_prob"] = log_prob_matrix.lookup(
+                                            assign_df["SS_name"],
+                                            assign_df["Res_name"])
+        # Careful above not to get rows/columns confused
+        assign_df = assign_df.sort_values(by="Res_N")
+        
+        if set_assign_df:
+            self.assign_df = assign_df
+        
+        return(assign_df)
+        
+    
+    def check_assignment_consistency(self, assign_df=None, threshold=0.1):
         """ Find maximum mismatch and number of 'significant' mismatches for 
         each residue
         
@@ -484,7 +579,13 @@ class NAPS_assigner:
             count as mismatched
         """
         
-        assign_df = self.assign_df
+        # If the user hasn't specified an assign_df, use one already calculated 
+        # for this NAPS_assigner instance
+        if assign_df is None:
+            set_assign_df = True
+            assign_df = self.assign_df
+        else:
+            set_assign_df = False
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
@@ -535,9 +636,9 @@ class NAPS_assigner:
                                                   "Num_good_links_prev", 
                                                   "Num_good_links_next"]], 
                                        on="Res_N")
-            
-            self.assign_df = assign_df
-            return(self.assign_df)
+            if set_assign_df:
+                self.assign_df = assign_df
+            return(assign_df)
     
     def find_alt_assignments(self, N=1, by_res=True,  verbose=False, 
                              return_full_assignments=False):

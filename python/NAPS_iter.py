@@ -6,8 +6,10 @@ Created on Tue Feb  5 21:32:56 2019
 """
 
 import pandas as pd
+import numpy as np
 from NAPS_importer import NAPS_importer
 from NAPS_assigner import NAPS_assigner
+from scipy.optimize import linear_sum_assignment
 import argparse
 from pathlib import Path
 from distutils.util import strtobool
@@ -87,26 +89,72 @@ logging.info("Read in %d predicted residues from %s.",
 
 # Do the analysis
 a.add_dummy_rows()
-a.calc_log_prob_matrix(sf=1, verbose=False)
+a.calc_log_prob_matrix2(sf=1, verbose=False)
 logging.info("Calculated log probability matrix (%dx%d).", 
              a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
-assign_df, best_match_indexes = a.find_best_assignment()
+matching = a.find_best_assignment2()
 logging.info("Calculated best assignment.")
+assign_df = a.make_assign_df(matching, set_assign_df=True)
 assign_df = a.check_assignment_consistency(threshold=0.1)
 logging.info("Checked assignment consistency.")
 
 obs = a.obs
 preds = a.preds
 
-# Work out which residues are consistent
-consistent_res = assign_df.loc[(assign_df["Num_good_links_prev"]==3) & (assign_df["Num_good_links_next"]==3),"Res_name"]
-inconsistent_res = assign_df.loc[~assign_df["Res_name"].isin(consistent_res), "Res_name"]
-assign_df.index = assign_df["Res_name"]
-inconsistent_SS = assign_df.loc[inconsistent_res, "SS_name"]
+#%% Iterate to improve consistency
+
+last_consistent=-1
+max_consistent = ((assign_df["Num_good_links_prev"]==3) & 
+                  (assign_df["Num_good_links_next"]==3)).sum()
+count=1
+
+while max_consistent>last_consistent:
+    print("Round %d" % count)
+    count = count+1
+    last_consistent = max_consistent
+    # Work out which residues are consistent
+    consistent = a.assign_df.loc[(a.assign_df["Num_good_links_prev"]==3) & 
+                               (a.assign_df["Num_good_links_next"]==3),
+                               ["SS_name", "Res_name"]]
+    inconsistent = a.assign_df.loc[~a.assign_df["Res_name"].isin(consistent["Res_name"]), ["SS_name", "Res_name"]]
+    
+    alt_assigns = pd.DataFrame({"SS_name":inconsistent["SS_name"],
+                                "Res_name":inconsistent["Res_name"],
+                                "Sum_prob":np.NaN, "Total_consistent":np.NaN}, 
+                                index=inconsistent.index)
+    matching_dict={}
+    
+    
+    for i in inconsistent.index:
+        matching2 = a.find_best_assignment2(inc=consistent, exc=inconsistent.loc[[i],:])
+        matching_dict[i] = matching2
+        alt_assigns.loc[i,"Sum_prob"] = sum(a.log_prob_matrix.lookup(matching2["SS_name"], matching2["Res_name"]))
+        tmp = a.make_assign_df(matching2, set_assign_df=False)
+        tmp = a.check_assignment_consistency(assign_df=tmp)
+        alt_assigns.loc[i,"Total_consistent"] = ((tmp["Num_good_links_prev"]==3) & 
+                                                 (tmp["Num_good_links_next"]==3)).sum()
+    
+    max_consistent = alt_assigns["Total_consistent"].max()
+    mask = alt_assigns["Total_consistent"]==max_consistent
+    i = alt_assigns.loc[mask,"Sum_prob"].idxmax()
+    print("Top result: %s\tTotal consistent: %d, Sum_probability: %d" % 
+          (alt_assigns.loc[i, "Res_name"],alt_assigns.loc[i, "Total_consistent"],
+           alt_assigns.loc[i, "Sum_prob"]))
+    if max_consistent > last_consistent:
+        a.make_assign_df(matching_dict[i], set_assign_df=True)
+        a.check_assignment_consistency()
+
+
+
+
+# Count correct assignments
+(a.assign_df["Res_name"].str.lstrip()==a.assign_df["SS_name"].str.lstrip("_")).sum()
+
+#%%
 
 b = NAPS_assigner()
-b.obs = a.obs.loc[inconsistent_SS,:]
-b.preds = a.preds.loc[inconsistent_res,:]
+b.obs = a.obs.loc[inconsistent["SS_name"],:]
+b.preds = a.preds.loc[inconsistent["Res_name"],:]
 
 obs2 = b.obs
 preds2 = b.preds
@@ -114,29 +162,73 @@ preds2 = b.preds
 b.add_dummy_rows()
 b.calc_log_prob_matrix(sf=1, verbose=False)
 
-def find_matching_constrained(assigner, inc=None, exc=None):
+
+
+def find_matching_constrained(assigner, 
+                              inc=pd.DataFrame(columns=["SS_name","Res_name"]), 
+                              exc=pd.DataFrame(columns=["SS_name","Res_name"])):
     """Find the best assignment, given constraints
     
     Returns a data frame of SS_names and Res_names of the best matching
     
-    inc: a list of (SS, Res) tuples which must be part of the assignment.
-    exc: a list of (SS, Res) tuples which may not be part of the assignment.
+    inc: a DataFrame of (SS,Res) pairs which must be part of the assignment. 
+        First column has the SS_names, second has the Res_names .
+    exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
     """
     obs = assigner.obs
     preds = assigner.preds
     log_prob_matrix = assigner.log_prob_matrix
     
     # Check that inc and exc lists are consistent
+    # Get rid of any entries in exc which chare a Res or SS with inc
+    exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
+    if any(exc_in_inc):
+        print("Some values in exc are also found in inc, so are redundant.")
+        exc = exc.loc[~exc_in_inc, :]
+    # Check for conflicting entries in inc
+    conflicts = inc["SS_name"].duplicated(keep=False) | inc["Res_name"].duplicated(keep=False)
+    if any(conflicts):
+        print("Error: entries in inc conflict with one another")
+        print(inc.loc[conflicts,:])
     
     # Removed fixed assignments from probability matrix
-    inc_SS, inc_res = zip(*inc)     # Make lists of SS and residues that are fixed
-    log_prob_matrix_reduced = log_prob_matrix.drop(index=list(inc_SS)).drop(columns=list(inc_res))
+    log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
     
     # Penalise excluded SS,Res pairs
+    penalty = 2*log_prob_matrix.min().min()
+    for index, row in exc.iterrows():
+        # Need to account for dummy residues or spin systems
+        if preds.loc[row["Res_name"], "Dummy_res"]:
+            log_prob_matrix_reduced.loc[row["SS_name"], 
+                            preds.loc[preds["Dummy_res"],"Res_name"]] = penalty
+        elif obs.loc[row["SS_name"], "Dummy_SS"]:
+            log_prob_matrix_reduced.loc[obs.loc[obs["Dummy_SS"],"SS_name"], 
+                                        row["Res_name"]] = penalty
+        else:
+            log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
+    
+    row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix_reduced)
+    
     
     # Construct results dataframe
-    fixed_assignments = pd.DataFrame({"SS_name":inc_SS, "Res_name":inc_res})    
-    pass
+    assignment_reduced = pd.DataFrame({"SS_name":log_prob_matrix_reduced.index[row_ind],
+                                       "Res_name":log_prob_matrix_reduced.columns[col_ind]})
+#    fixed_assignments = pd.DataFrame({"SS_name":inc, "Res_name":inc_res})
+
+    assignment = pd.concat([inc, assignment_reduced]) 
+    return(assignment)
+
+tmp=find_matching_constrained(a)
+
+assign_dict = {}
+scores_dict = {}
+for i, row in inconsistent.iterrows():
+    print(row["Res_name"])
+    tmp = find_matching_constrained(a, inc=consistent, exc = inconsistent.loc[[i],:])
+    assign_dict[row["SS_name"]] = tmp
+    scores_dict[row["SS_name"]] = sum(a.log_prob_matrix.lookup(tmp["SS_name"], tmp["Res_name"]))
+
+
 
 #assign_df, best_match_indexes = b.find_best_assignment()
 #assign_df = b.check_assignment_consistency(threshold=0.1)

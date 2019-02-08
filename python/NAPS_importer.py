@@ -210,6 +210,7 @@ class NAPS_importer:
                             "H": self.roots["H"],
                             "N": self.roots["N"]})
         obs.index = obs["SS_name"]
+        obs.index.name = None
         for spec in self.peaklists.keys():
             peaks = self.peaklists[spec]
             for ss in obs["SS_name"]:
