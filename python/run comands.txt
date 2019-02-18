@@ -1,0 +1,8 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Feb 16 16:22:55 2019
+
+@author: kheyam
+"""
+
+python python\NAPS.py shifts data\P3a_L273R\naps_shifts.txt output\test.txt --shift_type naps --pred_file data\P3a_L273R\shiftx2.cs -c config\config.txt -l output\test.log

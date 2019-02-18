@@ -73,13 +73,16 @@ parser.add_argument("--plot_stem",
                     default="/Users/aph516/GitHub/NAPS/plots/plot",
                     help="The base name for plots (do not include a file extension).")
 
-if False:
-    args = parser.parse_args(("../data/testset/simplified_BMRB/4032.txt "+
-                "../data/testset/shiftx2_results/A001_1KF3A.cs "+
-                "../output/test.txt " + 
-                "-c ../config/config.txt "+
-                "-l ../output/log.txt "+
-                "-p ../plots/A001_1KF3A").split())
+if True:
+    args = parser.parse_args(("shifts "+
+                                "../data/P3a_L273R/naps_shifts.txt "+
+                                "../output/test.txt "+
+                                "--shift_type naps "+
+                                "--pred_file ../data/P3a_L273R/shiftx2.cs "+
+                                "-c ../config/config.txt "+
+                                "-l ../output/test.log").split())
+    
+    
 else:
     args = parser.parse_args()
 
@@ -179,7 +182,7 @@ elif args.mode=="shifts":
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
     assign_df, best_match_indexes = a.find_best_assignment()
     logging.info("Calculated best assignment.")
-    a.check_assignment_consistency(threshold=0.1)
+    assign_df = a.check_assignment_consistency(threshold=0.1)
     logging.info("Checked assignment consistency.")
     
     if a.pars["alt_assignments"]>0:
@@ -189,11 +192,11 @@ elif args.mode=="shifts":
                      a.pars["alt_assignments"])
         a.alt_assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                                index=False)
-        logging.info("Wrote results to %s", args.output_file)
     else:
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
-        logging.info("Wrote results to %s", args.output_file)
+        
+    logging.info("Wrote results to %s", args.output_file)
     #tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
     #tmp = a.find_alt_assignments2(N=2, verbose=True, by_ss=False)
     

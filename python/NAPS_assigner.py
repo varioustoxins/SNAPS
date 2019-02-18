@@ -59,6 +59,7 @@ class NAPS_assigner:
                     if line.find("VARS")>-1:
                         colnames_line = num
                         colnames = line.split()[1:]
+                        break
                         
             preds_long = pd.read_table(input_file, sep="\s+", names=colnames,
                                        skiprows=colnames_line+1)
@@ -77,7 +78,7 @@ class NAPS_assigner:
                   preds_long["Res_type"]))
         preds_long["Res_name"] = [s.rjust(5) for s in preds_long["Res_name"]]
             
-        # Convert from wide to long format
+        # Convert from long to wide format
         preds = preds_long.pivot(index="Res_N", columns="Atom_type", 
                                  values="Shift")
         
@@ -490,6 +491,7 @@ class NAPS_assigner:
             First column has the SS_names, second has the Res_names .
         exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
         """
+        find_best_assignment2()
         
         obs = self.obs
         preds = self.preds
