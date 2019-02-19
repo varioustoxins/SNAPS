@@ -316,6 +316,11 @@ class NAPS_assigner:
         log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
         
         for atom in atoms:
+            # The most efficient way I've found to do the calculation is to 
+            # take the obs and preds shift columns for an atom, repeat each 
+            # into a matrix, then subtract these matrixes from each other. 
+            # That way, all calculations take advantage of vectorisation. 
+            # Much faster than using loops.
             obs_atom = (obs[atom].repeat(len(obs.index)).values.
                         reshape([len(obs.index),-1]))
             preds_atom = (preds[atom].repeat(len(preds.index)).values.
@@ -356,10 +361,13 @@ class NAPS_assigner:
                 SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
                                            columns=log_prob_matrix.columns)
                 for res in preds["Res_type"].unique():
-                    # Work out which spin systems could be this residue type 
-                    # (if SS_class==np.nan, defaults to allowed)
+                # For each amino acid type in turn:
+                    # Work out which observations could be that aa type
                     allowed = obs[ss_class].str.contains(res).fillna(True)
+                    # Select the predictions which are that aa type
                     pred_list = preds.loc[preds["Res_typem1"]==res,"Res_name"]
+                    # For the selected predictions, penalise any observations 
+                    # where the current aa type is not allowed
                     for p in pred_list:
                         SS_class_matrix.loc[:,p] = (~allowed)*log10(0.01)
             
@@ -478,9 +486,7 @@ class NAPS_assigner:
         self.best_match_indexes = [row_ind, col_ind]
         return(assign_df, [row_ind, col_ind])
         
-    def find_best_assignment2(self, 
-                              inc=pd.DataFrame(columns=["SS_name","Res_name"]), 
-                              exc=pd.DataFrame(columns=["SS_name","Res_name"])):
+    def find_best_assignment2(self, inc=None, exc=None):
         """ Use the Hungarian algorithm to find the highest probability matching 
         (ie. the one with the lowest log probability sum), with constraints.
         
@@ -491,40 +497,44 @@ class NAPS_assigner:
             First column has the SS_names, second has the Res_names .
         exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
         """
-        find_best_assignment2()
-        
         obs = self.obs
         preds = self.preds
-        log_prob_matrix = self.log_prob_matrix
+        log_prob_matrix = deepcopy(self.log_prob_matrix)
         
-        # Check constraints are consistent
-        # Get rid of any entries in exc which share a Res or SS with inc
-        exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
-        if any(exc_in_inc):
-            print("Some values in exc are also found in inc, so are redundant.")
-            exc = exc.loc[~exc_in_inc, :]
-        # Check for conflicting entries in inc
-        conflicts = inc["SS_name"].duplicated(keep=False) | inc["Res_name"].duplicated(keep=False)
-        if any(conflicts):
-            print("Error: entries in inc conflict with one another - dropping conflicts")
-            print(inc[conflicts])
-            inc = inc[~conflicts]
+        if inc is not None:
+            # Check for conflicting entries in inc
+            conflicts = inc["SS_name"].duplicated(keep=False) | inc["Res_name"].duplicated(keep=False)
+            if any(conflicts):
+                print("Error: entries in inc conflict with one another - dropping conflicts")
+                print(inc[conflicts])
+                inc = inc[~conflicts]
+            
+            if exc is not None:
+                # Check constraints are consistent
+                # Get rid of any entries in exc which share a Res or SS with inc
+                exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
+                if any(exc_in_inc):
+                    print("Some values in exc are also found in inc, so are redundant.")
+                    exc = exc.loc[~exc_in_inc, :]
+                    
+            # Removed fixed assignments from probability matrix
+            log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
+        else:
+            log_prob_matrix_reduced = log_prob_matrix
         
-        # Removed fixed assignments from probability matrix
-        log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
-    
-        # Penalise excluded SS,Res pairs
-        penalty = 2*log_prob_matrix.min().min()
-        for index, row in exc.iterrows():
-            # Need to account for dummy residues or spin systems
-            if preds.loc[row["Res_name"], "Dummy_res"]:
-                log_prob_matrix_reduced.loc[row["SS_name"], 
-                                preds.loc[preds["Dummy_res"],"Res_name"]] = penalty
-            elif obs.loc[row["SS_name"], "Dummy_SS"]:
-                log_prob_matrix_reduced.loc[obs.loc[obs["Dummy_SS"],"SS_name"], 
-                                            row["Res_name"]] = penalty
-            else:
-                log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
+        if exc is not None:
+            # Penalise excluded SS,Res pairs
+            penalty = 2*log_prob_matrix.min().min()
+            for index, row in exc.iterrows():
+                # Need to account for dummy residues or spin systems
+                if preds.loc[row["Res_name"], "Dummy_res"]:
+                    log_prob_matrix_reduced.loc[row["SS_name"], 
+                                    preds.loc[preds["Dummy_res"],"Res_name"]] = penalty
+                elif obs.loc[row["SS_name"], "Dummy_SS"]:
+                    log_prob_matrix_reduced.loc[obs.loc[obs["Dummy_SS"],"SS_name"], 
+                                                row["Res_name"]] = penalty
+                else:
+                    log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
         
         row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix_reduced)
         # -1 because the algorithm minimises sum, but we want to maximise it.
@@ -532,39 +542,45 @@ class NAPS_assigner:
         # Construct results dataframe
         matching_reduced = pd.DataFrame({"SS_name":log_prob_matrix_reduced.index[row_ind],
                                            "Res_name":log_prob_matrix_reduced.columns[col_ind]})
-
-        matching = pd.concat([inc, matching_reduced]) 
         
-        return(matching)
+        if inc is not None:
+            matching = pd.concat([inc, matching_reduced])             
+            return(matching)
+        else:
+            return(matching_reduced)
     
     def make_assign_df(self, matching, set_assign_df=False):
         """Make a dataframe with full assignment information, given a dataframe 
-        of SS_name and Res_name 
+        of SS_name and Res_name.
+        
+        Matching may have additional columns, which will also be kept.
         """
         obs = self.obs
         preds = self.preds
         log_prob_matrix = self.log_prob_matrix
         valid_atoms = list(self.pars["atom_set"])
+        extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
         
         assign_df = pd.merge(matching, 
                              preds.loc[:,["Res_N","Res_type", "Res_name", 
                                     "Dummy_res"]], 
-                             on="Res_name", how="outer")
+                             on="Res_name", how="left")
         assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name", 
-                               "Dummy_res"]]
+                               "Dummy_res"]+list(extra_cols)]
         assign_df = pd.merge(assign_df, 
                              obs.loc[:, obs.columns.isin(
-                                     valid_atoms+["SS_name","Dummy_SS"])], 
-                             on="SS_name", how="outer")
+                                     ["SS_name","Dummy_SS"]+valid_atoms)], 
+                             on="SS_name", how="left")
         assign_df = pd.merge(assign_df, 
                              preds.loc[:, preds.columns.isin(
                                      valid_atoms+["Res_name"])],
-                             on="Res_name", suffixes=("","_pred"), how="outer")
+                             on="Res_name", suffixes=("","_pred"), how="left")
         
         assign_df["Log_prob"] = log_prob_matrix.lookup(
                                             assign_df["SS_name"],
                                             assign_df["Res_name"])
         # Careful above not to get rows/columns confused
+        
         assign_df = assign_df.sort_values(by="Res_N")
         
         if set_assign_df:
@@ -913,7 +929,99 @@ class NAPS_assigner:
                                                     by=["Res_name", "Rank"])
         
         return(self.alt_assign_df)
-
+        
+    def find_alt_assignments3(self, N=1, by_ss=True, verbose=False):
+        """ Find the next-best assignment(s) for each residue or spin system
+        
+        This works by setting the log probability to a very high value for each 
+        residue in turn, and rerunning the assignment
+        
+        Arguments:
+        best_match_indexes: [row_ind, col_ind] output from find_best_assignment()
+        N: number of alternative assignments to generate
+        by_ss: if true, calculate next best assignment for each spin system. 
+            Otherwise, calculate it for each residue.
+        
+        Output:
+        A Dataframe containing the original assignments, and the 
+        alt_assignments by
+        """
+        
+        obs = self.obs
+        preds = self.preds
+        log_prob_matrix = self.log_prob_matrix
+        #best_match_indexes = self.best_match_indexes
+        best_matching = self.assign_df.loc[:,["SS_name","Res_name"]]
+        alt_matching = None
+        
+        # Calculate sum probability for the best matching
+        best_sum_prob = sum(log_prob_matrix.lookup(
+                best_matching["SS_name"], best_matching["Res_name"]))
+        
+        # Calculate the value used to penalise the best match for each residue
+        penalty = 2*log_prob_matrix.min().min()     
+        logging.debug("Penalty value: %f", penalty)
+        
+        # Initialise DataFrame for storing alt_assignments
+        alt_matching_all = best_matching.copy()
+        alt_matching_all["Rank"] = 1
+        alt_matching_all["Rel_prob"] = 0
+               
+        # Convert best_match_indexes to get a series of spin systems 
+        # indexed by spin system  
+        
+        for i in best_matching.index:   # Consider each spin system in turn
+            ss = best_matching.loc[i, "SS_name"]
+            res = best_matching.loc[i, "Res_name"]
+            print(ss, res)
+            logging.debug("Finding alt assignments for original match %s - %s", ss, res)
+            if verbose: print(ss, res)
+            
+            excluded = best_matching.loc[[i], :]
+            
+            for j in range(N):
+                print("\t", ss, res)
+                alt_matching = self.find_best_assignment2(exc=excluded)
+                
+#                # Make assign_df for the alt matching, and add the relevant row
+#                # to alt_assign_df
+#                new_assign_df = self.make_assign_df(alt_matching)
+#                new_assign_df.index = new_assign_df["SS_name"]
+#                new_assign_df["Rank"] = j+2
+#                alt_sum_prob = sum(self.log_prob_matrix.lookup(
+#                        alt_matching["SS_name"], alt_matching["Res_name"]))
+#                new_assign_df["Rel_prob"] = alt_sum_prob - best_sum_prob
+#                self.alt_assign_df = self.alt_assign_df.append(
+#                                new_assign_df.loc[ss, :], ignore_index=True)
+                alt_matching.index = alt_matching["SS_name"]
+                alt_matching["Rank"] = j+2
+                alt_sum_prob = sum(self.log_prob_matrix.lookup(
+                        alt_matching["SS_name"], alt_matching["Res_name"]))
+                alt_matching["Rel_prob"] = alt_sum_prob - best_sum_prob
+                alt_matching_all = alt_matching_all.append(
+                                alt_matching.loc[ss, :], ignore_index=True)
+                
+                
+                # Add the alt match for this ss or res to the excluded dataframe
+                if by_ss:
+                    res = alt_matching.loc[alt_matching["SS_name"]==ss, "Res_name"].tolist()[0]
+                    # The .tolist()[0] is to convert a single-item series into a string.
+                else:
+                    ss = alt_matching.loc[alt_matching["Res_name"]==res, "SS_name"].tolist()[0]
+                excluded = excluded.append(pd.DataFrame({"SS_name":ss,"Res_name":res}), 
+                                           ignore_index=True)
+                
+            
+        self.alt_assign_df = self.make_assign_df(alt_matching_all)
+        if by_ss:
+            self.alt_assign_df = self.alt_assign_df.sort_values(
+                                                by=["SS_name", "Rank"])
+        else:
+            self.alt_assign_df = self.alt_assign_df.sort_values(
+                                                by=["Res_name", "Rank"])
+            
+        return(self.alt_assign_df)
+    
     def output_peaklists(self, filepath, format="sparky", 
                          spectra=["hsqc","hnco","hncaco","hncacb", "hncocacb"]):
         """ Output assigned peaklists
