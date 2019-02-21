@@ -13,37 +13,42 @@ import argparse
 #from pathlib import Path
 import logging
 
-#### User input
-
+#### Command line arguments
 parser = argparse.ArgumentParser(description="NAPS (NMR Assignments from Predicted Shifts)")
-parser.add_argument("input_file", 
-                    help="""A table of observed chemical shifts.""")
-parser.add_argument("output_file")
+parser.add_argument("shift_file", 
+                    help="A table of observed chemical shifts.")
+parser.add_argument("pred_file",
+                    help="A table of predicted chemical shifts.")
+parser.add_argument("output_file",
+                    help="The file results will be written to.")
+
 parser.add_argument("--shift_type", 
                     choices=["naps", "ccpn", "sparky", 
                              "xeasy", "nmrpipe", "test"], 
                     default="naps", 
-                    help="""The format of the observed shift file.""")
-parser.add_argument("--pred_file")
+                    help="The format of the observed shift file.")
 parser.add_argument("--pred_type", 
                     choices=["shiftx2", "sparta+"],
                     default="shiftx2", 
-                    help="The file format of the predicted shifts")
+                    help="The format of the predicted shifts")
+
 parser.add_argument("-c", "--config_file", 
-                    default="/Users/aph516/GitHub/NAPS/python/config.txt")
-parser.add_argument("-l", "--log_file", default=None)
+                    default="/Users/aph516/GitHub/NAPS/python/config.txt",
+                    help="A file containing parameters for the analysis.")
+parser.add_argument("-l", "--log_file", default=None,
+                    help="A file logging information will be written to.")
 #parser.add_argument("--delta_correlation", action="store_true", 
 #                    help="If set, account for correlations between prediction errors of different atom types")
 parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
                     help="The number of alternative assignments to generate, "+
                     "in addition to the highest ranked.")
-parser.add_argument("--plot_stem", 
+parser.add_argument("--plot_file", 
                     default="/Users/aph516/GitHub/NAPS/plots/plot",
-                    help="The base name for plots (do not include a file extension).")
+                    help="A filename for any output plots.")
 
 if True:
     args = parser.parse_args()
-else:
+else:   # For testing
     args = parser.parse_args(("../data/P3a_L273R/naps_shifts.txt",
                               "../output/test.txt",
                               "--shift_type","naps",
@@ -60,6 +65,7 @@ else:
     logging.basicConfig(level=logging.ERROR)
 
 #%%
+#### Set up the NAPS_assigner object
 a = NAPS_assigner()
 
 # Import config file
@@ -76,19 +82,19 @@ if args.alt_assignments>=0:
 importer = NAPS_importer()
 
 if args.shift_type=="test":
-    importer.import_testset_shifts(args.input_file)
+    importer.import_testset_shifts(args.shift_file)
 else:
-    importer.import_obs_shifts(args.input_file, args.shift_type, SS_num=False)
+    importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
 a.obs = importer.obs
 logging.info("Read in %d spin systems from %s.", 
-             len(a.obs["SS_name"]), args.input_file)
+             len(a.obs["SS_name"]), args.shift_file)
 
 
 a.import_pred_shifts(args.pred_file, args.pred_type)
 logging.info("Read in %d predicted residues from %s.", 
              len(a.preds["Res_name"]), args.pred_file)
 
-# Do the analysis
+#### Do the analysis
 a.add_dummy_rows()
 a.calc_log_prob_matrix2(sf=1, verbose=False)
 logging.info("Calculated log probability matrix (%dx%d).", 
@@ -111,11 +117,10 @@ else:
                        index=False)
     
 logging.info("Wrote results to %s", args.output_file)
-#tmp = a.find_alt_assignments(best_match_indexes, by_res=False)
-#tmp = a.find_alt_assignments2(N=2, verbose=True, by_ss=False)
 
-# Make some plots
+#### Make some plots
 if a.pars["plot_strips"]:
     plt = a.plot_strips()
-    plt.save(args.plot_stem+"_strips.pdf", height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), units="mm")
-    logging.info("Wrote strip plot to %s", args.plot_stem+"_strips.pdf")
+    plt.save(args.plot_file, height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), 
+             units="mm", limitsize=False)
+    logging.info("Wrote strip plot to %s", args.plot_file)

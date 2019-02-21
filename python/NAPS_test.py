@@ -22,15 +22,18 @@ parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("-t", "--test", default="all", 
                     help="Specify a particular test to run.")
-parser.add_argument("--ID_start", default="A001", help="Start at this ID")
-parser.add_argument("--ID_end", default="A069", help="Start at this ID")
+parser.add_argument("--ID_start", default="A003", help="Start at this ID")
+parser.add_argument("--ID_end", default="A069", help="Finish at this ID")
 
-if False:
-    #args = parser.parse_args("C:/Users/kheyam/Documents/GitHub/NAPS/ -N 10".split())
-    args = parser.parse_args(("/Users/aph516/GitHub/NAPS/ -t alt_assignments "+
-                             "--ID_start A001 --ID_end A069").split())
-else:
+if True:
     args = parser.parse_args()
+else:
+    #args = parser.parse_args(("C:/Users/kheyam/Documents/GitHub/NAPS/",
+    args = parser.parse_args(("/Users/aph516/GitHub/NAPS/",
+                              "-t","basic",
+                             "--ID_start","A003",
+                             "--ID_end","A069"))
+
 
 path = Path(args.NAPS_path)
 #path = Path("/Users/aph516/GitHub/NAPS/")
@@ -46,13 +49,14 @@ testset_df.index = testset_df["ID"]
 
 #%%
 
-def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
+def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001", 
+                              ID_end="A069"):
     """Function to check assignment accuracy
     """
     # Nb. make sure data_dir ends with a forward slash
 
     assigns = None
-    for i in testset_df.index[0:N]:
+    for i in testset_df.loc[ID_start:ID_end, "ID"]:
         tmp_all = pd.read_csv(
                 data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), 
                 sep="\t", index_col=False)
@@ -172,23 +176,24 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", N=61):
 if args.test in ("basic", "all"):
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                testset_df.loc[i, "preds_file"].as_posix(),
                 (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
                 "-c", (path/"config/config_plot.txt").as_posix(),
                 "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                "--plot_stem", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
+                "--plot_file", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
         
-    assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", N=args.N_tests)
+    assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", ID_start=args.ID_start, ID_end=args.ID_end)
     summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
     plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
-    plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm")
+    plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm", limitsize=False)
 
 #%% Test effect of accounting for correlated errors
 if args.test in ("delta_correlation", "all"):

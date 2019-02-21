@@ -450,7 +450,7 @@ class NAPS_importer:
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
             obs_long["SS_name"] = (obs_long["Res_N"].astype(str) + 
                     obs_long["Res_type"])
-            obs_long["SS_name"] = [s.rjust(5,"_") for s in obs_long["SS_name"]]
+            obs_long["SS_name"] = [s.rjust(5," ") for s in obs_long["SS_name"]]
         else:
             obs_long["SS_name"] = (obs_long["Res_N"].astype(str).rjust(4,"_") + 
                     obs_long["Res_type"])
