@@ -28,7 +28,7 @@ testset_df.index = testset_df["ID"]
 a = NAPS_assigner()
     
 # Import config file
-a.read_config_file(path/"config/config.txt")
+a.read_config_file(path/"config/config_pred_correction.txt")
 #config = pd.read_table(path/"config/config.txt", sep="\s+", comment="#", header=None,
 #                       index_col=0, names=["Value"])
 #a.pars["pred_offset"] = int(config.loc["pred_offset"].Value)
@@ -55,12 +55,12 @@ a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 b.import_pred_shifts(testset_df.loc[id, "noshifty_file"], "shiftx2")
 
 # Do the analysis
-#a.add_dummy_rows()
-#a.calc_log_prob_matrix2(sf=1, verbose=False)
-#assign_df, best_match_indexes = a.find_best_assignment()
-#assign_df = a.check_assignment_consistency(threshold=0.1)
-#matching = a.find_best_assignment2()
-#alt_assign_df = a.find_alt_assignments2(N=2, verbose=False)
+a.add_dummy_rows()
+a.calc_log_prob_matrix2(sf=1, verbose=False)
+assign_df, best_match_indexes = a.find_best_assignment()
+assign_df = a.check_assignment_consistency(threshold=0.1)
+matching = a.find_best_assignment2()
+alt_assign_df = a.find_alt_assignments2(N=2, verbose=False)
 
 b.add_dummy_rows()
 b.calc_log_prob_matrix2(sf=1, verbose=False)

@@ -27,21 +27,29 @@ class NAPS_assigner:
         self.alt_assign_df = None
         self.best_match_indexes = None
         self.pars = {"pred_offset": 0,
+                "prob_method": "pdf",
+                "pred_correction": False,
+                "delta_correlation": False,
+                "alt_assignments": 1,
                 "atom_set": {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"},
                 "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
                             'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-                            'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}}
+                            'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163},
+                "plot_strips": False}
             
     def read_config_file(self, filename):
         config = pd.read_table(filename, sep="\s+", comment="#", header=None,
-                               index_col=0, names=["Value"])
-        self.pars["pred_offset"] = int(config.loc["pred_offset"].Value)
-        self.pars["prob_method"] = config.loc["prob_method"].Value
-        self.pars["alt_assignments"] = int(config.loc["alt_assignments"].Value)
-        self.pars["atom_set"] = {s.strip() for s in config.loc["atom_set"].Value.split(",")}
-        tmp = [s.strip() for s in config.loc["atom_sd"].Value.split(",")]
+                               index_col=0, names=["Value"]).to_dict()["Value"]
+        
+        self.pars["pred_offset"] = int(config["pred_offset"])
+        self.pars["prob_method"] = config["prob_method"]
+        self.pars["pred_correction"] = bool(strtobool(config["pred_correction"]))
+        self.pars["delta_correlation"] = bool(strtobool(config["delta_correlation"]))
+        self.pars["alt_assignments"] = int(config["alt_assignments"])
+        self.pars["atom_set"] = {s.strip() for s in config["atom_set"].split(",")}
+        tmp = [s.strip() for s in config["atom_sd"].split(",")]
         self.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
-        self.pars["plot_strips"] = bool(strtobool(config.loc["plot_strips"].Value))
+        self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
         return(self.pars)
     
     def import_pred_shifts(self, input_file, filetype, offset=None):
@@ -322,6 +330,10 @@ class NAPS_assigner:
 #                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
 #                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
         
+        if self.pars["pred_correction"]:
+            # This hardcoded path is bad! Need to import at an earlier stage.
+            lm_pars = pd.read_csv("../config/lin_model_shiftx2.csv", index_col=0)
+        
         obs = self.obs
         preds = self.preds
         atoms = self.pars["atom_set"].intersection(obs.columns)
@@ -339,7 +351,22 @@ class NAPS_assigner:
             preds_atom = (preds[atom].repeat(len(preds.index)).values.
                           reshape([len(preds.index),-1]).transpose())
             
-            delta_atom = preds_atom - obs_atom
+            
+            # If predicting corrections, apply a linear transformation of delta
+            if self.pars["pred_correction"]:
+                tmp = preds_atom
+                for res in preds["Res_type"].unique():
+                    grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
+                                       (lm_pars["Res_type"]==res),"Grad"].tolist()[0]
+                    offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
+                                       (lm_pars["Res_type"]==res),"Offset"].tolist()[0]
+                    tmp.loc[preds["Res_type"]==res,:] = (preds_atom.loc[preds["Res_type"]==res, :]
+                                                        - grad * obs_atom.loc[preds["Res_type"]==res, :]
+                                                        - offset) 
+                delta_atom = tmp - obs_atom
+                
+            else:
+                delta_atom = preds_atom - obs_atom
             
             # Make a note of NA positions in delta, and set them to zero 
             # (this avoids warnings when using norm.cdf later)

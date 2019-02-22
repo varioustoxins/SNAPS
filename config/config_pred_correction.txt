@@ -1,7 +1,7 @@
 # Configuration file for NAPS
 pred_offset  0       # Residue numbering offset for shiftx2
 prob_method     pdf     # Method for calculating probability (options are cdf or pdf)
-pred_correction False   # Applies a linear correction to the predicted shifts
+pred_correction True   # Applies a linear correction to the predicted shifts
 delta_correlation       False   # Accounts for correlations in prediction errors
 alt_assignments 0       # Number of alternative assignments to generate
 atom_set      "H, N, HA, CA, CB, C, CAm1, CBm1, Cm1"       # Which atom types to include. Comma separated.

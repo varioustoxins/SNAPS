@@ -415,6 +415,8 @@ for atom in atom_set:
         except:
             print("Error: ",res, atom)
 
+lm_results.to_csv("../config/lin_model_shiftx2.csv")
+
 #%% Make some graphs showing that the corrected predictions are better
 
 plt = ggplot(data = df2) 
@@ -472,10 +474,10 @@ delta_cor_wide = df2.pivot(index="ID_Res", columns="Atom_type", values="Delta_co
 delta_cor_corr = delta_cor_wide.corr()
 
 # Save to files for use with NAPS_assigner
-delta_wide.mean().to_csv("../data/d_mean.csv")
-delta_wide.cov().to_csv("../data/d_cov.csv")
-delta_cor_wide.mean().to_csv("../data/dd_mean.csv")
-delta_cor_wide.cov().to_csv("../data/dd_cov.csv")
+delta_wide.mean().to_csv("../config/d_mean.csv")
+delta_wide.cov().to_csv("../config/d_cov.csv")
+delta_cor_wide.mean().to_csv("../config/dd_mean.csv")
+delta_cor_wide.cov().to_csv("../config/dd_cov.csv")
 
 obs_wide = df2.pivot(index="ID_Res", columns="Atom_type", values="Shift_obs")
 obs_corr = obs_wide.corr()

@@ -20,20 +20,23 @@ parser = argparse.ArgumentParser(
         description="Test script for NAPS (NMR Assignments from Predicted Shifts)")
 parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
-parser.add_argument("-t", "--test", default="all", 
-                    help="Specify a particular test to run.")
+parser.add_argument("--assign", action="store_true", help="Do NAPS assignment for selected tests.")
+parser.add_argument("--analyse", action="store_true", help="Analyse results for selected tests.")
 parser.add_argument("--ID_start", default="A003", help="Start at this ID")
 parser.add_argument("--ID_end", default="A069", help="Finish at this ID")
+parser.add_argument("-t", "--test", nargs="+", default="all", 
+                    help="Specify a particular test to run.")
 
 if True:
     args = parser.parse_args()
 else:
     #args = parser.parse_args(("C:/Users/kheyam/Documents/GitHub/NAPS/",
     args = parser.parse_args(("/Users/aph516/GitHub/NAPS/",
-                              "-t","basic",
-                             "--ID_start","A003",
-                             "--ID_end","A069"))
-
+                              "-t","all",
+                              "--assign",
+                              "--analyse",
+                              "--ID_start","A003",
+                              "--ID_end","A069"))
 
 path = Path(args.NAPS_path)
 #path = Path("/Users/aph516/GitHub/NAPS/")
@@ -173,7 +176,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001",
     return([assigns, summary])
 
 #%% Test all proteins in the using most basic settings
-if args.test in ("basic", "all"):
+if args.assign and ("basic" in args.test or "all" in args.test):
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -186,7 +189,8 @@ if args.test in ("basic", "all"):
                 "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
                 "--plot_file", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
-        
+
+if args.analyse and ("basic" in args.test or "all" in args.test):        
     assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", ID_start=args.ID_start, ID_end=args.ID_end)
     summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
     
@@ -196,18 +200,20 @@ if args.test in ("basic", "all"):
     plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm", limitsize=False)
 
 #%% Test effect of accounting for correlated errors
-if args.test in ("delta_correlation", "all"):
+if args.assign and ("delta_correlation" in args.test or "all" in args.test):
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(), "shifts",
-                testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+                testset_df.loc[i, "obs_file"].as_posix(),
+                testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
                 "-c", (path/"config/config_delta_corr.txt").as_posix(),
                 "-l", (path/("output/delta_correlation/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
-        
+
+if args.analyse and ("delta_correlation" in args.test or "all" in args.test):        
     assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation/", N=args.N_tests)
     summary_dc.to_csv(path/"output/delta_correlation_summary.txt", sep="\t", float_format="%.3f")
     
@@ -217,18 +223,20 @@ if args.test in ("delta_correlation", "all"):
     plt.save(path/"plots/delta_correlation_summary.pdf", height=210, width=297, units="mm")
 
 #%% Test alternative assignments
-if args.test in ("alt_assignments", "all"):
+if args.assign and ("alt_assignments" in args.test or "all" in args.test):
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
                 "-c", (path/"config/config_alt_assign.txt").as_posix(),
                 "-l", (path/("output/alt_assign/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
-        
+
+if args.analyse and ("alt_assignments" in args.test or "all" in args.test):        
     assigns_alt, summary_alt = check_assignment_accuracy(path/"output/alt_assign/", ranks=[1,2,3], N=args.N_tests)
     assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
     
@@ -249,18 +257,20 @@ if args.test in ("alt_assignments", "all"):
     plt.save(path/"plots/alt_assign_correct.pdf", height=210, width=297, units="mm")
     
 #%% Test alternative assignments with reduced atom types
-if args.test in ("alt_hnco", "all"):
+if args.assign and ("alt_hnco" in args.test or "all" in args.test):
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/alt_hnco/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "--shift_type", "test",
+                "--pred_type", "shiftx2", 
                 "-c", (path/"config/config_alt_hnco.txt").as_posix(),
                 "-l", (path/("output/alt_hnco/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
+if args.analyse and ("alt_hnco" in args.test or "all" in args.test):
     assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
     assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
     
@@ -279,19 +289,21 @@ if args.test in ("alt_hnco", "all"):
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
     plt.save(path/"plots/alt_hnco_correct.pdf", height=210, width=297, units="mm")
-        
-if args.test in ("alt_hnco_hncacb", "all"):
+
+if args.assign and ("alt_hnco_hncacb" in args.test or "all" in args.test):        
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/alt_hnco_hncacb/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "--shift_type", "test",
+                "--pred_type", "shiftx2", 
                 "-c", (path/"config/config_alt_hnco_hncacb.txt").as_posix(),
                 "-l", (path/("output/alt_hnco_hncacb/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
         
+if args.analyse and ("alt_hnco_hncacb" in args.test or "all" in args.test):        
     assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output/alt_hnco_hncacb/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
     assigns_alt_hnco_hncacb = assigns_alt_hnco_hncacb.sort_values(by=["ID", "SS_name", "Rank"])
     
@@ -310,19 +322,21 @@ if args.test in ("alt_hnco_hncacb", "all"):
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
     plt.save(path/"plots/alt_hnco_hncacb_correct.pdf", height=210, width=297, units="mm")
-    
-if args.test in ("alt_ca_co", "all"):
+
+if args.assign and ("alt_ca_co" in args.test or "all" in args.test):    
     for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
         print(testset_df.loc[i, "out_name"])    
-        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),  "shifts",
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
-                "--shift_type", "test",
-                "--pred_file", testset_df.loc[i, "preds_file"].as_posix(), 
+                testset_df.loc[i, "preds_file"].as_posix(), 
                 (path/("output/alt_ca_co/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(), 
+                "--shift_type", "test",
+                "--pred_type", "shiftx2", 
                 "-c", (path/"config/config_alt_ca_co.txt").as_posix(),
                 "-l", (path/("output/alt_ca_co/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
         run(cmd)
-        
+
+if args.analyse and ("alt_ca_co" in args.test or "all" in args.test):            
     assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output/alt_ca_co/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
     assigns_alt_ca_co = assigns_alt_ca_co.sort_values(by=["ID", "SS_name", "Rank"])
     
