@@ -333,6 +333,7 @@ class NAPS_assigner:
         if self.pars["pred_correction"]:
             # This hardcoded path is bad! Need to import at an earlier stage.
             lm_pars = pd.read_csv("../config/lin_model_shiftx2.csv", index_col=0)
+            self.preds_corr = {}
         
         obs = self.obs
         preds = self.preds
@@ -346,25 +347,29 @@ class NAPS_assigner:
             # into a matrix, then subtract these matrixes from each other. 
             # That way, all calculations take advantage of vectorisation. 
             # Much faster than using loops.
-            obs_atom = (obs[atom].repeat(len(obs.index)).values.
-                        reshape([len(obs.index),-1]))
-            preds_atom = (preds[atom].repeat(len(preds.index)).values.
-                          reshape([len(preds.index),-1]).transpose())
+            obs_atom = pd.DataFrame(obs[atom].repeat(len(obs.index)).values.
+                                reshape([len(obs.index),-1]),
+                                index=preds.index, columns=obs.index)
+            preds_atom = pd.DataFrame(preds[atom].repeat(len(preds.index)).values.
+                                reshape([len(preds.index),-1]).transpose(),
+                                index=preds.index, columns=obs.index)
             
             
             # If predicting corrections, apply a linear transformation of delta
             if self.pars["pred_correction"]:
-                tmp = preds_atom
+                preds_corr_atom = preds_atom
                 for res in preds["Res_type"].unique():
-                    grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                       (lm_pars["Res_type"]==res),"Grad"].tolist()[0]
-                    offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                       (lm_pars["Res_type"]==res),"Offset"].tolist()[0]
-                    tmp.loc[preds["Res_type"]==res,:] = (preds_atom.loc[preds["Res_type"]==res, :]
-                                                        - grad * obs_atom.loc[preds["Res_type"]==res, :]
-                                                        - offset) 
-                delta_atom = tmp - obs_atom
-                
+                    if (atom+"_"+res) in lm_pars.index:
+                         
+                        grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
+                                           (lm_pars["Res_type"]==res),"Grad"].tolist()[0]
+                        offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
+                                           (lm_pars["Res_type"]==res),"Offset"].tolist()[0]
+                        preds_corr_atom.loc[preds["Res_type"]==res,:] = (preds_atom.loc[preds["Res_type"]==res, :]
+                                                            - grad * obs_atom.loc[preds["Res_type"]==res, :]
+                                                            - offset) 
+                delta_atom = preds_corr_atom - obs_atom
+                self.preds_corr[atom] = preds_corr_atom
             else:
                 delta_atom = preds_atom - obs_atom
             
@@ -421,6 +426,7 @@ class NAPS_assigner:
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
         self.log_prob_matrix = log_prob_matrix
+        #return(preds_corr)
         return(self.log_prob_matrix)
     
     def calc_dist_matrix(self, use_atoms=None, atom_scale=None, na_dist=0, rank=False):

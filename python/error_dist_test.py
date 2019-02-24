@@ -16,9 +16,9 @@ from NAPS_assigner import NAPS_assigner
 from pathlib import Path
 from math import sqrt
 
-path = Path("/Users/aph516/GitHub/NAPS/")
+#path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS/")
-#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
+path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 #%% Prepare to import all proteins in the testset
 
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 
@@ -376,7 +376,7 @@ plt.save(path/"plots/Error vs pred shift.pdf", height=210, width=297, units="mm"
 plt = ggplot(data=df)
 plt = plt + geom_density(aes(x="Delta", colour="ID"))
 plt = plt + facet_wrap("Atom_type", scales="free")
-#plt.save(path/"plots/Error distribution per ID.pdf", height=210, width=297, units="mm")
+plt.save(path/"plots/Error distribution per ID.pdf", height=210, width=297, units="mm")
 
 def error_boxplots():
     for a in atom_set:
@@ -417,6 +417,8 @@ for atom in atom_set:
 
 lm_results.to_csv("../config/lin_model_shiftx2.csv")
 
+df2["Delta2"] = abs(df2["Delta_cor"]) - abs(df2["Delta"])
+
 #%% Make some graphs showing that the corrected predictions are better
 
 plt = ggplot(data = df2) 
@@ -444,12 +446,32 @@ plt1 = plt1 + ggtitle("Corrected prediction error is independent of observed shi
 plt2 = ggplot(data = df2)
 plt2 = plt2 + geom_point(aes(x="Shift_pred", y="Delta_cor", colour="Res_atom"))
 plt2 = plt2 + scale_x_reverse()
-plt2 = plt2 + facet_wrap("Atom_type", scales="free", ncol=2)
+plt2 = plt2 + facet_wrap("Atom_type", scales="free")
 plt2 = plt2 + xlab("Predicted shift") + ylab("Corrected prediction error")
 plt2 = plt2 + ggtitle("...but is dependent on predicted shift. But I don't think this is a problem.")
 
 save_as_pdf_pages(filename=path/"plots/Corrected delta vs shift.pdf",
                   plots=[plt1, plt2])
+
+plt = ggplot(data=df2) + geom_density(aes(x="Delta2")) 
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt = plt + ggtitle("Improvement in corrected Delta over original Delta")
+plt = plt +  xlab("abs(Delta_cor) - abs(Delta)")
+plt = plt + geom_vline(xintercept=0, colour="red")
+plt.save(filename=path/"plots/Improvement in corrected Delta.pdf", 
+         height=210, width=297, units="mm")
+
+plt = ggplot(data=df2[df2["Res_atom"]=="L"]) 
+plt = plt + geom_point(aes(x="Delta", y="Delta2", colour="Res_atom"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt.save(filename=path/"plots/test.pdf", 
+         height=210, width=297, units="mm")
+
+plt = ggplot(data=df2[df2["Res_atom"]=="L"]) 
+plt = plt + geom_point(aes(x="Shift_obs", y="Delta2"))#, colour="Res_atom"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt.save(filename=path/"plots/test2.pdf", 
+         height=210, width=297, units="mm")
 
 
 def dist_comparison_plots():
