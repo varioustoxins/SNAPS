@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<meta content="utf-8" http-equiv="encoding">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<title>NAPS</title>
+	<!-- Bootstrap core CSS -->
+	<link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+	<!-- Custom styles for this template -->
+	<link href="{{ url_for('static', filename='css/simple-sidebar.css') }}" rel="stylesheet">
+	<link href="{{ url_for('static', filename='css/fixed-left.css') }}" rel="stylesheet">
+	<!-- Bootstrap core JavaScript -->
+	<script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}" rel="stylesheet"></script>
+	<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}" rel="stylesheet"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.10.1/bootstrap-table.min.css">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.10.1/bootstrap-table.min.js"></script>
+	<script>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
+    <!-- Form-specific JavaScript -->
+    <script src="{{ url_for('static', filename='Layout.js') }}" rel="stylesheet"></script>
+    <script src="{{ url_for('static', filename='Execution.js') }}" rel="stylesheet"></script>
+</head>
+<body>
+	<div class="d-flex" id="wrapper">
+		<!-- Sidebar -->
+		<div class="sidenav bg-light border-right" id="sidebar-wrapper">
+			<button onclick="scrollFunc('#configurationSection')" class="list-group-item list-group-item-action bg-light">Configuration</button>
+			<button onclick="scrollFunc('#resultsSection')" class="list-group-item list-group-item-action bg-light">Results</button>
+		</div>
+		<!-- /#sidebar-wrapper -->
+		<!-- Page Content -->
+		<div id="page-content-wrapper" class="container-fluid main">
+			<h1 class="mt-4">NAPS</h1>
+			<h2 id=configurationSection>Configuration</h2>
+			<form id="form" style="width: 600px" action="$SCRIPT_ROOT + '/run'" enctype=multipart/form-data method="post">
+				<div class="row">
+					<div class="col">
+						<label for="observedShiftsFile">Observed shifts file</label>
+					</div>
+					<div class="col">
+						<label for="observedShiftsFormat">Observed shifts format</label>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<input type="file" name="observedShiftsFile" class="form-control-file" id="observedShiftsFile" />
+					</div>
+					<div class="col">
+						<div class="dropdown">
+							<button class="btn btn-secondary dropdown-toggle" type="button" id="observedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Naps</button>
+                            <input type="hidden" name="shift_type" value="Naps">
+                            <div class="dropdown-menu" aria-labelledby="observedShiftsFormatDropdown">
+								<span class="dropdown-item">Naps</span>
+                                <span class="dropdown-item">CCPN</span>
+                                <span class="dropdown-item">Sparky</span>
+                                <span class="dropdown-item">XEasy</span>
+                                <span class="dropdown-item">NMRPipe</span>
+								<span class="dropdown-item">Test</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<label for="predictedShiftsFile">Predicted shifts file</label>
+					</div>
+					<div class="col">
+						<label for="predictedShiftsFormat">Predicted shifts format</label>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" />
+					</div>
+					<div class="col">
+						<div class="dropdown">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="predictedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Shiftx2</button>
+                            <input type="hidden" name="pred_type" value="Shiftx2">
+                            <div class="dropdown-menu" aria-labelledby="predictedShiftsFormatDropdown">
+								<span class="dropdown-item">Shiftx2</span>
+								<span class="dropdown-item">Sparta+</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<p><a href="#" id=advanced>Advanced</a></p>
+				<div id=advancedToggle class="collapse in">
+					<p>Predicted shift offset:</p>
+				</div>
+				<p><a href="#" id=run>Run</a></p>
+			</form>
+			<h2 id=resultsSection>Results</h2>
+            <p id="errors"></p>
+			<table id="table" data-height="800">
+				<thead>
+					<tr id="tableData"></tr>
+				</thead>
+			</table>
+			<!-- /#page-content-wrapper -->
+		</div>
+		<!-- /#wrapper -->
+	</div>
+</body>
+</html>
