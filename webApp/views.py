@@ -1,12 +1,12 @@
 import sys
 import os
 import re
-import shutil
 
 from flask import Flask, render_template, jsonify, request
 from os import environ
 from validation import Validate
 from args import Args
+from fileHandler import saveFiles, deleteFiles
 
 mainNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
 sys.path.append(mainNAPSfilePath)
@@ -17,38 +17,20 @@ app = Flask(__name__)
 
 @app.route('/run', methods = ['POST'])
 def run():
-    args = getArgs(request, Args(app.instance_path))
-    result = Validate(args)
-    if (result[0]):
-        try:
-            runNAPS(args.argsToList())
-            response = createJSONForTable(args.output_file)
-        except:
-            #log errors
-            response = jsonify(status='application_failed')
-    else:
-        response = result[1]
-
-    if os.path.exists(args.directory) and os.path.isdir(args.directory):
-        shutil.rmtree(args.directory)
-
+    args = Args(app.instance_path, request.form)
+    saveFiles(request, args)
+    validationResult = Validate(args)
+    response = run(args) if validationResult.isValid else validationResult.response
+    deleteFiles(args)
     return response
 
-def getArgs(request, args):
-    #For now, default files are used if files are not provided
-    if 'observedShiftsFile' in request.form:
-        args.shift_file = '../data/P3a_L273R/naps_shifts.txt'
-    else:
-        request.files['observedShiftsFile'].save(args.shift_file)
-
-    if 'predictedShiftsFile' in request.form:
-        args.pred_file = '../data/P3a_L273R/shiftx2.cs'
-    else:
-        request.files['predictedShiftsFile'].save(args.pred_file)
-
-    args.shift_type = request.form['shift_type'].strip().lower()
-    args.pred_type = request.form['pred_type'].strip().lower()
-    return args
+def run(args):
+    try:
+        runNAPS(args.argsToList())
+        return createJSONForTable(args.output_file)
+    except:
+        #log errors
+        return jsonify(status='application_failed')
 
 def createJSONForTable(output_path):
     with open(output_path) as output_file:
