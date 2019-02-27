@@ -382,7 +382,9 @@ class NAPS_assigner:
             # If predicting corrections, apply a linear transformation of delta
             if self.pars["pred_correction"]:
                 preds_corr_atom = preds_atom
-                for res in preds["Res_type"].unique():
+                for res in preds["Res_type"].dropna().unique():
+                    #print(res)
+                    #print(atom+"_"+res)
                     if (atom+"_"+res) in lm_pars.index:
                          
                         grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 

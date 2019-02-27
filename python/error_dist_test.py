@@ -509,9 +509,19 @@ obs_corr = obs_wide.corr()
 
 ggplot(delta_wide) + geom_point(aes(x="CA", y="HA"))
 
-
-
+#%% Find all ID's which contain particular shifts
+tmp=df.groupby(["ID","Atom_type"]).size().unstack(fill_value=0)
+#tmp.index[tmp["HA"]==0]
+#tmp.index[tmp["C"]==0]
+#tmp.index[tmp["Cm1"]==0]
+#tmp.index[tmp["CB"]==0]
+#tmp.index[tmp["CBm1"]==0]
+# ID's which have at least some observations for all three carbons
+tmp.index[(tmp["CA"]>0) & (tmp["CB"]>0) & (tmp["C"]>0)]
 #%% Not updated below this point to account for long vs wide dataframe, so won't work.
+
+
+
 
 #%% Calculate covariance matrixes with and without delta adjustment
 

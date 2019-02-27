@@ -22,8 +22,7 @@ parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("--assign", action="store_true", help="Do NAPS assignment for selected tests.")
 parser.add_argument("--analyse", action="store_true", help="Analyse results for selected tests.")
-parser.add_argument("--ID_start", default="A003", help="Start at this ID")
-parser.add_argument("--ID_end", default="A069", help="Finish at this ID")
+parser.add_argument("--N", default=None, help="Limit to first N datasets.")
 parser.add_argument("-t", "--test", nargs="+", default="all", 
                     help="Specify a particular test to run.")
 
@@ -50,16 +49,30 @@ testset_df["preds_file"] = [path/x for x in "data/testset/shiftx2_results/"+test
 testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
 testset_df.index = testset_df["ID"]
 
+# Define some lists of ID's with particular characteristics
+id_all = testset_df["ID"].tolist()  # All ID's
+
+    # Only ID's with info for C, CA and CB (not necessarily complete)
+id_all_carbons = [
+        'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009', 'A010', 'A011',
+        'A012', 'A013', 'A014', 'A015', 'A016', 'A017', 'A018', 'A019', 'A020',
+        'A021', 'A023', 'A025', 'A026', 'A027', 'A028', 'A029', 'A033', 'A035',
+        'A036', 'A037', 'A039', 'A043', 'A044', 'A045', 'A049', 'A050', 'A051',
+        'A053', 'A059', 'A061', 'A062', 'A066', 'A067', 'A069']
+
+# Limit how many datasets are assigned/analysed
+if args.N is not None:
+    id_all = id_all[0:args.N]
+    id_all_carbons = id_all_carbons[0:args.N]
 #%%
 
-def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001", 
-                              ID_end="A069"):
+def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_list=id_all):
     """Function to check assignment accuracy
     """
     # Nb. make sure data_dir ends with a forward slash
 
     assigns = None
-    for i in testset_df.loc[ID_start:ID_end, "ID"]:
+    for i in ID_list:
         tmp_all = pd.read_csv(
                 data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), 
                 sep="\t", index_col=False)
@@ -102,7 +115,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001",
         tmp["SS_in_pred"] = tmp["SS_name"].isin(tmp_all["Res_name"])
         tmp["Pred_in_SS"] = tmp["Res_name"].isin(tmp_all["SS_name"])
         
-        if type(assigns)!=type(tmp):
+        if assigns is None:
             assigns = tmp
         else:
             assigns = pd.concat([assigns, tmp], ignore_index=True)
@@ -144,11 +157,11 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001",
     # ID3 Rank1
     # ...
     Rank_list = list(Rank_unique)*len(ID_unique)
-    ID_list = list(ID_unique.repeat(len(Rank_unique)))
+    ID_list2 = list(ID_unique.repeat(len(Rank_unique)))
     status_list=["Correctly assigned","Correctly unassigned","Dummy SS",
                  "Misassigned","Wrongly assigned","Wrongly unassigned"]
     
-    summary = pd.DataFrame({"ID":ID_list, "Rank":Rank_list}, 
+    summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list}, 
                            columns=["ID", "Rank"]+status_list)
 
     for i in summary.index:
@@ -177,7 +190,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_start="A001",
 
 #%% Test all proteins in the using most basic settings
 if args.assign and ("basic" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all:
         print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -191,7 +204,7 @@ if args.assign and ("basic" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("basic" in args.test or "all" in args.test):        
-    assigns_std, summary_std = check_assignment_accuracy(path/"output/basic/", ID_start=args.ID_start, ID_end=args.ID_end)
+    assigns_std, summary_std = check_assignment_accuracy(path/"output/basic/", ID_list=id_all)
     summary_std.to_csv(path/"output/basic_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
@@ -201,7 +214,7 @@ if args.analyse and ("basic" in args.test or "all" in args.test):
 
 #%% Test effect of correcting the predicted shifts
 if args.assign and ("pred_correction" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(),
@@ -214,7 +227,7 @@ if args.assign and ("pred_correction" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("pred_correction" in args.test or "all" in args.test):        
-    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/pred_correction/", N=args.N_tests)
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/pred_correction/", ID_list=id_all)
     summary_dc.to_csv(path/"output/pred_correction_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
@@ -225,7 +238,7 @@ if args.analyse and ("pred_correction" in args.test or "all" in args.test):
 
 #%% Test effect of accounting for correlated errors
 if args.assign and ("delta_correlation" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(),
@@ -238,7 +251,7 @@ if args.assign and ("delta_correlation" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("delta_correlation" in args.test or "all" in args.test):        
-    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation/", N=args.N_tests)
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation/", ID_list=id_all)
     summary_dc.to_csv(path/"output/delta_correlation_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
@@ -248,7 +261,7 @@ if args.analyse and ("delta_correlation" in args.test or "all" in args.test):
 
 #%% Test effect of accounting for correlated errors *and* correcting the predicted shifts
 if args.assign and ("delta_correlation2" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(),
@@ -261,7 +274,7 @@ if args.assign and ("delta_correlation2" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("delta_correlation2" in args.test or "all" in args.test):        
-    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation2/", N=args.N_tests)
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation2/", ID_list=id_all)
     summary_dc.to_csv(path/"output/delta_correlation2_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
@@ -271,7 +284,7 @@ if args.analyse and ("delta_correlation2" in args.test or "all" in args.test):
 
 #%% Test alternative assignments
 if args.assign and ("alt_assignments" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all_carbons:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -284,7 +297,7 @@ if args.assign and ("alt_assignments" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("alt_assignments" in args.test or "all" in args.test):        
-    assigns_alt, summary_alt = check_assignment_accuracy(path/"output/alt_assign/", ranks=[1,2,3], N=args.N_tests)
+    assigns_alt, summary_alt = check_assignment_accuracy(path/"output/alt_assign/", ranks=[1,2,3], ID_list=id_all_carbons)
     assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
     
     assigns_alt.to_csv(path/"output/alt_assign_all.txt", sep="\t", float_format="%.3f")
@@ -305,7 +318,7 @@ if args.analyse and ("alt_assignments" in args.test or "all" in args.test):
     
 #%% Test alternative assignments with reduced atom types
 if args.assign and ("alt_hnco" in args.test or "all" in args.test):
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all_carbons:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -318,7 +331,7 @@ if args.assign and ("alt_hnco" in args.test or "all" in args.test):
         run(cmd)
         
 if args.analyse and ("alt_hnco" in args.test or "all" in args.test):
-    assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
+    assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output/alt_hnco/", ranks=[1,2,3], ID_list=id_all_carbons)
     assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
     
     assigns_alt_hnco.to_csv(path/"output/alt_hnco_all.txt", sep="\t", float_format="%.3f")
@@ -338,7 +351,7 @@ if args.analyse and ("alt_hnco" in args.test or "all" in args.test):
     plt.save(path/"plots/alt_hnco_correct.pdf", height=210, width=297, units="mm")
 
 if args.assign and ("alt_hnco_hncacb" in args.test or "all" in args.test):        
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all_carbons:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -351,7 +364,7 @@ if args.assign and ("alt_hnco_hncacb" in args.test or "all" in args.test):
         run(cmd)
         
 if args.analyse and ("alt_hnco_hncacb" in args.test or "all" in args.test):        
-    assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output/alt_hnco_hncacb/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
+    assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output/alt_hnco_hncacb/", ranks=[1,2,3], ID_list=id_all_carbons)
     assigns_alt_hnco_hncacb = assigns_alt_hnco_hncacb.sort_values(by=["ID", "SS_name", "Rank"])
     
     assigns_alt_hnco_hncacb.to_csv(path/"output/alt_hnco_hncacb_all.txt", sep="\t", float_format="%.3f")
@@ -371,7 +384,7 @@ if args.analyse and ("alt_hnco_hncacb" in args.test or "all" in args.test):
     plt.save(path/"plots/alt_hnco_hncacb_correct.pdf", height=210, width=297, units="mm")
 
 if args.assign and ("alt_ca_co" in args.test or "all" in args.test):    
-    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+    for i in id_all_carbons:
         print(testset_df.loc[i, "out_name"])    
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
@@ -384,7 +397,7 @@ if args.assign and ("alt_ca_co" in args.test or "all" in args.test):
         run(cmd)
 
 if args.analyse and ("alt_ca_co" in args.test or "all" in args.test):            
-    assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output/alt_ca_co/", ranks=[1,2,3], N=testset_df.loc[args.ID_start:args.ID_end, "ID"].count())
+    assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output/alt_ca_co/", ranks=[1,2,3], id_all = id_all[0:args.N])
     assigns_alt_ca_co = assigns_alt_ca_co.sort_values(by=["ID", "SS_name", "Rank"])
     
     assigns_alt_ca_co.to_csv(path/"output/alt_ca_co_all.txt", sep="\t", float_format="%.3f")
