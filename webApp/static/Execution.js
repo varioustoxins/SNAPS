@@ -3,6 +3,7 @@ $(function () {
         $("#resultsSection").append("<div id=runLoading class=\"spinner-border\" role=\"status\"><span class=\"sr-only\">Loading...</span></div>");
         $("#tableData").empty();
         $("#errors").empty();
+        $("#plot").empty();
         $("#form").submit();
         return false;
     });
@@ -35,6 +36,8 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
+        if (data.plot)
+            $('#plot').append("<img alt=\"Embedded Image\" src=\"data:image / png;base64, " + data.plot + "\" />");
     }
     else if (data.status == 'validation_failed') {
         $.each(data.errors, function (index, error) {

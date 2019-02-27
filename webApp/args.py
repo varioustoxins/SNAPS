@@ -9,6 +9,7 @@ class Args:
         self.shift_file = os.path.join(self.directory, 'shift.txt')
         self.pred_file = os.path.join(self.directory, 'pred.txt')
         self.output_file = os.path.join(self.directory, 'output.txt')
+        self.plot_file = os.path.join(self.directory, 'plot.png')
         self.shift_type = form['shift_type'].strip().lower()
         self.pred_type = form['pred_type'].strip().lower()
 
@@ -19,6 +20,7 @@ class Args:
             self.output_file,
             '--shift_type', self.shift_type,
             '--pred_type', self.pred_type,
+            '--plot_file', self.plot_file,
             '-c', '../config/config.txt',
             #'-l', '../output/test.log'
         ]

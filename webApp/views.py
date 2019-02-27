@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import base64
 
 from flask import Flask, render_template, jsonify, request
 from os import environ
@@ -27,13 +28,14 @@ def run():
 def run(args):
     try:
         runNAPS(args.argsToList())
-        return createJSONForTable(args.output_file)
-    except:
+        return createJSONForTable(args)
+    except Exception as e:
         #log errors
+        print("Unexpected error:" + str(e))
         return jsonify(status='application_failed')
 
-def createJSONForTable(output_path):
-    with open(output_path) as output_file:
+def createJSONForTable(args):
+    with open(args.output_file) as output_file:
         result = []
         line = output_file.readline()
         headers = re.split(r'\t', line.rstrip('\n'))
@@ -45,7 +47,14 @@ def createJSONForTable(output_path):
                 row[header] = values[i]
             result.append(row)
             line = output_file.readline()
-        return jsonify(status='ok', headers=headers, result=result)
+
+    if os.path.exists(args.plot_file):
+        with open(args.plot_file, "rb") as image:
+            plot = base64.b64encode(image.read()).decode('utf-8')
+    else:
+        plot = ''
+
+    return jsonify(status='ok', headers=headers, result=result, plot=plot)
 
 @app.route('/')
 def index():
