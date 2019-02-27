@@ -1,9 +1,9 @@
 # Configuration file for NAPS
 pred_offset  0       # Residue numbering offset for shiftx2
 prob_method     pdf     # Method for calculating probability (options are cdf or pdf)
-pred_correction False   # Apply a linear correction to the predicted shifts
+pred_correction True   # Apply a linear correction to the predicted shifts
 pred_correction_file      config/lin_model_shiftx2.csv    # File containing parameters for linear correction to predicted shift
-delta_correlation       False   # Account for correlations in prediction errors
+delta_correlation       True   # Account for correlations in prediction errors
 delta_correlation_mean_file     ../config/d_mean.csv       # File containing mean prediction errors
 delta_correlation_cov_file      ../config/d_cov.csv        # File containing covariances between the prediction errors
 delta_correlation_mean_corrected_file     ../config/dd_mean.csv       # File containing mean prediction errors, assuming the predictions have been corrected

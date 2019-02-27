@@ -16,9 +16,9 @@ from NAPS_assigner import NAPS_assigner
 from pathlib import Path
 from math import sqrt
 
-#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS/")
-path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
+#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 #%% Prepare to import all proteins in the testset
 
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 

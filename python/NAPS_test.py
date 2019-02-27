@@ -182,22 +182,46 @@ if args.assign and ("basic" in args.test or "all" in args.test):
         cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
                 testset_df.loc[i, "obs_file"].as_posix(), 
                 testset_df.loc[i, "preds_file"].as_posix(),
-                (path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                (path/("output/basic/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                 "--shift_type", "test",
                 "--pred_type", "shiftx2",
                 "-c", (path/"config/config_plot.txt").as_posix(),
-                "-l", (path/("output/testset/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                "--plot_file", (path/("plots/testset/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
+                "-l", (path/("output/basic/"+testset_df.loc[i, "out_name"]+".log")).as_posix(),
+                "--plot_file", (path/("plots/basic/"+testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
         run(cmd)
 
 if args.analyse and ("basic" in args.test or "all" in args.test):        
-    assigns_std, summary_std = check_assignment_accuracy(path/"output/testset/", ID_start=args.ID_start, ID_end=args.ID_end)
-    summary_std.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
+    assigns_std, summary_std = check_assignment_accuracy(path/"output/basic/", ID_start=args.ID_start, ID_end=args.ID_end)
+    summary_std.to_csv(path/"output/basic_summary.txt", sep="\t", float_format="%.3f")
     
     plt = ggplot(data=assigns_std) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
     plt = plt + geom_text(aes(x="summary_std.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
-    plt.save(path/"plots/testset_summary.pdf", height=210, width=297, units="mm", limitsize=False)
+    plt.save(path/"plots/basic_summary.pdf", height=210, width=297, units="mm", limitsize=False)
+
+#%% Test effect of correcting the predicted shifts
+if args.assign and ("pred_correction" in args.test or "all" in args.test):
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+                testset_df.loc[i, "obs_file"].as_posix(),
+                testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/pred_correction/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
+                "-c", (path/"config/config_pred_correction.txt").as_posix(),
+                "-l", (path/("output/pred_correction/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+
+if args.analyse and ("pred_correction" in args.test or "all" in args.test):        
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/pred_correction/", N=args.N_tests)
+    summary_dc.to_csv(path/"output/pred_correction_summary.txt", sep="\t", float_format="%.3f")
+    
+    plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+    plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+    plt.save(path/"plots/pred_correction_summary.pdf", height=210, width=297, units="mm")
+
 
 #%% Test effect of accounting for correlated errors
 if args.assign and ("delta_correlation" in args.test or "all" in args.test):
@@ -221,6 +245,29 @@ if args.analyse and ("delta_correlation" in args.test or "all" in args.test):
     plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
     plt.save(path/"plots/delta_correlation_summary.pdf", height=210, width=297, units="mm")
+
+#%% Test effect of accounting for correlated errors *and* correcting the predicted shifts
+if args.assign and ("delta_correlation2" in args.test or "all" in args.test):
+    for i in testset_df.loc[args.ID_start:args.ID_end, "ID"]:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+                testset_df.loc[i, "obs_file"].as_posix(),
+                testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/delta_correlation2/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
+                "-c", (path/"config/config_delta_corr2.txt").as_posix(),
+                "-l", (path/("output/delta_correlation2/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+
+if args.analyse and ("delta_correlation2" in args.test or "all" in args.test):        
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/delta_correlation2/", N=args.N_tests)
+    summary_dc.to_csv(path/"output/delta_correlation2_summary.txt", sep="\t", float_format="%.3f")
+    
+    plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+    plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+    plt.save(path/"plots/delta_correlation2_summary.pdf", height=210, width=297, units="mm")
 
 #%% Test alternative assignments
 if args.assign and ("alt_assignments" in args.test or "all" in args.test):

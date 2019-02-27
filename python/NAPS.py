@@ -75,8 +75,6 @@ logging.info("Read in configuration from %s.", args.config_file)
 # Account for any command line arguments that overide config file
 if args.alt_assignments>=0:
     a.pars["alt_assignments"] = args.alt_assignments
-#if args.delta_correlation:
-#    a.pars["prob_method"] = "delta_correlation"
 
 # Import observed and predicted shifts
 importer = NAPS_importer()

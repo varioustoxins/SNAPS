@@ -42,9 +42,18 @@ class NAPS_assigner:
                                index_col=0, names=["Value"]).to_dict()["Value"]
         
         self.pars["pred_offset"] = int(config["pred_offset"])
+        
         self.pars["prob_method"] = config["prob_method"]
+        
         self.pars["pred_correction"] = bool(strtobool(config["pred_correction"]))
+        self.pars["pred_correction_file"] = config["pred_correction_file"]
+        
         self.pars["delta_correlation"] = bool(strtobool(config["delta_correlation"]))
+        self.pars["delta_correlation_mean_file"] = config["delta_correlation_mean_file"]
+        self.pars["delta_correlation_cov_file"] = config["delta_correlation_cov_file"]
+        self.pars["delta_correlation_mean_corrected_file"] = config["delta_correlation_mean_corrected_file"]
+        self.pars["delta_correlation_cov_corrected_file"] = config["delta_correlation_cov_corrected_file"]
+
         self.pars["alt_assignments"] = int(config["alt_assignments"])
         self.pars["atom_set"] = {s.strip() for s in config["atom_set"].split(",")}
         tmp = [s.strip() for s in config["atom_sd"].split(",")]
@@ -330,17 +339,32 @@ class NAPS_assigner:
 #                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
 #                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
         
-        if self.pars["pred_correction"]:
-            # This hardcoded path is bad! Need to import at an earlier stage.
-            lm_pars = pd.read_csv("../config/lin_model_shiftx2.csv", index_col=0)
-            self.preds_corr = {}
-        
         obs = self.obs
         preds = self.preds
-        atoms = self.pars["atom_set"].intersection(obs.columns)
-    
-        log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
+        atoms = list(self.pars["atom_set"].intersection(obs.columns))
         
+        if self.pars["pred_correction"]:
+            # Import parameters for correcting the shifts
+            lm_pars = pd.read_csv(self.pars["pred_correction_file"], index_col=0)
+            self.preds_corr = {}
+        
+        if self.pars["delta_correlation"]:
+            # Import parameters describing the delta correlations
+            if self.pars["pred_correction"]:
+                d_mean = pd.read_csv(self.pars["delta_correlation_mean_corrected_file"], 
+                                     header=None, index_col=0).loc[atoms,1]
+                d_cov = (pd.read_csv(self.pars["delta_correlation_cov_corrected_file"], 
+                                     index_col=0).loc[atoms,atoms])
+            else:
+                d_mean = pd.read_csv(self.pars["delta_correlation_mean_file"], 
+                                     header=None, index_col=0).loc[atoms,1]
+                d_cov = (pd.read_csv(self.pars["delta_correlation_cov_file"], 
+                                     index_col=0).loc[atoms,atoms])
+            delta_list = []
+        
+                   
+        
+        log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
         for atom in atoms:
             # The most efficient way I've found to do the calculation is to 
             # take the obs and preds shift columns for an atom, repeat each 
@@ -349,10 +373,10 @@ class NAPS_assigner:
             # Much faster than using loops.
             obs_atom = pd.DataFrame(obs[atom].repeat(len(obs.index)).values.
                                 reshape([len(obs.index),-1]),
-                                index=preds.index, columns=obs.index)
+                                index=obs.index, columns=preds.index)
             preds_atom = pd.DataFrame(preds[atom].repeat(len(preds.index)).values.
                                 reshape([len(preds.index),-1]).transpose(),
-                                index=preds.index, columns=obs.index)
+                                index=obs.index, columns=preds.index)
             
             
             # If predicting corrections, apply a linear transformation of delta
@@ -362,39 +386,70 @@ class NAPS_assigner:
                     if (atom+"_"+res) in lm_pars.index:
                          
                         grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                           (lm_pars["Res_type"]==res),"Grad"].tolist()[0]
+                                           (lm_pars["Res_type"]==res),
+                                           "Grad"].tolist()[0]
                         offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                           (lm_pars["Res_type"]==res),"Offset"].tolist()[0]
-                        preds_corr_atom.loc[preds["Res_type"]==res,:] = (preds_atom.loc[preds["Res_type"]==res, :]
-                                                            - grad * obs_atom.loc[preds["Res_type"]==res, :]
-                                                            - offset) 
+                                             (lm_pars["Res_type"]==res),
+                                             "Offset"].tolist()[0]
+                        if atom in ("Cm1","CAm1","CBm1"):
+                            preds_corr_atom.loc[:,preds["Res_typem1"]==res] = (
+                                    preds_atom.loc[:, preds["Res_typem1"]==res]
+                                    - grad * obs_atom.loc[:, preds["Res_typem1"]==res]
+                                    - offset) 
+                        else:
+                            preds_corr_atom.loc[:, preds["Res_type"]==res] = (
+                                    preds_atom.loc[:, preds["Res_type"]==res]
+                                    - grad * obs_atom.loc[:, preds["Res_type"]==res]
+                                    - offset)
+                                
                 delta_atom = preds_corr_atom - obs_atom
                 self.preds_corr[atom] = preds_corr_atom
             else:
                 delta_atom = preds_atom - obs_atom
             
-            # Make a note of NA positions in delta, and set them to zero 
-            # (this avoids warnings when using norm.cdf later)
-            na_mask = np.isnan(delta_atom)
-            delta_atom[na_mask] = 0
-            
-            if self.pars["prob_method"] == "cdf":
-                # Use the cdf to calculate the probability of a 
-                # delta *at least* as great as the actual one
-                prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), scale=atom_sd[atom]),
-                                     index=obs.index, columns=preds.index)
-            elif self.pars["prob_method"] == "pdf":
-                prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
-                                     index=obs.index, columns=preds.index)
+            if self.pars["delta_correlation"]:
+                delta_list = delta_list + [delta_atom.values]
             else:
-                print("Method for calculating probability not recognised. Defaulting to pdf.")
-                prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
-                                     index=obs.index, columns=preds.index)
+                # Make a note of NA positions in delta, and set them to zero 
+                # (this avoids warnings when using norm.cdf later)
+                na_mask = np.isnan(delta_atom)
+                delta_atom[na_mask] = 0
+                
+                if self.pars["prob_method"] == "cdf":
+                    # Use the cdf to calculate the probability of a 
+                    # delta *at least* as great as the actual one
+                    prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), 
+                                                            scale=atom_sd[atom]),
+                                             index=obs.index, columns=preds.index)
+                elif self.pars["prob_method"] == "pdf":
+                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, 
+                                                         scale=atom_sd[atom]),
+                                             index=obs.index, columns=preds.index)
+                else:
+                    print("Method for calculating probability not recognised. Defaulting to pdf.")
+                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
+                                         index=obs.index, columns=preds.index)
+                
+                
+                prob_atom[na_mask] = log10(default_prob)
+                
+                log_prob_matrix = log_prob_matrix + prob_atom
+        
+        if self.pars["delta_correlation"]:
+            delta_mat = np.array(delta_list)
+            delta_mat = np.moveaxis(delta_mat, 0, -1)
+            self.delta_mat = delta_mat
             
+            # Make a note of NA positions in delta, and set them to zero
+            na_mask = np.isnan(delta_mat)
+            delta_mat[na_mask] = 0
             
-            prob_atom[na_mask] = log10(default_prob)
+            # TODO: Check that atom order in list is the same as in d_mean, d_cov
+            mvn = multivariate_normal(d_mean, d_cov)
+            log_prob_matrix = pd.DataFrame(mvn.logpdf(delta_mat), 
+                                           index=obs.index, columns=preds.index)
             
-            log_prob_matrix = log_prob_matrix + prob_atom
+            # TODO: Need to apply correction for missing data?
         
         if use_hadamac:
             # For each type of residue type information that's available, make a 
@@ -615,19 +670,19 @@ class NAPS_assigner:
             # First, get the i and i-1 shifts for the preceeding and 
             # succeeding residues
             tmp = assign_df.copy()
-            tmp = tmp.loc[tmp["Dummy_res"]==False,]
             tmp.index = tmp["Res_N"]
-            tmp = tmp[list(seq_atoms)+list(seq_atoms_m1)]
+            tmp = tmp.loc[tmp["Dummy_res"]==False, list(seq_atoms)+list(seq_atoms_m1)]
+            
             tmp_next = tmp.copy()
             tmp_next.index -= 1
             tmp_prev = tmp.copy()
             tmp_prev.index += 1
             tmp = tmp.join(tmp_next, rsuffix="_next")
             tmp = tmp.join(tmp_prev, rsuffix="_prev")
-            # Calculate mismatch for each atom type
+            # Calculate absolute mismatch for each atom type
             for atom in seq_atoms:
-                tmp["d"+atom+"_prev"] = tmp[atom+"m1"] - tmp[atom+"_prev"]
-                tmp["d"+atom+"_next"] = tmp[atom] - tmp[atom+"m1_next"]
+                tmp["d"+atom+"_prev"] = abs(tmp[atom+"m1"] - tmp[atom+"_prev"])
+                tmp["d"+atom+"_next"] = abs(tmp[atom] - tmp[atom+"m1_next"])
             # Calculate maximum mismatch
             tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, 
                                                                    skipna=True)
@@ -809,30 +864,4 @@ class NAPS_assigner:
             plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
                    
             return(plt)
-
-#%%
-        
-#### Testing 
-
-#a = NAPS_assigner()
-#a.import_obs_shifts("~/GitHub/NAPS/data/testset/simplified_BMRB/6338.txt")
-#a.import_pred_shifts("~/GitHub/NAPS/data/P3a_L273R/shiftx2.cs", offset=208)
-#a.add_dummy_rows()
-#a.calc_log_prob_matrix(sf=2, verbose=False)
-#assign_df, best_match_indexes = a.find_best_assignment()
-
-
-## Import the observed and predicted shifts
-#    obs = import_obs_shifts(obs_file)
-#    preds = import_pred_shifts(preds_file)
-#    
-#    # Add dummy rows so that obs and preds are the same length
-#    obs, preds = add_dummy_rows(obs, preds)
-#    
-#    # Calculate the log probability for each observation/prediction pair
-#    log_prob_matrix = calc_log_prob_matrix(obs, preds, sf=2)
-#    
-#    # Find the assignment with the highest overall probability
-#    assign_df, matching = find_best_assignment(obs, preds, log_prob_matrix)        
-        
         

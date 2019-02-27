@@ -15,9 +15,9 @@ from scipy.stats import norm
 from copy import deepcopy
 from math import isnan, log10
 
-#path = Path("/Users/aph516/GitHub/NAPS/")
+path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/Alex/GitHub/NAPS")
-path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
+#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
 testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file for file in testset_df["BMRB"].astype(str)+".txt"]
@@ -42,7 +42,7 @@ b = deepcopy(a)
 
 # Import config file
 a.read_config_file(path/"config/config.txt")
-b.read_config_file(path/"config/config_pred_correction.txt")
+b.read_config_file(path/"config/config_delta_corr.txt")
 
 a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 b.import_pred_shifts(testset_df.loc[id, "noshifty_file"], "shiftx2")
@@ -70,13 +70,21 @@ log_prob_matrix = a.log_prob_matrix
 obs2 = b.obs
 preds2 = b.preds
 log_prob_matrix2 = b.log_prob_matrix
-preds_corr = b.preds_corr
-pc_CA = preds_corr["CA"]
-del_CA = pc_CA - pd.DataFrame(preds["CA"].repeat(len(preds.index)).values.
-                                reshape([len(preds.index),-1]).transpose(),
-                                index=preds.index, columns=obs.index)
+#preds_corr = b.preds_corr
+#pc_CA = preds_corr["CA"]
+#del_CA = pc_CA - pd.DataFrame(preds["CA"].repeat(len(preds.index)).values.
+#                                reshape([len(preds.index),-1]).transpose(),
+#                                index=obs.index, columns=preds.index)
 
+sum(assign_df["SS_name"] == assign_df["Res_name"])
+sum(assign_df2["SS_name"] == assign_df2["Res_name"])
 
+tmp1 = assign_df
+tmp1.index = tmp1["Res_name"]
+tmp2 = assign_df2
+tmp2.index = tmp2["Res_name"]
+
+sum(tmp1["SS_name"] == tmp2["SS_name"])
 #plt = a.plot_strips()
 #%% Test stuff
 
@@ -101,35 +109,25 @@ tmp["Type"] = "in"
 tmp = tmp.dropna()
 tmp.to_csv(path/"data/SS_class_info.txt", sep="\t", header=False, index=False)
 #%%
-def calc_log_prob_matrix2(assigner, default_prob=0.01):
-    # Use default atom_sd values if not defined
-    atom_sd = assigner.pars["atom_sd"]
-    
-    atoms = assigner.pars["atom_set"].intersection(obs.columns)
-    
-    log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
-    
-    for atom in atoms:
-        obs_atom = obs[atom].repeat(len(obs.index)).values.reshape([len(obs.index),-1])
-        preds_atom = preds[atom].repeat(len(preds.index)).values.reshape([len(preds.index),-1]).transpose()
-        
-        #return(obs[atom])
-        delta_atom = preds_atom - obs_atom
-        
-        # Make a note of NA positions in delta, and set them to zero 
-        # (this avoids warnings when using norm.cdf later)
-        na_mask = np.isnan(delta_atom)
-        delta_atom[na_mask] = 0
-        
-        prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
-                                 index=obs.index, columns=preds.index)
-        prob_atom[na_mask] = log10(default_prob)
-        
-        log_prob_matrix = log_prob_matrix + prob_atom
-    
-    return(log_prob_matrix)
+x=np.indices((3,3))
+x=np.swapaxes(x,0,2)
+from scipy.stats import multivariate_normal
+mvn = multivariate_normal([0,0],[1,1])
+mvn.pdf(x)
 
-a.pars["prob_method"]="cdf"
-lpm = a.log_prob_matrix
-lpm2 = calc_log_prob_matrix2(a)
-lpm3 = a.calc_log_prob_matrix2()
+x=np.array([[0,1],[2,3]])
+y=np.array([[4,5],[6,7]])
+z=np.array([[8,9],[10,np.NaN]])
+xyz = np.array([x,y,z])
+xyz = np.moveaxis(xyz, 0, -1)
+mvn = multivariate_normal([0,0,0],[1,1,1])
+mvn.pdf(xyz)
+
+
+
+
+#x2 = pd.DataFrame(x)
+#y2 = pd.DataFrame(y)
+#z2 = pd.DataFrame(z)
+#
+#xyz2 = np.array([x2,y2,z2])
