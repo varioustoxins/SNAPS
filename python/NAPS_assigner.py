@@ -53,7 +53,8 @@ class NAPS_assigner:
         self.pars["delta_correlation_cov_file"] = config["delta_correlation_cov_file"]
         self.pars["delta_correlation_mean_corrected_file"] = config["delta_correlation_mean_corrected_file"]
         self.pars["delta_correlation_cov_corrected_file"] = config["delta_correlation_cov_corrected_file"]
-
+        
+        self.pars["use_ss_class_info"] = bool(strtobool(config["use_ss_class_info"]))
         self.pars["alt_assignments"] = int(config["alt_assignments"])
         self.pars["atom_set"] = {s.strip() for s in config["atom_set"].split(",")}
         tmp = [s.strip() for s in config["atom_sd"].split(",")]
@@ -317,19 +318,11 @@ class NAPS_assigner:
         return(self.log_prob_matrix)
         
     def calc_log_prob_matrix2(self, atom_sd=None, sf=1, default_prob=0.01, 
-                             use_hadamac=False, cdf=False, 
-                             delta_correlation=False, shift_correlation=False,
                              verbose=False):
         """Calculate a matrix of -log10(match probabilities)
         
-        use_hadamac: if True, amino acid type information will contribute to 
-            the log probability
-        cdf: if True, use cdf in probability matrix. Otherwise use pdf (cdf 
-            uses chance of seeing a delta 'at least this great')
-        delta_correlation: if True, correlated errors between different atom 
-            types are accounted for in the probability 
-        shift_correlation: if True, the correlation between observed shift and
-            prediction error is accounted for.
+        sf: Multiply the provided atom_sd's by this number
+        default_prob: penalty for missing data
         """
         
         # Use default atom_sd values if not defined
@@ -383,8 +376,6 @@ class NAPS_assigner:
             if self.pars["pred_correction"]:
                 preds_corr_atom = preds_atom
                 for res in preds["Res_type"].dropna().unique():
-                    #print(res)
-                    #print(atom+"_"+res)
                     if (atom+"_"+res) in lm_pars.index:
                          
                         grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
@@ -453,7 +444,7 @@ class NAPS_assigner:
             
             # TODO: Need to apply correction for missing data?
         
-        if use_hadamac:
+        if self.pars["use_ss_class_info"]:
             # For each type of residue type information that's available, make a 
             # matrix showing the probability modifications due to type mismatch, 
             # then add it to log_prob_matrix
@@ -720,7 +711,7 @@ class NAPS_assigner:
         
         Output:
         A Dataframe containing the original assignments, and the 
-        alt_assignments by
+        alt_assignments by rank
         """
         
         obs = self.obs
@@ -754,7 +745,7 @@ class NAPS_assigner:
             excluded = best_matching.loc[[i], :]
             
             for j in range(N):
-                alt_matching = self.find_best_assignment2(exc=excluded)
+                alt_matching = self.find_best_assignments(exc=excluded)
                                 
                 alt_matching["Rank"] = j+2
                 alt_sum_prob = sum(self.log_prob_matrix.lookup(

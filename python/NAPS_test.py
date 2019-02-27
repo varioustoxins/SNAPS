@@ -22,7 +22,7 @@ parser.add_argument("NAPS_path", help="Path to the top-level NAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("--assign", action="store_true", help="Do NAPS assignment for selected tests.")
 parser.add_argument("--analyse", action="store_true", help="Analyse results for selected tests.")
-parser.add_argument("--N", default=None, help="Limit to first N datasets.")
+parser.add_argument("-N", default=None, help="Limit to first N datasets.")
 parser.add_argument("-t", "--test", nargs="+", default="all", 
                     help="Specify a particular test to run.")
 
@@ -281,6 +281,31 @@ if args.analyse and ("delta_correlation2" in args.test or "all" in args.test):
     plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
     plt.save(path/"plots/delta_correlation2_summary.pdf", height=210, width=297, units="mm")
+
+#%% Test effect of including HADAMAC amino acid type information
+if args.assign and ("hadamac" in args.test or "all" in args.test):
+    for i in id_all:
+        print(testset_df.loc[i, "out_name"])    
+        cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+                testset_df.loc[i, "obs_file"].as_posix(),
+                testset_df.loc[i, "preds_file"].as_posix(), 
+                (path/("output/hadamac/"+testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                "--shift_type", "test",
+                "--pred_type", "shiftx2",
+                "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
+                "-c", (path/"config/config_hadamac.txt").as_posix(),
+                "-l", (path/("output/hadamac/"+testset_df.loc[i, "out_name"]+".log")).as_posix()]
+        run(cmd)
+
+if args.analyse and ("hadamac" in args.test or "all" in args.test):        
+    assigns_dc, summary_dc = check_assignment_accuracy(path/"output/hadamac/", ID_list=id_all)
+    summary_dc.to_csv(path/"output/hadamac_summary.txt", sep="\t", float_format="%.3f")
+    
+    plt = ggplot(data=assigns_dc) + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
+    plt = plt + geom_text(aes(x="summary_dc.index", label="Pc_correct"), y=0.1, format_string="{:.0%}", data=summary_std, angle=90)
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=1))
+    plt.save(path/"plots/hadamac_summary.pdf", height=210, width=297, units="mm")
+
 
 #%% Test alternative assignments
 if args.assign and ("alt_assignments" in args.test or "all" in args.test):

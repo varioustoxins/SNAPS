@@ -382,7 +382,7 @@ class NAPS_importer:
         self.obs = obs
         return(self.obs)
     
-    def import_aa_type_info(self, filename, offset="i_minus_1"):
+    def import_aa_type_info(self, filename, offset="i-1"):
         """ Add amino acid type information to previously-imported observed 
         shifts
         
@@ -397,10 +397,10 @@ class NAPS_importer:
         
         if offset=="i":
             col = "SS_class"
-        elif offset=="i_minus_1":
+        elif offset=="i-1":
             col = "SS_classm1"
         else:
-            print("invalid value of offset: must be 'i' or 'i_minus_1'.")
+            print("invalid value of offset: must be 'i' or 'i-1'.")
             return(None)
         
         # Import file
@@ -434,11 +434,22 @@ class NAPS_importer:
         return(self.obs)
     
     def import_testset_shifts(self, filename, remove_Pro=True, 
-                          short_aa_names=True):
+                          short_aa_names=True, SS_class=None, SS_classm1=None):
         """ Import observed chemical shifts from testset data
         
         This function is intended for use with test data only, and is unlikely 
         to work well on 'real' data.
+        
+        filename: The simplified BMRB file containing observed shift info.
+        remove_Pro: If True, remove proline residues from output
+        short_aa_names: If True, single letter aa codes are used, otherwise 3 
+            letter codes are used
+        SS_class: Either None or a list of strings, each of which is a list of 
+            amino acids (eg. ["VIA","G","S","T","DN","FHYWC","REKPQML"] would 
+            give the HADAMAC classes). If not None, a column SS_class will be 
+            created which gives the class containing the residue type.
+        SS_classm1: as above, but for the i-1 residue.
+        
         """
         #### Import the observed chemical shifts
         obs_long = pd.read_table(filename)
@@ -469,25 +480,30 @@ class NAPS_importer:
         tmp.index = tmp["Res_N"]
         obs = pd.concat([tmp, obs], axis=1)
         
-        # Add HADAMAC information
-        hadamac_groups = ["VIA","G","S","T","DN","FHYWC","REKPQML"]
-        obs["SS_class"]=obs["Res_type"]
-        for g in hadamac_groups:
-            obs["SS_class"] = obs["SS_class"].str.replace("["+g+"]", g)
-        
         # Make columns for the i-1 observed shifts of C, CA and CB
-        obs_m1 = obs[list({"C","CA","CB","SS_class"}.intersection(obs.columns))]
+        obs_m1 = obs[list({"C","CA","CB","Res_type"}.intersection(obs.columns))]
         obs_m1.index = obs_m1.index+1
         obs_m1.columns = obs_m1.columns + "m1"
         obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
                        right_index=True)
         
         # Restrict to specific atom types
-        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA","SS_classm1"}
-        obs = obs[["Res_N","Res_type","SS_name"]+
+        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
+        obs = obs[["Res_N","Res_type","Res_typem1","SS_name"]+
                   list(atom_set.intersection(obs.columns))]
         
+        # Add SS_class information
+        if SS_class is not None:
+            obs["SS_class"]=obs["Res_type"]
+            for g in SS_class:
+                obs["SS_class"] = obs["SS_class"].str.replace("["+g+"]", g)
+        if SS_classm1 is not None:
+            obs["SS_classm1"]=obs["Res_typem1"]
+            for g in SS_classm1:
+                obs["SS_classm1"] = obs["SS_classm1"].str.replace("["+g+"]", g)
+        
         obs.index = obs["SS_name"]
+        obs.index.name = None
         
         if remove_Pro:
             # Remove prolines, as they wouldn't be observed in a real spectrum

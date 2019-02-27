@@ -31,7 +31,6 @@ parser.add_argument("--pred_type",
                     choices=["shiftx2", "sparta+"],
                     default="shiftx2", 
                     help="The format of the predicted shifts")
-
 parser.add_argument("-c", "--config_file", 
                     default="/Users/aph516/GitHub/NAPS/python/config.txt",
                     help="A file containing parameters for the analysis.")
@@ -42,6 +41,13 @@ parser.add_argument("-l", "--log_file", default=None,
 parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
                     help="The number of alternative assignments to generate, "+
                     "in addition to the highest ranked.")
+parser.add_argument("--test_aa_classes", default=None, 
+                    help="""For test data only. 
+                    A string containing a comma-separated list of the amino acid 
+                    classes for the i residue, a semicolon, then a list of AA 
+                    classes for the i-1 residue. No spaces. 
+                    eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
+                    a sequential HADAMAC """)
 parser.add_argument("--plot_file", 
                     default="/Users/aph516/GitHub/NAPS/plots/plot",
                     help="A filename for any output plots.")
@@ -80,7 +86,13 @@ if args.alt_assignments>=0:
 importer = NAPS_importer()
 
 if args.shift_type=="test":
-    importer.import_testset_shifts(args.shift_file)
+    if args.test_aa_classes is None:
+        importer.import_testset_shifts(args.shift_file)
+    else:
+        AA_class, AA_classm1 = args.test_aa_classes.split(";")
+        importer.import_testset_shifts(args.shift_file,
+                                       SS_class=AA_class.split(","),
+                                       SS_classm1=AA_classm1.split(","))
 else:
     importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
 a.obs = importer.obs
