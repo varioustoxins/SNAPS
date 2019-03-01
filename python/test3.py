@@ -31,19 +31,26 @@ testset_df.index = testset_df["ID"]
 # Import observed and predicted shifts
 id = "A003"
 
-importer = NAPS_importer()
-importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
-#importer.obs = importer.obs.drop("SS_classm1", axis=1)
-#tmp = importer.import_aa_type_info(path/"data/SS_class_info.txt")
+importer1 = NAPS_importer()
+importer1.import_testset_shifts(testset_df.loc[id, "obs_file"])
+
+importer2 = NAPS_importer()
+#importer2.import_testset_shifts(testset_df.loc[id, "obs_file"])
+AA_class, AA_classm1 = "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML".split(";")
+importer2.import_testset_shifts(testset_df.loc[id, "obs_file"],
+                               SS_class=AA_class.split(","),
+                               SS_classm1=AA_classm1.split(","))
 
 #%%
 a = NAPS_assigner()
-a.obs = importer.obs
-b = deepcopy(a)
+b = NAPS_assigner()
+
+a.obs = importer1.obs
+b.obs = importer2.obs
 
 # Import config file
 a.read_config_file(path/"config/config.txt")
-b.read_config_file(path/"config/config_delta_corr.txt")
+b.read_config_file(path/"config/config_hadamac.txt")
 
 a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 b.import_pred_shifts(testset_df.loc[id, "noshifty_file"], "shiftx2")
@@ -54,14 +61,14 @@ a.calc_log_prob_matrix2(sf=1, verbose=False)
 matching = a.find_best_assignments()
 assign_df = a.make_assign_df(matching, set_assign_df=True)
 assign_df = a.check_assignment_consistency(threshold=0.1)
-#alt_assign_df = a.find_alt_assignments2(N=2, verbose=False)
+#alt_assign_df = a.find_alt_assignments(N=2, verbose=True)
 
 b.add_dummy_rows()
 tmp = b.calc_log_prob_matrix2(sf=1, verbose=False)
 matching2 = b.find_best_assignments()
 assign_df2 = b.make_assign_df(matching2, set_assign_df=True)
 assign_df2 = b.check_assignment_consistency(threshold=0.1)
-#alt_assign_df2 = b.find_alt_assignments(N=2, by_ss=True, verbose=False)
+#alt_assign_df2 = b.find_alt_assignments(N=2, by_ss=True, verbose=True)
 
 obs = a.obs
 preds = a.preds
@@ -86,6 +93,10 @@ tmp2 = assign_df2
 tmp2.index = tmp2["Res_name"]
 
 sum(tmp1["SS_name"] == tmp2["SS_name"])
+
+tmp = log_prob_matrix.melt()
+
+tmp = alt_assign_df[["SS_name","Res_name","Rank","Rel_prob", "Log_prob"]]
 #plt = a.plot_strips()
 #%% Test stuff
 

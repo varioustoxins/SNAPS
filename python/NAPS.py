@@ -64,7 +64,6 @@ else:   # For testing
 
 # Set up logging
 if isinstance(args.log_file, str):
-    print(args.log_file)
     logging.basicConfig(filename=args.log_file, filemode='w', level=logging.DEBUG,
                         format="%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s")
 else:

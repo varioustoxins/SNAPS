@@ -339,7 +339,7 @@ class NAPS_assigner:
         if self.pars["pred_correction"]:
             # Import parameters for correcting the shifts
             lm_pars = pd.read_csv(self.pars["pred_correction_file"], index_col=0)
-            self.preds_corr = {}
+            #self.preds_corr = {}
         
         if self.pars["delta_correlation"]:
             # Import parameters describing the delta correlations
@@ -396,7 +396,7 @@ class NAPS_assigner:
                                     - offset)
                                 
                 delta_atom = preds_corr_atom - obs_atom
-                self.preds_corr[atom] = preds_corr_atom
+                #self.preds_corr[atom] = preds_corr_atom
             else:
                 delta_atom = preds_atom - obs_atom
             
@@ -431,7 +431,7 @@ class NAPS_assigner:
         if self.pars["delta_correlation"]:
             delta_mat = np.array(delta_list)
             delta_mat = np.moveaxis(delta_mat, 0, -1)
-            self.delta_mat = delta_mat
+            #self.delta_mat = delta_mat
             
             # Make a note of NA positions in delta, and set them to zero
             na_mask = np.isnan(delta_mat)
@@ -450,11 +450,12 @@ class NAPS_assigner:
             # then add it to log_prob_matrix
             # Maybe make SS_class mismatch a parameter in config file?
             for ss_class in {"SS_class","SS_classm1"}.intersection(obs.columns):
-                print(ss_class)
+                #print(ss_class)
                 SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
                                            columns=log_prob_matrix.columns)
-                for res in preds["Res_type"].unique():
+                
                 # For each amino acid type in turn:
+                for res in preds["Res_type"].dropna().unique():                
                     # Work out which observations could be that aa type
                     allowed = obs[ss_class].str.contains(res).fillna(True)
                     # Select the predictions which are that aa type
@@ -462,7 +463,7 @@ class NAPS_assigner:
                     # For the selected predictions, penalise any observations 
                     # where the current aa type is not allowed
                     for p in pred_list:
-                        SS_class_matrix.loc[:,p] = (~allowed)*log10(0.01)
+                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
             
                 log_prob_matrix = log_prob_matrix + SS_class_matrix
                 
@@ -474,7 +475,6 @@ class NAPS_assigner:
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
         self.log_prob_matrix = log_prob_matrix
-        #return(preds_corr)
         return(self.log_prob_matrix)
     
     def calc_dist_matrix(self, use_atoms=None, atom_scale=None, na_dist=0, rank=False):
@@ -522,8 +522,6 @@ class NAPS_assigner:
             return (dist_matrix.rank(axis=1))
         else:
             return(dist_matrix)
-    
-        return(assign_df, [row_ind, col_ind])
         
     def find_best_assignments(self, inc=None, exc=None):
         """ Use the Hungarian algorithm to find the highest probability matching 
@@ -713,11 +711,8 @@ class NAPS_assigner:
         A Dataframe containing the original assignments, and the 
         alt_assignments by rank
         """
-        
-        obs = self.obs
-        preds = self.preds
+
         log_prob_matrix = self.log_prob_matrix
-        #best_match_indexes = self.best_match_indexes
         best_matching = self.assign_df.loc[:,["SS_name","Res_name"]]
         best_matching.index = best_matching["SS_name"]
         alt_matching = None
@@ -734,8 +729,7 @@ class NAPS_assigner:
         alt_matching_all = best_matching.copy()
         alt_matching_all["Rank"] = 1
         alt_matching_all["Rel_prob"] = 0
-               
-        
+                      
         for i in best_matching.index:   # Consider each spin system in turn
             ss = best_matching.loc[i, "SS_name"]
             res = best_matching.loc[i, "Res_name"]
@@ -751,8 +745,7 @@ class NAPS_assigner:
                 alt_sum_prob = sum(self.log_prob_matrix.lookup(
                         alt_matching["SS_name"], alt_matching["Res_name"]))
                 alt_matching["Rel_prob"] = alt_sum_prob - best_sum_prob
-                
-                
+                               
                 # Add the alt match for this ss or res to the results dataframe 
                 # and also the excluded dataframe.
                 if by_ss:
