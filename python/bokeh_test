@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  1 15:19:50 2019
+
+@author: aph516
+"""
+
+from bokeh.plotting import figure, output_file, show
+from bokeh.layouts import gridplot
+from bokeh.io import export_png
+from bokeh.models.ranges import Range1d
+import pandas as pd
+from pathlib import Path
+
+path = Path("..")
+
+# prepare some data
+x = [1, 2, 3, 4, 5]
+y = [6, 7, 2, 4, 5]
+
+# output to static HTML file
+output_file(path/"lines.html")
+
+# create a new plot with a title and axis labels
+p = figure(title="simple line example", x_axis_label='x', y_axis_label='y')
+
+# add a line renderer with legend and line thickness
+p.line(x, y, legend="Temp.", line_width=2)
+
+# show the results
+show(p)
+export_png(p, "../test.png")
+
+# Test with the real assignment data
+assign_df = pd.read_csv(path/"output/basic/A002_6338.txt", sep="\t", index_col=False)
+
+output_file(path/"test.html")
+
+p = figure(title="Bokeh example",
+           x_axis_label="Residue number",
+           y_axis_label="Carbon shift",
+           x_range=assign_df["Res_name"].tolist())
+
+p.circle(assign_df["Res_name"], assign_df["CB"], fill_color="blue", radius=0.5)
+p.circle(assign_df["Res_name"], assign_df["CBm1"], fill_color="red", radius=0.5)
+
+# Reverse the Y axis
+p.y_range = Range1d(assign_df[["CB","CBm1"]].max().max(), 
+                    assign_df[["CB","CBm1"]].min().min())
+
+p.xaxis.major_label_orientation = 3.14159/2
+
+show(p)
+
+# Make a faceted plot
+p1 = figure(x_range=assign_df["Res_name"].tolist(), height=400, width=800)
+p1.circle(assign_df["Res_name"], assign_df["CB"], fill_color="blue", radius=0.5)
+p1.circle(assign_df["Res_name"], assign_df["CBm1"], fill_color="red", radius=0.5)
+p1.y_range = Range1d(assign_df[["CB","CBm1"]].max().max(), 
+                    assign_df[["CB","CBm1"]].min().min())
+p1.xaxis.major_label_orientation = 3.14159/2
+
+p2 = figure(x_range=p1.x_range, height=400, width=800)
+p2.circle(assign_df["Res_name"], assign_df["CA"], fill_color="blue", radius=0.5)
+p2.circle(assign_df["Res_name"], assign_df["CAm1"], fill_color="red", radius=0.5)
+p2.y_range = Range1d(assign_df[["CA","CAm1"]].max().max(), 
+                    assign_df[["CA","CAm1"]].min().min())
+p2.xaxis.major_label_orientation = 3.14159/2
+
+p = gridplot([[p1], [p2]])
+show(p)

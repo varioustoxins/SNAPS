@@ -131,6 +131,8 @@ df = df[["ID_Res", "ID","Res_name","Res_N","Res_type","Res_typem1",
 # Calculate the prediction errors
 df["Delta"] = df["Shift_pred"] - df["Shift_obs"]
 
+# Save the data
+df.to_csv(path/"output/prediction_accuracy.txt", sep="\t", float_format="%.3f")
 
 #%% Work out obs vs pred distance matrix.
 # Then calculate how many observations are closer to the prediction than the correct one

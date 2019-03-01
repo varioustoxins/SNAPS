@@ -124,7 +124,7 @@ def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_list=id_all):
             assigns = tmp
         else:
             assigns = pd.concat([assigns, tmp], ignore_index=True)
-    
+        
     # Determine which spin systems were correctly assigned
     assigns["Correct"] = False
     assigns["Status"] = ""
@@ -263,6 +263,17 @@ if "basic" in args.test or "all" in args.test:
         tmp3 = tmp[(tmp["Type_match"]==False) & (tmp["Status"]=="Misassigned")]
         tmp3.groupby("SS_type")["ID"].count()
         
+        # Check if there's any pattern in the log_probabilities
+        tmp = assigns_basic[(assigns_basic["ID"]=="A006") & 
+                          ~assigns_basic["Dummy_SS"] & 
+                          ~assigns_basic["Dummy_res"]]
+        (ggplot(tmp) + geom_density(aes(x="Log_prob", colour="Correct")) 
+        + xlim(-100, 0) )
+        
+        tmp = assigns_basic[~assigns_basic["Dummy_SS"] & 
+                            ~assigns_basic["Dummy_res"]]
+        (ggplot(tmp) + geom_boxplot(aes(y="Log_prob", x="ID", colour="Correct")) 
+        + ylim(-100,0) )
     
     
 #%% Test effect of correcting the predicted shifts
