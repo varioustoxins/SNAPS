@@ -129,7 +129,7 @@ logging.info("Wrote results to %s", args.output_file)
 
 #### Make some plots
 if a.pars["plot_strips"]:
-    plt = a.plot_strips()
-    plt.save(args.plot_file, height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), 
-             units="mm", limitsize=False)
+    plt = a.plot_strips_bokeh(args.plot_file, "html")
+#    plt.save(args.plot_file, height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), 
+#             units="mm", limitsize=False)
     logging.info("Wrote strip plot to %s", args.plot_file)

@@ -9,9 +9,14 @@ Created on Mon Nov 19 10:36:07 2018
 import numpy as np
 import pandas as pd
 from plotnine import *
+from bokeh.plotting import figure, output_file, save
+from bokeh.layouts import gridplot
+from bokeh.models.ranges import Range1d
+from bokeh.models import WheelZoomTool
+from bokeh.io import export_png
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
-from math import isnan, log10, sqrt
+from math import log10, sqrt
 from copy import deepcopy
 #from Bio.SeqUtils import seq1
 from distutils.util import strtobool
@@ -825,6 +830,95 @@ class NAPS_assigner:
         plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
         
         return(plt)
+    
+    def plot_strips_bokeh(self, outfile=None, format="html"):
+        """Make a strip plot of the assignment.
+        
+        Uses bokeh module for plotting. Returns the bokeh plot object.
+        
+        outfile: if defined, the plot will be saved to this location
+        format: type of output. Either "html" or "png"
+        """
+        df = self.assign_df
+        plotlist = []
+        
+        # First check if there are any sequential atoms
+        carbons = pd.Series(["C","CA","CB"])
+        carbons_m1 = carbons + "m1"
+        seq_atoms = carbons[carbons.isin(df.columns) & 
+                            carbons_m1.isin(df.columns)]
+        
+        if seq_atoms.size==0:
+            # You can't draw a strip plot
+            print("No sequential links in data - strip plot not drawn.")
+            return(None)
+        else:
+            tmp = figure(x_range=df["Res_name"].tolist())
+            for atom in seq_atoms:
+                # Setup plot
+                plt = figure(title="Strip plot",
+                                x_axis_label="Residue number",
+                                y_axis_label="Carbon shift",
+                                x_range=tmp.x_range,
+                                tools="xpan, xwheel_zoom,reset",
+                                height=250, width=1000)
+                plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
+                
+                ## Plot the vertical lines
+                vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"m1"]]
+                # Introduce NaN's to break the line into discontinuous segments
+                # "x" in name is to ensure it sorts after the atom+"m1" shifts
+                vlines[atom+"x"] = np.NaN  
+                # Convert from wide to long
+                vlines = vlines.melt(id_vars=["Res_name"], 
+                                     value_vars=[atom, atom+"m1", atom+"x"], 
+                                     var_name="Atom_type", 
+                                     value_name="Shift")
+                vlines = vlines.sort_values(["Res_name","Atom_type"], 
+                                            ascending=[True,False])
+                plt.line(vlines["Res_name"], vlines["Shift"], 
+                         line_color="black", line_dash="dashed")
+                
+                ## Plot the horizontal lines
+                hlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"m1"]]
+                # Introduce NaN's to break the line into discontinuous segments
+                # "a" in name ensures it sorts between the atom and atom+"m1" shifts
+                hlines[atom+"a"] = np.NaN  
+                # Convert from wide to long
+                hlines = hlines.melt(id_vars=["Res_name"], 
+                                     value_vars=[atom, atom+"m1", atom+"a"], 
+                                     var_name="Atom_type", 
+                                     value_name="Shift")
+                hlines = hlines.sort_values(["Res_name","Atom_type"], 
+                                            ascending=[True,False])
+                plt.line(hlines["Res_name"], hlines["Shift"], 
+                         line_color="black", line_dash="solid")
+                
+                # Draw circles at the observed chemical shifts
+                plt.circle(df["Res_name"], df[atom], fill_color="blue", size=5)
+                plt.circle(df["Res_name"], df[atom+"m1"], fill_color="red", size=5)
+                
+                # Reverse the y axis and set range:
+                plt.y_range = Range1d(
+                        df[[atom,atom+"m1"]].max().max()+5, 
+                        df[[atom,atom+"m1"]].min().min()-5)
+                
+                # Change axis label orientation
+                plt.xaxis.major_label_orientation = 3.14159/2
+                
+                plotlist = plotlist + [plt]
+            
+            p = gridplot(plotlist, ncols=1)
+            
+            if outfile is not None:
+                if format=="html":
+                    output_file(outfile)
+                    save(p)
+                elif format=="png":
+                    export_png(p, outfile)
+            return(p)
+                
+        
     
     def plot_seq_mismatch(self):
         """ Make a plot of the maximum sequential mismatch between i-1, i and 

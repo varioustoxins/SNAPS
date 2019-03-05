@@ -11,6 +11,7 @@ from bokeh.layouts import gridplot
 from bokeh.io import export_png
 from bokeh.models.ranges import Range1d
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 path = Path("..")
@@ -40,28 +41,51 @@ output_file(path/"test.html")
 p = figure(title="Bokeh example",
            x_axis_label="Residue number",
            y_axis_label="Carbon shift",
-           x_range=assign_df["Res_name"].tolist())
+           x_range=assign_df["Res_name"].tolist(),
+           tools="xpan, xwheel_zoom,reset",
+           height=400, width=800)
 
-p.circle(assign_df["Res_name"], assign_df["CB"], fill_color="blue", radius=0.5)
-p.circle(assign_df["Res_name"], assign_df["CBm1"], fill_color="red", radius=0.5)
+tmp = assign_df.loc[~assign_df["Dummy_res"],["Res_name","CB","CBm1"]]
+tmp = tmp.melt(id_vars=["Res_name"], value_vars=["CB","CBm1"], 
+               var_name="Atom_type", value_name="Shift")
+tmp = tmp.sort_values(["Res_name","Atom_type"], ascending=[True,False])
+#p.line(tmp["Res_name"], tmp["Shift"], line_color="black", line_dash="dashed")
+
+tmp2 = assign_df.loc[~assign_df["Dummy_res"],["Res_name","CB","CBm1"]]
+tmp2["CBx"] = np.NaN
+tmp2 = tmp2.melt(id_vars=["Res_name"], value_vars=["CB","CBm1","CBx"], 
+               var_name="Atom_type", value_name="Shift")
+tmp2 = tmp2.sort_values(["Res_name","Atom_type"], ascending=[True,False])
+p.line(tmp2["Res_name"], tmp2["Shift"], line_color="black", line_dash="dashed")
+
+tmp3 = tmp2.copy()
+tmp3.loc[tmp3["Atom_type"]=="CBx", "Atom_type"] = "CBa"
+tmp3 = tmp3.sort_values(["Res_name","Atom_type"], ascending=[True,False])
+p.line(tmp3["Res_name"], tmp3["Shift"], line_color="black", line_dash="solid")
+
+p.circle(assign_df["Res_name"], assign_df["CB"], fill_color="blue", size=5)
+p.circle(assign_df["Res_name"], assign_df["CBm1"], fill_color="red", size=5)
 
 # Reverse the Y axis
-p.y_range = Range1d(assign_df[["CB","CBm1"]].max().max(), 
-                    assign_df[["CB","CBm1"]].min().min())
+p.y_range = Range1d(assign_df[["CB","CBm1"]].max().max()+5, 
+                    assign_df[["CB","CBm1"]].min().min()-5)
 
 p.xaxis.major_label_orientation = 3.14159/2
 
 show(p)
 
 # Make a faceted plot
-p1 = figure(x_range=assign_df["Res_name"].tolist(), height=400, width=800)
+p1 = figure(x_range=assign_df["Res_name"].tolist(), height=400, width=800, 
+            tools="xpan, xwheel_zoom,reset")
+#p1.toolbar.active_scroll = 
 p1.circle(assign_df["Res_name"], assign_df["CB"], fill_color="blue", radius=0.5)
 p1.circle(assign_df["Res_name"], assign_df["CBm1"], fill_color="red", radius=0.5)
 p1.y_range = Range1d(assign_df[["CB","CBm1"]].max().max(), 
                     assign_df[["CB","CBm1"]].min().min())
 p1.xaxis.major_label_orientation = 3.14159/2
 
-p2 = figure(x_range=p1.x_range, height=400, width=800)
+p2 = figure(x_range=p1.x_range, height=400, width=800, 
+            tools="xpan, xwheel_zoom,reset")
 p2.circle(assign_df["Res_name"], assign_df["CA"], fill_color="blue", radius=0.5)
 p2.circle(assign_df["Res_name"], assign_df["CAm1"], fill_color="red", radius=0.5)
 p2.y_range = Range1d(assign_df[["CA","CAm1"]].max().max(), 

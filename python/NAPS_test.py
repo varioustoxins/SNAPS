@@ -234,7 +234,7 @@ if "basic" in args.test or "all" in args.test:
                     "--pred_type", "shiftx2",
                     "-c", (path/"config/config_plot.txt").as_posix(),
                     "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                    "--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.pdf")).as_posix()]
+                    "--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()]
             run(cmd)
     
     if args.analyse:        
@@ -399,7 +399,7 @@ if "alt_assign" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_alt, summary_alt = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
+        assigns_alt, summary_alt = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -424,11 +424,11 @@ if "alt_hadamac" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_alt, summary_alt = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
-        assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
+        assigns_alt_hadamac, summary_alt_hadamac = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hadamac = assigns_alt_hadamac.sort_values(by=["ID", "SS_name", "Rank"])
         
-        assigns_alt.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
-        summary_alt.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        assigns_alt_hadamac.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
+        summary_alt_hadamac.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
     
         save_alt_summary_plots(assigns_hadamac, summary_hadamac, out_dir)
     
@@ -445,12 +445,13 @@ if "alt_hnco" in args.test or "all" in args.test:
                     (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                     "--shift_type", "test",
                     "--pred_type", "shiftx2", 
+                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
                     "-c", (path/"config/config_alt_hnco.txt").as_posix(),
                     "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
             run(cmd)
             
     if args.analyse:
-        assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
+        assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -474,8 +475,8 @@ if "alt_hnco2" in args.test or "all" in args.test:
             run(cmd)
             
     if args.analyse:
-        assigns_alt_hnco2, summary_alt_hnco2 = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
-        assigns_alt_hnco2 = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
+        assigns_alt_hnco2, summary_alt_hnco2 = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hnco2 = assigns_alt_hnco2.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco2.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
         summary_alt_hnco2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
@@ -499,7 +500,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
             run(cmd)
             
     if args.analyse:        
-        assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
+        assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hnco_hncacb = assigns_alt_hnco_hncacb.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco_hncacb.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -524,7 +525,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:            
-        assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons)
+        assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_ca_co = assigns_alt_ca_co.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_ca_co.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
