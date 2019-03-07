@@ -62,8 +62,8 @@ id_missing_carbons = list(set(id_all) - set(id_all_carbons))
 
 # Limit how many datasets are assigned/analysed
 if args.N is not None:
-    id_all = id_all[0:args.N]
-    id_all_carbons = id_all_carbons[0:args.N]
+    id_all = id_all[0:int(args.N)]
+    id_all_carbons = id_all_carbons[0:int(args.N)]
 #%%
 
 def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_list=id_all):
@@ -469,7 +469,8 @@ if "alt_hnco2" in args.test or "all" in args.test:
                     testset_df.loc[i, "preds_file"].as_posix(), 
                     (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
                     "--shift_type", "test",
-                    "--pred_type", "shiftx2", 
+                    "--pred_type", "shiftx2",
+                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
                     "-c", (path/"config/config_alt_hnco2.txt").as_posix(),
                     "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
             run(cmd)

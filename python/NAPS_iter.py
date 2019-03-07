@@ -60,15 +60,7 @@ else:
 a = NAPS_assigner()
 
 # Import config file
-config = pd.read_table(args.config_file, sep="\s+", comment="#", header=None,
-                       index_col=0, names=["Value"])
-a.pars["pred_offset"] = int(config.loc["pred_offset"].Value)
-a.pars["prob_method"] = config.loc["prob_method"].Value
-a.pars["alt_assignments"] = int(config.loc["alt_assignments"].Value)
-a.pars["atom_set"] = {s.strip() for s in config.loc["atom_set"].Value.split(",")}
-tmp = [s.strip() for s in config.loc["atom_sd"].Value.split(",")]
-a.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
-a.pars["plot_strips"] = bool(strtobool(config.loc["plot_strips"].Value))
+a.read_config_file(args.config_file)
 logging.info("Read in configuration from %s.", args.config_file)
 
 # Import observed shifts
@@ -92,16 +84,16 @@ a.add_dummy_rows()
 a.calc_log_prob_matrix2(sf=1, verbose=False)
 logging.info("Calculated log probability matrix (%dx%d).", 
              a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
-matching = a.find_best_assignment2()
+matching1 = a.find_best_assignments()
 logging.info("Calculated best assignment.")
-assign_df = a.make_assign_df(matching, set_assign_df=True)
+assign_df = a.make_assign_df(matching1, set_assign_df=True)
 assign_df = a.check_assignment_consistency(threshold=0.1)
 logging.info("Checked assignment consistency.")
 
 obs = a.obs
 preds = a.preds
 
-#%% Iterate to improve consistency
+#%% 1st attempt: try excluding each inconsistent match in turn, and keep going if consistency improves.
 
 last_consistent=-1
 max_consistent = ((assign_df["Num_good_links_prev"]==3) & 
@@ -150,7 +142,12 @@ while max_consistent>last_consistent:
 # Count correct assignments
 (a.assign_df["Res_name"].str.lstrip()==a.assign_df["SS_name"].str.lstrip("_")).sum()
 
-#%%
+#%% 2nd attempt: more general function for including/excluding potential matches.
+consistent = a.assign_df.loc[(a.assign_df["Num_good_links_prev"]==3) & 
+                               (a.assign_df["Num_good_links_next"]==3),
+                               ["SS_name", "Res_name"]]
+inconsistent = a.assign_df.loc[~a.assign_df["Res_name"].isin(consistent["Res_name"]), ["SS_name", "Res_name"]]
+
 
 b = NAPS_assigner()
 b.obs = a.obs.loc[inconsistent["SS_name"],:]
@@ -228,27 +225,95 @@ for i, row in inconsistent.iterrows():
     assign_dict[row["SS_name"]] = tmp
     scores_dict[row["SS_name"]] = sum(a.log_prob_matrix.lookup(tmp["SS_name"], tmp["Res_name"]))
 
+#%% 3rd attempt: Rigorously find k-best assignments (don't worry about consistency for now.
 
+from collections import namedtuple
+from sortedcontainers import SortedListWithKey
 
-#assign_df, best_match_indexes = b.find_best_assignment()
-#assign_df = b.check_assignment_consistency(threshold=0.1)
+def score_matching(assigner, matching):
+    "Calculate the total score of a matching"
+    # Calculate sum probability for the best matching
+    return(sum(assigner.log_prob_matrix.lookup(matching["SS_name"], 
+                                               matching["Res_name"])))
+    
+Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
 
-# Make a strip plot
-plt = a.plot_strips()
-plt.save(args.plot_file, height=210, width=max(297,297/80*a.assign_df["SS_name"].count()), units="mm", limitsize=False)
-logging.info("Wrote strip plot to %s", args.plot_file)
+# Note: python library says removing items from the start of a list is slow, 
+# and that a collections.deque object may be better
 
-#if a.pars["alt_assignments"]>0:
-#    a.find_alt_assignments2(N=a.pars["alt_assignments"], verbose=False, 
-#                            by_ss=True)
-#    logging.info("Calculated the %d next best assignments for each spin system", 
-#                 a.pars["alt_assignments"])
-#    a.alt_assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
-#                           index=False)
-#    logging.info("Wrote results to %s", args.output_file)
-#else:
-#    a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
-#                       index=False)
-#    logging.info("Wrote results to %s", args.output_file)
+matching1.index = matching1["SS_name"]
+matching1.index.name = None
 
+ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
+unranked_nodes = SortedListWithKey([Node(score_matching(a, matching1),
+                                         matching1, inc=None, exc=None)],
+                                   key=lambda n: n.sum_log_prob)
+k=50
+while len(ranked_nodes)<k:
+    #print(len(ranked_nodes))
+    # Set highest scoring unranked node as current_node
+    current_node = unranked_nodes.pop()
+    
+    #Print status
+    s = str(len(ranked_nodes))+"\t"
+    if current_node.inc is not None:
+        s = s + "inc:" +str(len(current_node.inc))+ "\t"
+    if current_node.exc is not None:
+        s = s + "exc:"+ str(len(current_node.exc))
+    print(s)
+    # If the current node has forced included pairings, get a list of all non-mandatory pairs
+    if current_node.inc is not None:
+        matching_reduced = current_node.matching[~current_node.matching["SS_name"].isin(current_node.inc["SS_name"])]
+    else:
+        matching_reduced = current_node.matching
+    
+    # Create child nodes and add them to the unranked_nodes list
+    for i in range(matching_reduced.shape[0]):
+        #print(i)
+        #Construct dataframes of excluded and included pairs
+        exc_i = matching_reduced.iloc[[i],:]
+        if current_node.exc is not None:
+            exc_i = exc_i.append(current_node.exc, ignore_index=True)
+        inc_i = matching_reduced.iloc[0:i,:]
+        if current_node.inc is not None:
+            inc_i = inc_i.append(current_node.inc, ignore_index=True)
+        inc_i = inc_i.drop_duplicates()
+        # If there are no included pairs, it's better for inc_i to be None than an empty df
+        if inc_i.shape[0]==0: 
+            inc_i = None
+        
+        matching_i = a.find_best_assignments(inc=inc_i, exc=exc_i, 
+                                             return_none_if_all_dummy=True,
+                                             verbose=False)
+        if matching_i is None:
+            pass
+        else:
+            matching_i.index = matching_i["SS_name"]
+            matching_i.index.name = None
+            node_i = Node(score_matching(a, matching_i), matching_i, inc_i, exc_i)
+            unranked_nodes.add(node_i)
+    ranked_nodes.add(current_node)
 
+tmp = [n.matching["Res_name"] for i,n in enumerate(reversed(ranked_nodes))]
+results_df = pd.concat(tmp, axis=1)
+results_df.columns = list(range(k))
+#results_df.index =ranked_nodes[0].matching["SS_name"]
+correct_mat = (results_df == results_df.index.tolist()).astype(int)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+#plt.pcolormesh(correct_mat.transpose())
+#plt.yticks(np.arange(0.5, len(correct_mat.index), 1), correct_mat.index)
+#plt.xticks(np.arange(0.5, len(correct_mat.columns), 1), correct_mat.columns)
+p = sns.heatmap(correct_mat.transpose())
+fig = p.get_figure()
+fig.savefig("../plots/test.png", dpi=400)
+#plt.show()
+#plt.savefig("../plots/test.png")
+
+#tmp = [(n.exc.values[0][0],n.exc.values[0][1]) for n in unranked_nodes]
+tmp = [n.sum_log_prob for n in unranked_nodes]
+tmp = [n.matching for n in ranked_nodes]
+
+tmp = ranked_nodes[0].matching
+tmp2 = ranked_nodes[1].matching

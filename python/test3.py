@@ -29,7 +29,7 @@ testset_df.index = testset_df["ID"]
 #%%
 
 # Import observed and predicted shifts
-id = "A003"
+id = "A002"
 
 importer1 = NAPS_importer()
 importer1.import_testset_shifts(testset_df.loc[id, "obs_file"])
@@ -49,8 +49,8 @@ a.obs = importer1.obs
 b.obs = importer2.obs
 
 # Import config file
-a.read_config_file(path/"config/config.txt")
-b.read_config_file(path/"config/config_hadamac.txt")
+a.read_config_file(path/"config/config_alt_hnco.txt")
+b.read_config_file(path/"config/config_alt_hnco2.txt")
 
 a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 b.import_pred_shifts(testset_df.loc[id, "noshifty_file"], "shiftx2")
@@ -96,7 +96,7 @@ sum(tmp1["SS_name"] == tmp2["SS_name"])
 
 tmp = log_prob_matrix.melt()
 
-tmp = alt_assign_df[["SS_name","Res_name","Rank","Rel_prob", "Log_prob"]]
+#tmp = alt_assign_df[["SS_name","Res_name","Rank","Rel_prob", "Log_prob"]]
 #plt = a.plot_strips()
 #%% Test stuff
 

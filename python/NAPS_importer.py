@@ -378,7 +378,11 @@ class NAPS_importer:
             obs = pd.merge(obs, obs_m1, how="left", 
                            left_index=True, right_index=True)
             obs = obs.drop(columns="Res_N")
-        
+            
+            # Set index back to SS_name
+            obs.index = obs["SS_name"]
+            obs.index.name = None
+              
         self.obs = obs
         return(self.obs)
     

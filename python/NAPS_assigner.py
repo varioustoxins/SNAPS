@@ -528,7 +528,7 @@ class NAPS_assigner:
         else:
             return(dist_matrix)
         
-    def find_best_assignments(self, inc=None, exc=None):
+    def find_best_assignments(self, inc=None, exc=None, return_none_if_all_dummy=False, verbose=True):
         """ Use the Hungarian algorithm to find the highest probability matching 
         (ie. the one with the lowest log probability sum), with constraints.
         
@@ -538,6 +538,11 @@ class NAPS_assigner:
         inc: a DataFrame of (SS,Res) pairs which must be part of the assignment. 
             First column has the SS_names, second has the Res_names .
         exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
+        return_none_if_all_dummy: Sometimes after setting aside the pairs that 
+            must be included in the final assignment, only dummy residues or 
+            spin systems will remain. If this argument is True, the function 
+            will return None in these cases.
+        verbose: if True, prints messages if inc and exc contain reduntant info
         """
         obs = self.obs
         preds = self.preds
@@ -556,13 +561,25 @@ class NAPS_assigner:
                 # Get rid of any entries in exc which share a Res or SS with inc
                 exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
                 if any(exc_in_inc):
-                    print("Some values in exc are also found in inc, so are redundant.")
+                    if verbose:
+                        print("Some values in exc are also found in inc, so are redundant.")
+                        print(exc[exc_in_inc])
                     exc = exc.loc[~exc_in_inc, :]
                     
-            # Removed fixed assignments from probability matrix
+            # Removed fixed assignments from probability matrix and obs, preds 
+            # dataframes. Latter is needed if inc includes any dummy SS/res, 
+            # and to detect if the reduced data is entirely dummies
             log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
+            obs_reduced = obs.drop(index=inc["SS_name"])
+            preds_reduced = preds.drop(index=inc["Res_name"])
         else:
             log_prob_matrix_reduced = log_prob_matrix
+            obs_reduced = obs
+            preds_reduced = preds
+        
+        if return_none_if_all_dummy:
+            if obs_reduced["Dummy_SS"].all() or preds_reduced["Dummy_res"].all():
+                return(None)
         
         if exc is not None:
             # Penalise excluded SS,Res pairs
@@ -571,9 +588,9 @@ class NAPS_assigner:
                 # Need to account for dummy residues or spin systems
                 if preds.loc[row["Res_name"], "Dummy_res"]:
                     log_prob_matrix_reduced.loc[row["SS_name"], 
-                                    preds.loc[preds["Dummy_res"],"Res_name"]] = penalty
+                                                preds_reduced["Dummy_res"]] = penalty
                 elif obs.loc[row["SS_name"], "Dummy_SS"]:
-                    log_prob_matrix_reduced.loc[obs.loc[obs["Dummy_SS"],"SS_name"], 
+                    log_prob_matrix_reduced.loc[obs_reduced["Dummy_SS"], 
                                                 row["Res_name"]] = penalty
                 else:
                     log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
