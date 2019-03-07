@@ -20,6 +20,8 @@ from math import log10, sqrt
 from copy import deepcopy
 #from Bio.SeqUtils import seq1
 from distutils.util import strtobool
+from collections import namedtuple
+from sortedcontainers import SortedListWithKey
 import logging
 
 class NAPS_assigner:
@@ -646,7 +648,11 @@ class NAPS_assigner:
             self.assign_df = assign_df
         
         return(assign_df)
-        
+    
+    def calc_overall_matching_prob(self, matching):
+        "Calculate the sum log probability of a particular matching"
+        return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
+                                                   matching["Res_name"])))    
     
     def check_assignment_consistency(self, assign_df=None, threshold=0.1):
         """ Find maximum mismatch and number of 'significant' mismatches for 
@@ -740,8 +746,7 @@ class NAPS_assigner:
         alt_matching = None
         
         # Calculate sum probability for the best matching
-        best_sum_prob = sum(log_prob_matrix.lookup(
-                best_matching["SS_name"], best_matching["Res_name"]))
+        best_sum_prob = self.calc_overall_matching_prob(best_matching)
         
         # Calculate the value used to penalise the best match for each residue
         penalty = 2*log_prob_matrix.min().min()     
@@ -764,8 +769,7 @@ class NAPS_assigner:
                 alt_matching = self.find_best_assignments(exc=excluded)
                                 
                 alt_matching["Rank"] = j+2
-                alt_sum_prob = sum(self.log_prob_matrix.lookup(
-                        alt_matching["SS_name"], alt_matching["Res_name"]))
+                alt_sum_prob = self.calc_overall_matching_prob(alt_matching)
                 alt_matching["Rel_prob"] = alt_sum_prob - best_sum_prob
                                
                 # Add the alt match for this ss or res to the results dataframe 
@@ -795,6 +799,100 @@ class NAPS_assigner:
                                                 by=["Res_name", "Rank"])
             
         return(self.alt_assign_df)
+    
+    def find_kbest_assignments(self, k, verbose=False):
+        """ Find the k best overall assignments using the Murty algorithm.
+        
+        k: the number of assignments to find
+        verbose: print information about progress
+        
+        This algorithm works by defining nodes. A node is a particular set of 
+        constraints on the assignment, consisting of pairs that muct be included,
+        and pairs that must be excluded. These constraints define a set of 
+        potential assignments, one of which will be optimal. The clever part is 
+        that this set of assignments can be further subdivided into the optimal 
+        assignment plus a set of child nodes, each with additional constraints.
+        The optimal solution can be found for each child node, allowing them to 
+        be ranked. The highest ranking child can then be split up further, 
+        allowing computational effort to be focused on the sets containing the 
+        best solutions.
+        For more details, see: 
+        Murty, K. (1968). An Algorithm for Ranking all the Assignments in 
+        Order of Increasing Cost. Operations Research, 16(3), 682-687
+        """
+        Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
+        
+        # Initial best matching
+        best_matching = self.find_best_assignments()
+        best_matching.index = best_matching["SS_name"]
+        best_matching.index.name = None
+        
+        # Define lists to keep track of nodes
+        ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
+        unranked_nodes = SortedListWithKey(
+                            [Node(self.calc_overall_matching_prob(best_matching),
+                            best_matching, inc=None, exc=None)],
+                            key=lambda n: n.sum_log_prob)
+        
+        while len(ranked_nodes)<k:
+            # Set highest scoring unranked node as current_node
+            current_node = unranked_nodes.pop()
+            
+            if verbose:
+                s = str(len(ranked_nodes))+"\t"
+                if current_node.inc is not None:
+                    s = s + "inc:" +str(len(current_node.inc))+ "\t"
+                if current_node.exc is not None:
+                    s = s + "exc:"+ str(len(current_node.exc))
+                print(s)
+            
+            # If the current node has forced included pairings, get a list of 
+            # all parts of the matching that can vary.
+            if current_node.inc is not None:
+                matching_reduced = current_node.matching[~current_node.matching["SS_name"].isin(current_node.inc["SS_name"])]
+            else:
+                matching_reduced = current_node.matching
+            
+            # Create child nodes and add them to the unranked_nodes list
+            # -1 in range(matching_reduced.shape[0]-1) is because forcing 
+            # inclusion of all but one residue actually results in getting back 
+            # the original matching, and also results in an infinite loop of 
+            # identical child nodes...
+            for i in range(matching_reduced.shape[0]-1):
+                #print("\t", i)
+                #Construct dataframes of excluded and included pairs
+                exc_i = matching_reduced.iloc[[i],:]
+                if current_node.exc is not None:
+                    exc_i = exc_i.append(current_node.exc, ignore_index=True)
+                inc_i = matching_reduced.iloc[0:i,:]
+                if current_node.inc is not None:
+                    inc_i = inc_i.append(current_node.inc, ignore_index=True)
+                inc_i = inc_i.drop_duplicates()
+                # If there are no included pairs, it's better for inc_i to be None than an empty df
+                if inc_i.shape[0]==0: 
+                    inc_i = None
+                
+                matching_i = self.find_best_assignments(inc=inc_i, exc=exc_i, 
+                                                     return_none_if_all_dummy=True,
+                                                     verbose=False)
+                if matching_i is None:
+                    # If the non-constrained residues or spin systems are all 
+                    # dummies, find_best_assignments will return None, and this 
+                    # node can be discarded
+                    pass
+                else:
+                    # Create a new child node and add to unranked_nodes
+                    matching_i.index = matching_i["SS_name"]
+                    matching_i.index.name = None
+                    node_i = Node(self.calc_overall_matching_prob(matching_i), 
+                                  matching_i, inc_i, exc_i)
+                    unranked_nodes.add(node_i)
+            ranked_nodes.add(current_node)
+            
+        return(ranked_nodes, unranked_nodes)                                                                                                                             
+        
+                
+
     
     def output_peaklists(self, filepath, format="sparky", 
                          spectra=["hsqc","hnco","hncaco","hncacb", "hncocacb"]):

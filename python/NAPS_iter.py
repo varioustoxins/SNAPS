@@ -248,7 +248,7 @@ ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
 unranked_nodes = SortedListWithKey([Node(score_matching(a, matching1),
                                          matching1, inc=None, exc=None)],
                                    key=lambda n: n.sum_log_prob)
-k=50
+k=10
 while len(ranked_nodes)<k:
     #print(len(ranked_nodes))
     # Set highest scoring unranked node as current_node
