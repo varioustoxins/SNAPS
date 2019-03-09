@@ -654,6 +654,57 @@ class NAPS_assigner:
         return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
                                                    matching["Res_name"])))    
     
+    def calc_mismatch_matrix(self, threshold=0.1):
+        """Calculate matrix of the mismatch between i and i-1 observed shifts 
+        for all spin system pairs. Also, make matrix of number of consistent 
+        links for all spin system pairs.
+        """
+        obs = self.obs
+        
+        # First check if there are any sequential atoms
+        carbons = pd.Series(["C","CA","CB"])
+        carbons_m1 = carbons + "m1"
+        seq_atoms = carbons[carbons.isin(obs.columns) & 
+                            carbons_m1.isin(obs.columns)]
+        #seq_atoms_m1 = seq_atoms+"m1"
+        #seq_atoms = list(seq_atoms)
+    
+        if seq_atoms.size==0:
+            # You can't make a mismatch matrix
+            return(None)
+        else:
+            mismatch_matrix = pd.DataFrame(0, index=obs["SS_name"], columns=obs["SS_name"])
+            mismatch_matrix.columns.name = "i"
+            mismatch_matrix.index.name = "im1"
+            
+            consistent_links_matrix = mismatch_matrix.copy()
+            
+            for atom in seq_atoms:
+                i_atom = (obs[atom].repeat(len(obs.index)).values.
+                          reshape([len(obs.index),-1]))
+                im1_atom = (obs[atom+"m1"].repeat(len(obs.index)).values.
+                          reshape([len(obs.index),-1]).transpose())
+                mismatch_atom = pd.DataFrame(i_atom - im1_atom)
+                mismatch_atom.columns = obs["SS_name"]
+                mismatch_atom.columns.name = "i"
+                mismatch_atom.index = obs["SS_name"]
+                mismatch_atom.index.name = "im1"
+                
+                consistent_links_atom = (abs(mismatch_atom) < threshold)
+                
+                # Make a note of NA positions in delta, and set them to default value 
+                na_mask = np.isnan(mismatch_atom)
+                mismatch_atom[na_mask] = 0
+                consistent_links_atom[na_mask] = 0
+                
+                # Update mismatch matrix
+                mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
+                consistent_links_matrix = consistent_links_matrix + consistent_links_atom
+            
+            self.mismatch_matrix = mismatch_matrix
+            self.consistent_links_matrix = consistent_links_matrix
+            return(self.mismatch_matrix)
+            
     def check_assignment_consistency(self, assign_df=None, threshold=0.1):
         """ Find maximum mismatch and number of 'significant' mismatches for 
         each residue
@@ -722,7 +773,15 @@ class NAPS_assigner:
             if set_assign_df:
                 self.assign_df = assign_df
             return(assign_df)
-        
+    
+#    def check_matching_consistency(self, matching):
+#        """Calculate mismatch scores for a given matching"""
+#        matching["Max_mismatch_prev"] = self.mismatch_matrix.lookup(
+#                                matching["SS_name"], matching["Res_name"])
+#        matching["Num_good_links_prev"] = self.mismatch_matrix.lookup(
+#                                matching["SS_name"], matching["Res_name"])
+#        return(matching)
+    
     def find_alt_assignments(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
         

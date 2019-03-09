@@ -105,8 +105,10 @@ tmp9 = kbest[9]
 #[n.sum_log_prob for n in kbest]
 #[n.sum_log_prob for n in unranked]
 unranked[-1].exc
-#tmp = alt_assign_df[["SS_name","Res_name","Rank","Rel_prob", "Log_prob"]]
-#plt = a.plot_strips()
+
+tmp = a.calc_mismatch_matrix()
+tmp2 = a.consistent_links_matrix
+
 #%% Test stuff
 
 obs = a.obs
