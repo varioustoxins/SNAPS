@@ -57,8 +57,9 @@ if True:
 else:   # For testing
     args = parser.parse_args(("../data/P3a_L273R/naps_shifts.txt",
                               "../output/test.txt",
+                              "../data/P3a_L273R/shiftx2.cs",
                               "--shift_type","naps",
-                              "--pred_file","../data/P3a_L273R/shiftx2.cs",
+                              "--pred_type","shiftx2",
                               "-c","../config/config.txt",
                               "-l","../output/test.log"))    
 

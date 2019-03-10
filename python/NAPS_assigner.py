@@ -127,12 +127,15 @@ class NAPS_assigner:
         preds = pd.concat([tmp, preds], axis=1)
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
-        preds_m1 = preds[list({"C","CA","CB","Res_type"}.
+        preds_m1 = preds[list({"C","CA","CB","Res_type","Res_name"}.
                               intersection(preds.columns))].copy()
         preds_m1.index = preds_m1.index+1
         preds_m1.columns = preds_m1.columns + "m1"
         preds = pd.merge(preds, preds_m1, how="left", 
                          left_index=True, right_index=True)
+        
+        # Create a dictionary to quickly look up the i-1 Res_name
+        self.Res_namem1_dict = preds["Res_namem1"].to_dict()
         
         # Restrict to only certain atom types
         atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
@@ -622,6 +625,8 @@ class NAPS_assigner:
         valid_atoms = list(self.pars["atom_set"])
         extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
         
+        obs.index.name = None
+        
         assign_df = pd.merge(matching, 
                              preds.loc[:,["Res_N","Res_type", "Res_name", 
                                     "Dummy_res"]], 
@@ -802,6 +807,7 @@ class NAPS_assigner:
         log_prob_matrix = self.log_prob_matrix
         best_matching = self.assign_df.loc[:,["SS_name","Res_name"]]
         best_matching.index = best_matching["SS_name"]
+        best_matching.index.name = None
         alt_matching = None
         
         # Calculate sum probability for the best matching
