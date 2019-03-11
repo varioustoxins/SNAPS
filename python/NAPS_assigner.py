@@ -14,6 +14,7 @@ from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
 from bokeh.models import WheelZoomTool
 from bokeh.io import export_png
+from bokeh.embed import json_item
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
 from math import log10, sqrt
@@ -1089,14 +1090,15 @@ class NAPS_assigner:
                 plotlist = plotlist + [plt]
             
             p = gridplot(plotlist, ncols=1)
-            
+
             if outfile is not None:
                 if format=="html":
                     output_file(outfile)
                     save(p)
                 elif format=="png":
                     export_png(p, outfile)
-            return(p)
+            
+            return(json_item(p))
                 
         
     
