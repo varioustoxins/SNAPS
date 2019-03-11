@@ -36,8 +36,9 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
-        if (data.plot)
-            $('#plot').append("<img alt=\"Embedded Image\" src=\"data:image / png;base64, " + data.plot + "\" />");
+        if (data.plot) {
+            Bokeh.embed.embed_item(data.plot, "plot");
+        }
     }
     else if (data.status == 'validation_failed') {
         $.each(data.errors, function (index, error) {

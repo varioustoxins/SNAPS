@@ -21,6 +21,11 @@
     <!-- Form-specific JavaScript -->
     <script src="{{ url_for('static', filename='Layout.js') }}" rel="stylesheet"></script>
     <script src="{{ url_for('static', filename='Execution.js') }}" rel="stylesheet"></script>
+
+    <link href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.css" rel="stylesheet" type="text/css">
+    <link href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.css" rel="stylesheet" type="text/css">
+    <script src="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.js"></script>
+    <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.js"></script>
 </head>
 <body>
 	<div class="d-flex" id="wrapper">
@@ -98,7 +103,7 @@
 					<tr id="tableData"></tr>
 				</thead>
 			</table>
-            <p id="plot"></p>
+            <div id="plot"></div>
 			<!-- /#page-content-wrapper -->
 		</div>
 		<!-- /#wrapper -->

@@ -27,7 +27,7 @@ def run():
 
 def run(args):
     try:
-        runNAPS(args.argsToList())
+        args.plot = runNAPS(args.argsToList())
         return createJSONForTable(args)
     except Exception as e:
         #log errors
@@ -48,13 +48,7 @@ def createJSONForTable(args):
             result.append(row)
             line = output_file.readline()
 
-    if os.path.exists(args.plot_file):
-        with open(args.plot_file, "rb") as image:
-            plot = base64.b64encode(image.read()).decode('utf-8')
-    else:
-        plot = ''
-
-    return jsonify(status='ok', headers=headers, result=result, plot=plot)
+    return jsonify(status='ok', headers=headers, result=result, plot=args.plot)
 
 @app.route('/')
 def index():
