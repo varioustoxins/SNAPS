@@ -217,17 +217,17 @@ class NAPS_importer:
                 if ss in peaks["SS_name"].values:
                     ss_peaks = peaks.loc[peaks["SS_name"]==ss,:]
                     if spec=="hnco":
-                        # Set Cm1 shift to strongest peak in this spin system.         
+                        # Set C_m1 shift to strongest peak in this spin system.         
                         i = ss_peaks.loc[:,"Height"].idxmax()
-                        obs.loc[ss, "Cm1"] = ss_peaks.loc[i, "C"]
+                        obs.loc[ss, "C_m1"] = ss_peaks.loc[i, "C"]
                     elif spec=="hncaco":
                         # Set C shift to strongest peak in this spin system.         
                         i = ss_peaks.loc[:,"Height"].idxmax()
                         obs.loc[ss, "C"] = ss_peaks.loc[i, "C"]
                     elif spec=="hncoca":
-                        # Set CAm1 shift to strongest peak in this spin system.         
+                        # Set CA_m1 shift to strongest peak in this spin system.         
                         i = ss_peaks.loc[:,"Height"].idxmax()
-                        obs.loc[ss, "CAm1"] = ss_peaks.loc[i, "C"]
+                        obs.loc[ss, "CA_m1"] = ss_peaks.loc[i, "C"]
                     elif spec=="hnca":
                         # Set CA shift to strongest peak in this spin system.         
                         i = ss_peaks.loc[:,"Height"].idxmax()
@@ -241,9 +241,9 @@ class NAPS_importer:
                         #   Otherwise, the smallest shift is CB
                         if sum(peaks["SS_name"]==ss)==1:
                             if ss_peaks["C"].item()>41:
-                                obs.loc[ss, "CAm1"] = ss_peaks["C"].item()
+                                obs.loc[ss, "CA_m1"] = ss_peaks["C"].item()
                             else:
-                                obs.loc[ss, "CBm1"] = ss_peaks["C"].item()
+                                obs.loc[ss, "CB_m1"] = ss_peaks["C"].item()
                         else:
                             ss_peaks["Abs_height"] = ss_peaks["Height"].abs()
                             # Above line throws a SettingWithCopy warning, 
@@ -255,11 +255,11 @@ class NAPS_importer:
                             C_max = ss_peaks["C"].max()
                             C_min = ss_peaks["C"].min()
                             if C_max>48 and C_min>48:
-                                obs.loc[ss,"CAm1"] = C_min
-                                obs.loc[ss,"CBm1"] = C_max
+                                obs.loc[ss,"CA_m1"] = C_min
+                                obs.loc[ss,"CB_m1"] = C_max
                             else:
-                                obs.loc[ss,"CAm1"] = C_max
-                                obs.loc[ss,"CBm1"] = C_min
+                                obs.loc[ss,"CA_m1"] = C_max
+                                obs.loc[ss,"CB_m1"] = C_min
                     elif spec=="hncacb":
                         # Use a simple heuristic to guess if peak is CA or CB:
                         # - If only 1 peak, CA if shift >41 ppm, otherwise CB
@@ -361,7 +361,7 @@ class NAPS_importer:
         
         # Restrict to backbone atom types
         obs = obs.loc[obs["Atom_type"].isin(["H","HA","N","C","CA","CB",
-                                             "Cm1","CAm1","CBm1"]),:]
+                                             "C_m1","CA_m1","CB_m1"]),:]
         
         # Convert from long to wide
         obs = obs.pivot(index="SS_name", columns="Atom_type", values="Shift")
@@ -374,7 +374,7 @@ class NAPS_importer:
             obs.index = obs["Res_N"]
             obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
             obs_m1.index = obs_m1.index+1
-            obs_m1.columns = obs_m1.columns + "m1"
+            obs_m1.columns = obs_m1.columns + "_m1"
             obs = pd.merge(obs, obs_m1, how="left", 
                            left_index=True, right_index=True)
             obs = obs.drop(columns="Res_N")
@@ -402,7 +402,7 @@ class NAPS_importer:
         if offset=="i":
             col = "SS_class"
         elif offset=="i-1":
-            col = "SS_classm1"
+            col = "SS_class_m1"
         else:
             print("invalid value of offset: must be 'i' or 'i-1'.")
             return(None)
@@ -438,7 +438,7 @@ class NAPS_importer:
         return(self.obs)
     
     def import_testset_shifts(self, filename, remove_Pro=True, 
-                          short_aa_names=True, SS_class=None, SS_classm1=None):
+                          short_aa_names=True, SS_class=None, SS_class_m1=None):
         """ Import observed chemical shifts from testset data
         
         This function is intended for use with test data only, and is unlikely 
@@ -452,7 +452,7 @@ class NAPS_importer:
             amino acids (eg. ["VIA","G","S","T","DN","FHYWC","REKPQML"] would 
             give the HADAMAC classes). If not None, a column SS_class will be 
             created which gives the class containing the residue type.
-        SS_classm1: as above, but for the i-1 residue.
+        SS_class_m1: as above, but for the i-1 residue.
         
         """
         #### Import the observed chemical shifts
@@ -487,13 +487,13 @@ class NAPS_importer:
         # Make columns for the i-1 observed shifts of C, CA and CB
         obs_m1 = obs[list({"C","CA","CB","Res_type"}.intersection(obs.columns))]
         obs_m1.index = obs_m1.index+1
-        obs_m1.columns = obs_m1.columns + "m1"
+        obs_m1.columns = obs_m1.columns + "_m1"
         obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
                        right_index=True)
         
         # Restrict to specific atom types
-        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-        obs = obs[["Res_N","Res_type","Res_typem1","SS_name"]+
+        atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+        obs = obs[["Res_N","Res_type","Res_type_m1","SS_name"]+
                   list(atom_set.intersection(obs.columns))]
         
         # Add SS_class information
@@ -501,10 +501,10 @@ class NAPS_importer:
             obs["SS_class"]=obs["Res_type"]
             for g in SS_class:
                 obs["SS_class"] = obs["SS_class"].str.replace("["+g+"]", g)
-        if SS_classm1 is not None:
-            obs["SS_classm1"]=obs["Res_typem1"]
-            for g in SS_classm1:
-                obs["SS_classm1"] = obs["SS_classm1"].str.replace("["+g+"]", g)
+        if SS_class_m1 is not None:
+            obs["SS_class_m1"]=obs["Res_type_m1"]
+            for g in SS_class_m1:
+                obs["SS_class_m1"] = obs["SS_class_m1"].str.replace("["+g+"]", g)
         
         obs.index = obs["SS_name"]
         obs.index.name = None
@@ -525,7 +525,7 @@ class NAPS_importer:
         
         df = self.obs.melt(id_vars="SS_name", 
                       value_vars=set(self.obs.columns).intersection({"H","N",
-                                    "HA","C","CA","CB","Cm1","CAm1","CBm1"}), 
+                                    "HA","C","CA","CB","C_m1","CA_m1","CB_m1"}), 
                       var_name="Atom_type", value_name="Shift")
         df = df.sort_values(by=["SS_name", "Atom_type"])
             
@@ -565,12 +565,12 @@ def find_all_assignments(peaks, atoms):
     return(df)                    
 
 def score_plausibility(assignments):
-    atom_list = {"CA","CB","CAm1","CBm1"}.intersection(assignments.columns)
+    atom_list = {"CA","CB","CA_m1","CB_m1"}.intersection(assignments.columns)
     scores = pd.DataFrame(index = assignments.index, columns=["Rest","Gly","Ser","Thr"])
     scores.iloc[:,:] = 0
     tmp = pd.DataFrame(index = assignments.index)
     for a in atom_list:
-        if a in ["CA", "CAm1"]:
+        if a in ["CA", "CA_m1"]:
             scores.loc[assignments[a].between(48,68),"Rest"] += 1/len(atom_list)
             scores.loc[~assignments[a].between(46,70) & assignments[a].notnull(),"Rest"] = -2
             
@@ -583,7 +583,7 @@ def score_plausibility(assignments):
             scores.loc[assignments[a].between(57,69),"Thr"] += 1/len(atom_list)
             scores.loc[~assignments[a].between(52,72) & assignments[a].notnull(),"Thr"] = -2
             
-        elif a in ["CB", "CBm1"]:
+        elif a in ["CB", "CB_m1"]:
             scores.loc[assignments[a].between(15,45),"Rest"] += 1/len(atom_list)
             scores.loc[~assignments[a].between(13,53) & assignments[a].notnull(),"Rest"] = -2
             
@@ -638,7 +638,7 @@ def score_plausibility(assignments):
 #hncocacb = a.peaklists["hncocacb"]
 #
 ## Make a list of all possible peak assignments for the HNCOCACB
-#atoms = ["CAm1","CBm1"]
+#atoms = ["CA_m1","CB_m1"]
 #assignments = pd.DataFrame(columns=["SS_name","As_ID"]+atoms)
 #for SS in a.roots["SS_name"]:
 #    peaks = a.peaklists["hncocacb"].loc[a.peaklists["hncocacb"]["SS_name"]==SS, "C"]

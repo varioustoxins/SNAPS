@@ -89,10 +89,10 @@ def runNAPS(args):
         if args.test_aa_classes is None:
             importer.import_testset_shifts(args.shift_file)
         else:
-            AA_class, AA_classm1 = args.test_aa_classes.split(";")
+            AA_class, AA_class_m1 = args.test_aa_classes.split(";")
             importer.import_testset_shifts(args.shift_file,
                                            SS_class=AA_class.split(","),
-                                           SS_classm1=AA_classm1.split(","))
+                                           SS_class_m1=AA_class_m1.split(","))
     else:
         importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
     a.obs = importer.obs
@@ -136,3 +136,8 @@ def runNAPS(args):
             logging.info("Wrote strip plot to %s", args.plot_file)
 
         return plt
+
+#%% Run the actual script
+import sys
+
+runNAPS(sys.argv[1:])

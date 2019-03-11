@@ -39,10 +39,10 @@ class NAPS_assigner:
                 "pred_correction": False,
                 "delta_correlation": False,
                 "alt_assignments": 1,
-                "atom_set": {"H","N","HA","C","CA","CB","Cm1","CAm1","CBm1"},
+                "atom_set": {"H","N","HA","C","CA","CB","C_m1","CA_m1","CB_m1"},
                 "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
                             'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-                            'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163},
+                            'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163},
                 "plot_strips": False}
             
     def read_config_file(self, filename):
@@ -131,20 +131,19 @@ class NAPS_assigner:
         preds_m1 = preds[list({"C","CA","CB","Res_type","Res_name"}.
                               intersection(preds.columns))].copy()
         preds_m1.index = preds_m1.index+1
-        preds_m1.columns = preds_m1.columns + "m1"
+        preds_m1.columns = preds_m1.columns + "_m1"
         preds = pd.merge(preds, preds_m1, how="left", 
                          left_index=True, right_index=True)
         
         # Create a dictionary to quickly look up the i-1 Res_name
-        self.Res_namem1_dict = preds["Res_namem1"].to_dict()
-        
-        # Restrict to only certain atom types
-        atom_set = {"H","N","C","CA","CB","Cm1","CAm1","CBm1","HA"}
-        preds = preds[["Res_name","Res_N","Res_type","Res_typem1"]+
-                      list(atom_set.intersection(preds.columns))]
-        
         preds.index = preds["Res_name"]
         preds.index.name = None
+        self.Res_name_m1_dict = preds["Res_name_m1"]
+        
+        # Restrict to only certain atom types
+        atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+        preds = preds[["Res_name","Res_N","Res_type","Res_type_m1"]+
+                      list(atom_set.intersection(preds.columns))]
         
         self.preds = preds
         return(self.preds)
@@ -222,7 +221,7 @@ class NAPS_assigner:
             atom_sd = self.pars["atom_sd"]
 #            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
 #                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-#                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
+#                     'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163}
         
         def calc_match_probability(obs, pred1):
             """ Calculate match scores between all observed spin systems and a 
@@ -296,10 +295,10 @@ class NAPS_assigner:
                     # If the i-1 aa type of the predicted residue matches the 
                     # HADAMAC group of the observation, probability is 1.
                     # Otherwise, probability defaults to 0.01
-                    prob["SS_classm1"] = 0.01
-                    if type(pred1["Res_typem1"])==str:    # dummies have NaN
-                        prob.loc[obs["SS_classm1"].str.find(
-                                pred1["Res_typem1"])>=0, "SS_classm1"] = 1
+                    prob["SS_class_m1"] = 0.01
+                    if type(pred1["Res_type_m1"])==str:    # dummies have NaN
+                        prob.loc[obs["SS_class_m1"].str.find(
+                                pred1["Res_type_m1"])>=0, "SS_class_m1"] = 1
             
                 # Calculate overall probability of each row
                 overall_prob = prob.sum(skipna=False, axis=1)
@@ -341,7 +340,7 @@ class NAPS_assigner:
             atom_sd = self.pars["atom_sd"]
 #            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
 #                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-#                     'Cm1':0.5530, 'CAm1':0.4412, 'CBm1':0.5163}
+#                     'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163}
         
         obs = self.obs
         preds = self.preds
@@ -395,10 +394,10 @@ class NAPS_assigner:
                         offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
                                              (lm_pars["Res_type"]==res),
                                              "Offset"].tolist()[0]
-                        if atom in ("Cm1","CAm1","CBm1"):
-                            preds_corr_atom.loc[:,preds["Res_typem1"]==res] = (
-                                    preds_atom.loc[:, preds["Res_typem1"]==res]
-                                    - grad * obs_atom.loc[:, preds["Res_typem1"]==res]
+                        if atom in ("C_m1","CA_m1","CB_m1"):
+                            preds_corr_atom.loc[:,preds["Res_type_m1"]==res] = (
+                                    preds_atom.loc[:, preds["Res_type_m1"]==res]
+                                    - grad * obs_atom.loc[:, preds["Res_type_m1"]==res]
                                     - offset) 
                         else:
                             preds_corr_atom.loc[:, preds["Res_type"]==res] = (
@@ -460,7 +459,7 @@ class NAPS_assigner:
             # matrix showing the probability modifications due to type mismatch, 
             # then add it to log_prob_matrix
             # Maybe make SS_class mismatch a parameter in config file?
-            for ss_class in {"SS_class","SS_classm1"}.intersection(obs.columns):
+            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
                 #print(ss_class)
                 SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
                                            columns=log_prob_matrix.columns)
@@ -470,7 +469,7 @@ class NAPS_assigner:
                     # Work out which observations could be that aa type
                     allowed = obs[ss_class].str.contains(res).fillna(True)
                     # Select the predictions which are that aa type
-                    pred_list = preds.loc[preds["Res_typem1"]==res,"Res_name"]
+                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
                     # For the selected predictions, penalise any observations 
                     # where the current aa type is not allowed
                     for p in pred_list:
@@ -669,10 +668,10 @@ class NAPS_assigner:
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "m1"
+        carbons_m1 = carbons + "_m1"
         seq_atoms = carbons[carbons.isin(obs.columns) & 
                             carbons_m1.isin(obs.columns)]
-        #seq_atoms_m1 = seq_atoms+"m1"
+        #seq_atoms_m1 = seq_atoms+"_m1"
         #seq_atoms = list(seq_atoms)
     
         if seq_atoms.size==0:
@@ -681,20 +680,20 @@ class NAPS_assigner:
         else:
             mismatch_matrix = pd.DataFrame(0, index=obs["SS_name"], columns=obs["SS_name"])
             mismatch_matrix.columns.name = "i"
-            mismatch_matrix.index.name = "im1"
+            mismatch_matrix.index.name = "i_m1"
             
             consistent_links_matrix = mismatch_matrix.copy()
             
             for atom in seq_atoms:
                 i_atom = (obs[atom].repeat(len(obs.index)).values.
                           reshape([len(obs.index),-1]))
-                im1_atom = (obs[atom+"m1"].repeat(len(obs.index)).values.
+                i_m1_atom = (obs[atom+"_m1"].repeat(len(obs.index)).values.
                           reshape([len(obs.index),-1]).transpose())
-                mismatch_atom = pd.DataFrame(i_atom - im1_atom)
+                mismatch_atom = pd.DataFrame(i_atom - i_m1_atom)
                 mismatch_atom.columns = obs["SS_name"]
                 mismatch_atom.columns.name = "i"
                 mismatch_atom.index = obs["SS_name"]
-                mismatch_atom.index.name = "im1"
+                mismatch_atom.index.name = "i_m1"
                 
                 consistent_links_atom = (abs(mismatch_atom) < threshold)
                 
@@ -729,10 +728,10 @@ class NAPS_assigner:
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "m1"
+        carbons_m1 = carbons + "_m1"
         seq_atoms = carbons[carbons.isin(assign_df.columns) & 
                             carbons_m1.isin(assign_df.columns)]
-        seq_atoms_m1 = seq_atoms+"m1"
+        seq_atoms_m1 = seq_atoms+"_m1"
         #seq_atoms = list(seq_atoms)
     
         if seq_atoms.size==0:
@@ -757,8 +756,8 @@ class NAPS_assigner:
             tmp = tmp.join(tmp_prev, rsuffix="_prev")
             # Calculate absolute mismatch for each atom type
             for atom in seq_atoms:
-                tmp["d"+atom+"_prev"] = abs(tmp[atom+"m1"] - tmp[atom+"_prev"])
-                tmp["d"+atom+"_next"] = abs(tmp[atom] - tmp[atom+"m1_next"])
+                tmp["d"+atom+"_prev"] = abs(tmp[atom+"_m1"] - tmp[atom+"_prev"])
+                tmp["d"+atom+"_next"] = abs(tmp[atom] - tmp[atom+"_m1_next"])
             # Calculate maximum mismatch
             tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, 
                                                                    skipna=True)
@@ -966,7 +965,7 @@ class NAPS_assigner:
         """
         return(0)
     
-    def plot_strips(self, atom_list=["C","Cm1","CA","CAm1","CB","CBm1"]):
+    def plot_strips(self, atom_list=["C","C_m1","CA","CA_m1","CB","CB_m1"]):
         """ Make a strip plot of the assignment
         
         atom_list: only plot data for these atom types
@@ -986,9 +985,9 @@ class NAPS_assigner:
         
         # Add columns with information to be plotted
         plot_df["i"] = "0"     # Track if shift is from the i or i-1 residue
-        plot_df.loc[plot_df["Atom_type"].isin(["Cm1","CAm1","CBm1"]),"i"] = "-1"
-        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"Cm1":"C", 
-                                                   "CAm1":"CA", "CBm1":"CB"}) 
+        plot_df.loc[plot_df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"i"] = "-1"
+        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"C_m1":"C", 
+                                                   "CA_m1":"CA", "CB_m1":"CB"}) 
                                                     # Simplify atom type
         
         plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
@@ -1025,7 +1024,7 @@ class NAPS_assigner:
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "m1"
+        carbons_m1 = carbons + "_m1"
         seq_atoms = carbons[carbons.isin(df.columns) & 
                             carbons_m1.isin(df.columns)]
         
@@ -1046,13 +1045,13 @@ class NAPS_assigner:
                 plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
                 ## Plot the vertical lines
-                vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"m1"]]
+                vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
-                # "x" in name is to ensure it sorts after the atom+"m1" shifts
+                # "x" in name is to ensure it sorts after the atom+"_m1" shifts
                 vlines[atom+"x"] = np.NaN  
                 # Convert from wide to long
                 vlines = vlines.melt(id_vars=["Res_name"], 
-                                     value_vars=[atom, atom+"m1", atom+"x"], 
+                                     value_vars=[atom, atom+"_m1", atom+"x"], 
                                      var_name="Atom_type", 
                                      value_name="Shift")
                 vlines = vlines.sort_values(["Res_name","Atom_type"], 
@@ -1061,13 +1060,13 @@ class NAPS_assigner:
                          line_color="black", line_dash="dashed")
                 
                 ## Plot the horizontal lines
-                hlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"m1"]]
+                hlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
-                # "a" in name ensures it sorts between the atom and atom+"m1" shifts
+                # "a" in name ensures it sorts between the atom and atom+"_m1" shifts
                 hlines[atom+"a"] = np.NaN  
                 # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"], 
-                                     value_vars=[atom, atom+"m1", atom+"a"], 
+                                     value_vars=[atom, atom+"_m1", atom+"a"], 
                                      var_name="Atom_type", 
                                      value_name="Shift")
                 hlines = hlines.sort_values(["Res_name","Atom_type"], 
@@ -1077,12 +1076,12 @@ class NAPS_assigner:
                 
                 # Draw circles at the observed chemical shifts
                 plt.circle(df["Res_name"], df[atom], fill_color="blue", size=5)
-                plt.circle(df["Res_name"], df[atom+"m1"], fill_color="red", size=5)
+                plt.circle(df["Res_name"], df[atom+"_m1"], fill_color="red", size=5)
                 
                 # Reverse the y axis and set range:
                 plt.y_range = Range1d(
-                        df[[atom,atom+"m1"]].max().max()+5, 
-                        df[[atom,atom+"m1"]].min().min()-5)
+                        df[[atom,atom+"_m1"]].max().max()+5, 
+                        df[[atom,atom+"_m1"]].min().min()-5)
                 
                 # Change axis label orientation
                 plt.xaxis.major_label_orientation = 3.14159/2

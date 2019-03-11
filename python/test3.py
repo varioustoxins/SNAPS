@@ -36,10 +36,10 @@ importer1.import_testset_shifts(testset_df.loc[id, "obs_file"])
 
 importer2 = NAPS_importer()
 #importer2.import_testset_shifts(testset_df.loc[id, "obs_file"])
-AA_class, AA_classm1 = "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML".split(";")
+AA_class, AA_class_m1 = "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML".split(";")
 importer2.import_testset_shifts(testset_df.loc[id, "obs_file"],
                                SS_class=AA_class.split(","),
-                               SS_classm1=AA_classm1.split(","))
+                               SS_class_m1=AA_class_m1.split(","))
 
 #%%
 a = NAPS_assigner()
@@ -126,7 +126,7 @@ tmp = rank_dist.lookup(common_residues, common_residues)
 #tmp = pd.Series(np.diag(rank_dist), index=rank_dist.index)
 
 #%% Write a file with HADAMAC info
-tmp = obs.loc[:,["SS_name", "SS_classm1"]]
+tmp = obs.loc[:,["SS_name", "SS_class_m1"]]
 tmp["Type"] = "in"
 tmp = tmp.dropna()
 tmp.to_csv(path/"data/SS_class_info.txt", sep="\t", header=False, index=False)
