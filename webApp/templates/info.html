@@ -1,46 +1,71 @@
 {% extends "layout.html" %}
 {% block content %}
-<h1 class="mt-4">NAPS</h1>
-<h2>About NAPS</h2>
-<p>
-NAPS (NMR Assignments from Predicted Shifts) is a program for assigning NMR 
-spectra using information from chemical shift predictions derived from protein 
-structures. It is currently under development.
-</p>
-<p>
-To use NAPS, you will need:
-<ul>
-    <li>a chemical shift list derived from one or more protein spectra. The shifts 
-    should be grouped into spin systems/pseudo-residues. A number of formats are
-    accepted, including SPARKY, XEASY, nmrPipe and shift lists exported from CCPN
-    Analysis (v2.x). In future, it will be possible to import peaklists directly.</li>
-    <li>a list of predicted chemical shifts. Currently, <a href="http://www.shiftx2.ca/">SHIFTX2</a> 
-    and <a href="https://spin.niddk.nih.gov/bax/nmrserver/sparta/">SPARTA+</a> 
-    predictions are accepted.</li>
-</ul>
-You can also leave both input fields blank, and the server will return results 
-from some demonstration data.
-</p>
-<p>
-After running NAPS, two pieces of information are returned:
-<ul><
-     <li>a table containing the maximum likelihood assignment.</li>
-    <li>an interactive strip plot which allows you to quickly locate residues with 
-    poor sequential links. (This will only be generated if your input data contains 
-    sequential connectivity information for at least one carbon, eg. both CA_i and 
-    CA_i-1 shifts.)</li>
-</ul>
-</p>
-<p>
-NAPS is available at GitHub: you can find it at https://github.com/aheyam/NAPS. 
-Any feedback would be gratefully received at alex.heyam at york.ac.uk.
-</p>
-<h2>Disclaimer</h2>
-<p>
-NAPS is currently under development, and is available for demonstration or 
-testing purposes only. It likely contains bugs, and may change without notice. 
-Use at your own risk!
-</p>
-			
+			<h1 class="mt-4">NAPS</h1>
+			<h2 id=configurationSection>Configuration</h2>
+			<form id="form" style="width: 600px" action="$SCRIPT_ROOT + '/run'" enctype=multipart/form-data method="post">
+				<div class="row">
+					<div class="col">
+						<label for="observedShiftsFile">Observed shifts file</label>
+					</div>
+					<div class="col">
+						<label for="observedShiftsFormat">Observed shifts format</label>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<input type="file" name="observedShiftsFile" class="form-control-file" id="observedShiftsFile" />
+					</div>
+					<div class="col">
+						<div class="dropdown">
+							<button class="btn btn-secondary dropdown-toggle" type="button" id="observedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Naps</button>
+                            <input type="hidden" name="shift_type" value="Naps">
+                            <div class="dropdown-menu" aria-labelledby="observedShiftsFormatDropdown">
+								<span class="dropdown-item">Naps</span>
+                                <span class="dropdown-item">CCPN</span>
+                                <span class="dropdown-item">Sparky</span>
+                                <span class="dropdown-item">XEasy</span>
+                                <span class="dropdown-item">NMRPipe</span>
+								<span class="dropdown-item">Test</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<label for="predictedShiftsFile">Predicted shifts file</label>
+					</div>
+					<div class="col">
+						<label for="predictedShiftsFormat">Predicted shifts format</label>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col">
+						<input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" />
+					</div>
+					<div class="col">
+						<div class="dropdown">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="predictedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Shiftx2</button>
+                            <input type="hidden" name="pred_type" value="Shiftx2">
+                            <div class="dropdown-menu" aria-labelledby="predictedShiftsFormatDropdown">
+								<span class="dropdown-item">Shiftx2</span>
+								<span class="dropdown-item">Sparta+</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<p><a href="#" id=advanced>Advanced</a></p>
+				<div id=advancedToggle class="collapse in">
+					<p>Predicted shift offset:</p>
+				</div>
+				<p><a href="#" id=run>Run</a></p>
+			</form>
+			<h2 id=resultsSection>Results</h2>
+            <p id="errors"></p>
+			<table id="table" data-height="800">
+				<thead>
+					<tr id="tableData"></tr>
+				</thead>
+			</table>
+            <div id="plot"></div>
 			<!-- /#page-content-wrapper -->
 {% endblock %}
