@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<meta content="utf-8" http-equiv="encoding">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<title>NAPS</title>
+	<!-- Bootstrap core CSS -->
+	<link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+	<!-- Custom styles for this template -->
+	<link href="{{ url_for('static', filename='css/simple-sidebar.css') }}" rel="stylesheet">
+	<link href="{{ url_for('static', filename='css/fixed-left.css') }}" rel="stylesheet">
+	<!-- Bootstrap core JavaScript -->
+	<script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}" rel="stylesheet"></script>
+	<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}" rel="stylesheet"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.10.1/bootstrap-table.min.css">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.10.1/bootstrap-table.min.js"></script>
+	<script>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
+    <!-- Form-specific JavaScript -->
+    <script src="{{ url_for('static', filename='Layout.js') }}" rel="stylesheet"></script>
+    <script src="{{ url_for('static', filename='Execution.js') }}" rel="stylesheet"></script>
+
+    <link href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.css" rel="stylesheet" type="text/css">
+    <link href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.css" rel="stylesheet" type="text/css">
+    <script src="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.js"></script>
+    <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.js"></script>
+</head>
+<body>
+	<div class="d-flex" id="wrapper">
+		<!-- Sidebar -->
+		<div class="sidenav bg-light border-right" id="sidebar-wrapper">
+			<a href="../" class="list-group-item list-group-item-action bg-light">Run NAPS</a>
+                       <a href="../info" class="list-group-item list-group-item-action bg-light">About NAPS</a> 
+		</div>
+		<!-- /#sidebar-wrapper -->
+		<!-- Page Content -->
+		<div id="page-content-wrapper" class="container-fluid main">
+			<!-- /#page-content-wrapper -->
+			{% block content %}
+			{% endblock %}
+		</div>
+		<!-- /#wrapper -->
+	</div>
+</body>
+</html>
