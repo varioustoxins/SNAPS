@@ -8,7 +8,7 @@ Created on Mon Nov 19 10:36:07 2018
 
 import numpy as np
 import pandas as pd
-from plotnine import *
+#from plotnine import *
 from bokeh.plotting import figure, output_file, save
 from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
@@ -135,14 +135,16 @@ class NAPS_assigner:
         preds = pd.merge(preds, preds_m1, how="left", 
                          left_index=True, right_index=True)
         
-        # Create a dictionary to quickly look up the i-1 Res_name
-        preds.index = preds["Res_name"]
-        preds.index.name = None
-        self.Res_name_m1_dict = preds["Res_name_m1"]
+        # Make column for the i+1 Res_name
+        preds_p1 = preds[["Res_name"]].copy()
+        preds_p1.index = preds_p1.index-1
+        preds_p1.columns = ["Res_name_p1"]
+        preds = pd.merge(preds, preds_p1, how="left", 
+                         left_index=True, right_index=True)
         
         # Restrict to only certain atom types
         atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
-        preds = preds[["Res_name","Res_N","Res_type","Res_type_m1"]+
+        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1","Res_name_p1","Res_type_m1"]+
                       list(atom_set.intersection(preds.columns))]
         
         self.preds = preds
@@ -159,7 +161,14 @@ class NAPS_assigner:
         preds = self.preds.copy()
         
         # Delete any prolines in preds
+        self.all_preds = preds.copy()   # Keep a copy of all predictions
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
+        
+        # Create a data frame to quickly look up the i-1 and i+1 Res_name
+        preds.index = preds["Res_name"]
+        preds.index.name = None
+        self.neighbour_df = preds[["Res_name_m1","Res_name_p1"]]
+        #self.Res_name_m1.loc[preds["Res_type_m1"]=="P"] = np.NaN
         
         # Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
@@ -192,7 +201,13 @@ class NAPS_assigner:
             obs = obs.append(dummies)
             #obs.loc[["dummy_"+str(i) for i in 1+np.arange(M-N)]] = np.NaN
             #obs.loc[obs.index[N:M], "SS_name"] = ["dummy_"+str(i) for i in 1+np.arange(M-N)]
-
+        
+        # Set missing Res_name_m1 entries to NaN
+        self.neighbour_df.loc[~self.neighbour_df["Res_name_m1"].isin(preds["Res_name"]), 
+                          "Res_name_m1"] = np.NaN
+        self.neighbour_df.loc[~self.neighbour_df["Res_name_p1"].isin(preds["Res_name"]), 
+                          "Res_name_p1"] = np.NaN
+        
         self.obs = obs.copy()
         self.preds = preds.copy()
         
@@ -779,13 +794,40 @@ class NAPS_assigner:
                 self.assign_df = assign_df
             return(assign_df)
     
-#    def check_matching_consistency(self, matching):
-#        """Calculate mismatch scores for a given matching"""
-#        matching["Max_mismatch_prev"] = self.mismatch_matrix.lookup(
-#                                matching["SS_name"], matching["Res_name"])
-#        matching["Num_good_links_prev"] = self.mismatch_matrix.lookup(
-#                                matching["SS_name"], matching["Res_name"])
-#        return(matching)
+    def check_matching_consistency(self, matching):
+        """Calculate mismatch scores for a given matching"""
+        # Add a Res_name_m1 column to matching DataFrame
+        matching.index = matching["Res_name"]
+        matching.index.name = None
+        
+        tmp = pd.concat([matching, self.neighbour_df], axis=1)
+        
+        # Add a SS_name_m1 and SS_name_p1 columns
+        tmp = tmp.merge(matching[["SS_name"]], how="left", left_on="Res_name_m1", 
+                        right_index=True, suffixes=("","_m1"))
+        tmp = tmp.merge(matching[["SS_name"]], how="left", left_on="Res_name_p1", 
+                        right_index=True, suffixes=("","_p1"))
+        
+        # Filter out rows with NaN's in SS_name_m1/p1
+        tmp_m1 = tmp.dropna(subset=["SS_name_m1"])
+        tmp_p1 = tmp.dropna(subset=["SS_name_p1"])
+        
+        # Get the mismatches
+        tmp["Max_mismatch_m1"] = pd.Series(self.mismatch_matrix.lookup(
+                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"]),
+                                index=tmp_m1.index)
+        tmp["Max_mismatch_p1"] = pd.Series(self.mismatch_matrix.lookup(
+                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
+                                index=tmp_p1.index)
+        
+        tmp["Num_good_links_m1"] = pd.Series(self.consistent_links_matrix.lookup(
+                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"]),
+                                index=tmp_m1.index)
+        tmp["Num_good_links_p1"] = pd.Series(self.consistent_links_matrix.lookup(
+                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
+                                index=tmp_p1.index)
+        return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1",
+                    "Num_good_links_m1","Num_good_links_p1"]])
     
     def find_alt_assignments(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system

@@ -93,6 +93,19 @@ tmp2 = assign_df2
 tmp2.index = tmp2["Res_name"]
 
 sum(tmp1["SS_name"] == tmp2["SS_name"])
+mismatch_mat = a.calc_mismatch_matrix()
+
+d = a.neighbour_df
+tmp = a.check_matching_consistency(matching)
+#
+#p1 = pd.DataFrame(d.index, index=d)
+#p1["Res_name_p1"] = p1.index
+#p1.index = p1["Res_name_m1"]
+#
+#df = pd.DataFrame(d)
+#df["Res_name"] = df.index
+#df2 = pd.merge(df, p1, how="left", left_index=True, right_index=True)
+
 
 #%% Test kbest assignments
 kbest, unranked = a.find_kbest_assignments(10, verbose=True)
