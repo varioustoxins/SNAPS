@@ -137,7 +137,8 @@ def runNAPS(args):
 
         return plt
 
-#%% Run the actual script
-import sys
+if __name__ == '__main__':
+    #%% Run the actual script
+    import sys
 
-runNAPS(sys.argv[1:])
+    runNAPS(sys.argv[1:])
