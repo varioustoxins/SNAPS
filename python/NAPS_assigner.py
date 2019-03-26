@@ -956,7 +956,9 @@ class NAPS_assigner:
             # If the current node has forced included pairings, get a list of 
             # all parts of the matching that can vary.
             if current_node.inc is not None:
-                matching_reduced = current_node.matching[~current_node.matching["SS_name"].isin(current_node.inc["SS_name"])]
+                matching_reduced = current_node.matching[
+                                            ~current_node.matching["SS_name"].
+                                            isin(current_node.inc["SS_name"])]
             else:
                 matching_reduced = current_node.matching
             
@@ -998,7 +1000,18 @@ class NAPS_assigner:
             
         return(ranked_nodes, unranked_nodes)                                                                                                                             
         
-                
+    def find_kbest_consistent_assignments(self):
+        """Find a consistent set of assignments using kbest search
+        
+        Finds the best assignment, then holds constant any consistent residues. Then finds 
+        the k-best alternative assignments, and checks if a more consistent assignment 
+        is found. If so, the extra consistent residues are held constant, and the 
+        process is repeated.
+        
+        """
+        init_matching = self.find_best_assignments()
+        init_consistency = self.check_matching_consistency(init_matching)
+        pass          
 
     
     def output_peaklists(self, filepath, format="sparky", 

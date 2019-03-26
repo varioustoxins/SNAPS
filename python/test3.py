@@ -93,10 +93,6 @@ tmp2 = assign_df2
 tmp2.index = tmp2["Res_name"]
 
 sum(tmp1["SS_name"] == tmp2["SS_name"])
-mismatch_mat = a.calc_mismatch_matrix()
-
-d = a.neighbour_df
-tmp = a.check_matching_consistency(matching)
 #
 #p1 = pd.DataFrame(d.index, index=d)
 #p1["Res_name_p1"] = p1.index
@@ -117,9 +113,16 @@ tmp9 = kbest[9]
 #[n.sum_log_prob for n in unranked]
 unranked[-1].exc
 
-#%% Test mismatch matrix
-tmp = a.calc_mismatch_matrix()
-tmp2 = a.consistent_links_matrix
+#%% Test mismatch matrix and kbest consistency
+
+mismatch_mat = a.calc_mismatch_matrix()
+consistent_links_mat = a.consistent_links_matrix
+
+d = a.neighbour_df
+tmp = a.check_matching_consistency(matching)
+tmp2 = tmp[(tmp["Num_good_links_m1"]==3) & (tmp["Num_good_links_p1"]==3)]
+
+
 
 #%% Test stuff
 
