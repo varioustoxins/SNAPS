@@ -25,7 +25,8 @@ function download(filePath) {
         url: $SCRIPT_ROOT + '/download',
         data: { filePath: filePath },
         success: function (output) {
-            console.log(output);
+            var naps_download = new Blob([output], { type: "application / octet - stream" });
+            saveAs(naps_download, filePath.split("\\")[1]);
         }
     });
 }
