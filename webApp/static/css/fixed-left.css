@@ -1,4 +1,22 @@
 /* The sidebar menu */
+#fileSender {
+    padding: 2.5rem 0.5rem 0 1.25rem;
+}
+
+#fileSender p {
+    margin-bottom: 0;
+}
+
+#fileSender button {
+    font-size: 0.8rem;
+}
+
+.fileSender {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    width: 100%;
+}
+
 .sidenav {
     height: 100%; /* Full-height: remove this if you want "auto" height */
     width: 160px; /* Set the width of the sidebar */
@@ -9,13 +27,4 @@
     background-color: #111; /* Black */
     overflow-x: hidden; /* Disable horizontal scroll */
     padding-top: 20px;
-}
-
-/* The navigation menu links */
-.sidenav button {
-    padding: 6px 8px 6px 16px;
-    text-decoration: none;
-    font-size: 18px;
-    color: #818181;
-    display: block;
 }

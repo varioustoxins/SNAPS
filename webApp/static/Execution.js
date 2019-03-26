@@ -23,13 +23,12 @@ $(function () {
                 console.log(err);
             }
         });
-
     });
 });
 
 function success(data) {
     $("#runLoading").remove();
-    if (data.status == 'ok') {
+    if (data.status === 'ok') {
         $.each(data.headers, function (index, header) {
             $("#tableData").append("<th data-field=" + header + ">" + header + "</th>");
         });
@@ -42,7 +41,7 @@ function success(data) {
         $("#files").empty();
         insertDownloadLinks(data.files);
     }
-    else if (data.status == 'validation_failed') {
+    else if (data.status === 'validation_failed') {
         $.each(data.errors, function (index, error) {
             $("#errors").append("<p>" + error + "</p>");
         });

@@ -4,10 +4,12 @@ import re
 import base64
 import json
 
-from flask import Flask, render_template, jsonify, request, session, send_file
+from flask import Flask, render_template, jsonify, request, session
+from flask_mail import Mail
 from os import environ
 from validation import Validate
 from args import Args
+from fileSender import downloadFile, emailFiles
 from fileHandler import saveFiles, deleteFiles
 
 mainNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
@@ -16,7 +18,19 @@ os.chdir(mainNAPSfilePath)
 
 from NAPS import runNAPS
 app = Flask(__name__)
-app.secret_key = 'napsnapsnapsnaps'
+app.secret_key = 'napsnapsnapsnaps' #should be changed to an external config value in production
+
+mail_settings = {
+    "MAIL_SERVER": '',
+    "MAIL_PORT": 0,
+    "MAIL_USE_TLS": False,
+    "MAIL_USE_SSL": True,
+    "MAIL_USERNAME": '',
+    "MAIL_PASSWORD": ''
+}
+
+app.config.update(mail_settings)
+mail = Mail(app)
 
 @app.route('/run', methods = ['POST'])
 def run():
@@ -24,6 +38,7 @@ def run():
     saveFiles(request, args)
     validationResult = Validate(args)
     response = run(args) if validationResult.isValid else validationResult.response
+    #This needs replacing with a clean-up script
     #deleteFiles(args)
     return response
 
@@ -32,13 +47,13 @@ def run(args):
         args.plot = runNAPS(args.argsToList())
         files = {'results': args.getResultsLocation(), 'plot': args.getPlotLocation()}
         saveSession(files)
-        return createJSONForTable(args, files)
+        return createJSONForTable(args)
     except Exception as e:
         #log errors
         print("Unexpected error:" + str(e))
         return jsonify(status='application_failed')
 
-def createJSONForTable(args, files):
+def createJSONForTable(args):
     with open(args.output_file) as output_file:
         result = []
         line = output_file.readline()
@@ -52,34 +67,40 @@ def createJSONForTable(args, files):
             result.append(row)
             line = output_file.readline()
 
-    return jsonify(status='ok', headers=headers, result=result, plot=args.plot, files=files)
+    return jsonify(status='ok', headers=headers, result=result, plot=args.plot, files=getFileBools())
+
+def getFileBools():
+    files = getSessionInfo()
+    return {'results': 'results' in files, 'plot': 'plot' in files}
 
 @app.route('/')
 def index():
-    files = getSessionInfo()
-    return render_template('index.html', files=files)
+    return render_template('index.html', files=getFileBools())
     
 @app.route('/info')
 def info():
-    files = getSessionInfo()
-    return render_template('info.html', files=files)
+    return render_template('info.html', files=getFileBools())
 
 @app.route('/download', methods = ['POST'])
 def download():
-    try:
-        return send_file(os.path.join(app.instance_path, request.values['filePath']), as_attachment=True)
-    except Exception as e:
-        return str(e)
+    return downloadFile(getSessionInfo(), request)
+
+@app.route('/email', methods = ['POST'])
+def email():
+    if not app.config.get("MAIL_SERVER"):
+        return jsonify(status='no_email_server', message='The email server is not configured on the views.py page.')
+    return emailFiles(getSessionInfo(), request, mail, app)
 
 def saveSession(sessionInfo):
     session['userSession'] = sessionInfo
 
 def getSessionInfo():
+    files = {}
     if 'userSession' in session:
-        return session['userSession']
-    else:
-        return {}
-
+        for file,path in session['userSession'].items():
+            if (os.path.isfile(path)):
+                files[file] = path
+    return files
 
 if __name__ == '__main__':
     HOST = environ.get('SERVER_HOST', 'localhost')
