@@ -21,19 +21,26 @@
     <!-- Form-specific JavaScript -->
     <script src="{{ url_for('static', filename='Layout.js') }}" rel="stylesheet"></script>
     <script src="{{ url_for('static', filename='Execution.js') }}" rel="stylesheet"></script>
+    <script src="{{ url_for('static', filename='Download.js') }}" rel="stylesheet"></script>
+    <script src="{{ url_for('static', filename='scripts/FileSaver.min.js') }}" rel="stylesheet"></script>
 
     <link href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.css" rel="stylesheet" type="text/css">
     <link href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.css" rel="stylesheet" type="text/css">
     <script src="https://cdn.pydata.org/bokeh/release/bokeh-1.0.4.min.js"></script>
     <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.js"></script>
+    <script>
+        var files = {{ files|tojson }};
+    </script>
 </head>
 <body>
 	<div class="d-flex" id="wrapper">
 		<!-- Sidebar -->
 		<div class="sidenav bg-light border-right" id="sidebar-wrapper">
 			<a href="../" class="list-group-item list-group-item-action bg-light">Run NAPS</a>
-                       <a href="../info" class="list-group-item list-group-item-action bg-light">About NAPS</a> 
-		</div>
+            <a href="../info" class="list-group-item list-group-item-action bg-light">About NAPS</a> 
+            <div id="files" class="list-group-item bg-light">
+            </div>
+        </div>
 		<!-- /#sidebar-wrapper -->
 		<!-- Page Content -->
 		<div id="page-content-wrapper" class="container-fluid main">

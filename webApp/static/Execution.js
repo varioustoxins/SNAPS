@@ -39,6 +39,8 @@ function success(data) {
         if (data.plot) {
             Bokeh.embed.embed_item(data.plot, "plot");
         }
+        $("#files").empty();
+        insertDownloadLinks(data.files);
     }
     else if (data.status == 'validation_failed') {
         $.each(data.errors, function (index, error) {

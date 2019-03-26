@@ -8,7 +8,6 @@ Created on Mon Nov 19 10:36:07 2018
 
 import numpy as np
 import pandas as pd
-#from plotnine import *
 from bokeh.plotting import figure, output_file, save
 from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
