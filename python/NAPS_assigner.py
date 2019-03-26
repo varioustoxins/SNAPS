@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Nov 19 10:36:07 2018
+Defines a class with functions related to the actual assignment process, and 
+outputting the results.
 
 @author: aph516
 """
@@ -150,6 +151,60 @@ class NAPS_assigner:
         self.preds = preds
         return(self.preds)
     
+    def simulate_pred_shifts(self, filename, sd, seed=1):
+        """Generate a 'simulated' predicted shift DataFrame by importing some 
+        observed chemical shifts (in 'test' format), and adding Gaussian 
+        errors.
+        
+        sd: dictionary of standard deviation for each atom type 
+            eg. {"H":0.1,"N":0.5}
+        """
+        from NAPS_importer import NAPS_importer
+        from numpy.random import normal
+        
+        importer = NAPS_importer()
+        importer.import_testset_shifts(filename, remove_Pro=False)
+        
+        preds = importer.obs
+        
+        # Limit columns
+        preds = preds[["Res_N","Res_type"]+
+                      list({"C","CA","CB","H","N","HA"}.intersection(preds.columns))]
+        
+        # Add the random shifts
+        for atom in self.pars["atom_set"].intersection(preds.columns):
+            preds.loc[:,atom] += normal(0, sd[atom], size=len(preds.index))
+        
+        # Add other columns back in
+        preds.insert(1, "Res_name", (preds["Res_N"].astype(str) + 
+                  preds["Res_type"]))
+        preds.loc[:,"Res_name"] = [s.rjust(5) for s in preds["Res_name"]]
+        
+        preds.index = preds["Res_N"]
+        preds.index.name=None
+        
+        # Make columns for the i-1 predicted shifts of C, CA and CB
+        preds_m1 = preds[list({"C","CA","CB","Res_type","Res_name"}.
+                              intersection(preds.columns))].copy()
+        preds_m1.index = preds_m1.index+1
+        preds_m1.columns = preds_m1.columns + "_m1"
+        preds = pd.merge(preds, preds_m1, how="left", 
+                         left_index=True, right_index=True)
+        
+        # Make column for the i+1 Res_name
+        preds_p1 = preds[["Res_name"]].copy()
+        preds_p1.index = preds_p1.index-1
+        preds_p1.columns = ["Res_name_p1"]
+        preds = pd.merge(preds, preds_p1, how="left", 
+                         left_index=True, right_index=True)
+        
+        # Restrict to only certain atom types
+        atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1","Res_name_p1","Res_type_m1"]+
+                      list(atom_set.intersection(preds.columns))]
+        
+        self.preds = preds
+        return(self.preds)
     
     def add_dummy_rows(self):
         """Add dummy rows to obs and preds to bring them to the same length.

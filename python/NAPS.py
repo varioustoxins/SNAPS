@@ -1,7 +1,7 @@
 #!/anaconda3/bin/python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Nov 19 14:30:36 2018
+Main NAPS script for assigning an observed shift list based on predicted shifts
 
 @author: aph516
 """

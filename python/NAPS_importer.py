@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct 17 19:08:55 2018
+Defines a class with functions related to importing peak lists and shift lists.
 
 @author: Alex
 """
