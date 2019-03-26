@@ -124,6 +124,7 @@ class NAPS_assigner:
         tmp = preds_long[["Res_N","Res_type","Res_name"]]
         tmp = tmp.drop_duplicates(subset="Res_name")
         tmp.index = tmp["Res_N"]
+        tmp.index.name = None
         preds = pd.concat([tmp, preds], axis=1)
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
