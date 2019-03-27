@@ -10,7 +10,8 @@ eg "python NAPS_test.py /Users/aph516/GitHub/NAPS/"
 
 import numpy as np
 import pandas as pd
-from subprocess import run, Popen, PIPE
+from NAPS_analyse import import_testset_metadata, check_assignment_accuracy
+from subprocess import run
 from pathlib import Path
 import argparse
 from plotnine import *
@@ -40,12 +41,7 @@ path = Path(args.NAPS_path)
 #path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
 # Import metadata on the test datasets
-testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 
-                           names=["ID","PDB","BMRB","Resolution","Length"])
-testset_df["obs_file"] = [path/x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
-testset_df["preds_file"] = [path/x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
-testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
-testset_df.index = testset_df["ID"]
+testset_df = import_testset_metadata()
 
 # Define some lists of ID's with particular characteristics
 id_all = testset_df["ID"].tolist()  # All ID's
@@ -64,134 +60,7 @@ id_missing_carbons = list(set(id_all) - set(id_all_carbons))
 if args.N is not None:
     id_all = id_all[0:int(args.N)]
     id_all_carbons = id_all_carbons[0:int(args.N)]
-#%%
-
-def check_assignment_accuracy(data_dir, ranks=[1], prefix="", ID_list=id_all):
-    """Function to check assignment accuracy
-    """
-    # Nb. make sure data_dir ends with a forward slash
-
-    assigns = None
-    for i in ID_list:
-        tmp_all = pd.read_csv(
-                data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"), 
-                sep="\t", index_col=False)
-        tmp_all["ID"] = i
-        
-        # Cysteines in disulphide bridges are often named B in this dataset. 
-        # We don't need to know this, so change to C
-        mask = tmp_all["Res_type"]=="B"
-        tmp_all.loc[mask,"Res_type"] = "C"
-        tmp_all.loc[mask, "Res_name"] = (tmp_all.loc[mask,"Res_name"].
-                   str.replace("B","C"))
-        
-        # Restrict to just the ranks being considered (ie. when output contains 
-        # alternative assignments)
-        if "Rank" not in tmp_all.columns:
-            tmp_all["Rank"] = 1
-            tmp_all["Rel_prob"] = 0
-        
-        tmp = tmp_all.loc[tmp_all["Rank"].isin(ranks),:].copy()
-        tmp["Rank"] = tmp["Rank"].astype(str)
-        if "Max_mismatch_prev" in tmp.columns:
-            tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
-                       "Rank","Rel_prob","Dummy_SS","Dummy_res",
-                       "Max_mismatch_prev","Max_mismatch_next",
-                       "Num_good_links_prev","Num_good_links_next"]]
-        else:
-            tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
-                       "Rank","Rel_prob","Dummy_SS","Dummy_res"]]
-       
-        # Convert Res_N column to integer
-        tmp.loc[:,"Res_N"] = tmp.loc[:,"Res_N"].fillna(-999)
-        tmp.loc[:,"Res_N"] = tmp.loc[:,"Res_N"].astype(int)
-        # Cysteines in disulphide bridges are often named B in this dataset. 
-        # We don't need to know this, so change to C
-        mask = tmp["Res_type"]=="B"
-        tmp.loc[mask,"Res_type"] = "C"
-        tmp.loc[mask, "Res_name"] = tmp.loc[mask,"Res_name"].str.replace("B","C")
-        # Add a column saying whether a match exists for the spin system 
-        # (ie whether a correct assignment is possible)
-        tmp["SS_in_pred"] = tmp["SS_name"].isin(tmp_all["Res_name"])
-        tmp["Pred_in_SS"] = tmp["Res_name"].isin(tmp_all["SS_name"])
-        
-        # Add a column with the residue type of the spin system 
-        # (as opposed to the prediction assigned to it)
-        tmp["SS_type"] = tmp["SS_name"].str[-1:]
-        tmp.loc[tmp["Dummy_SS"],"SS_type"] = np.NaN
-        
-        if assigns is None:
-            assigns = tmp
-        else:
-            assigns = pd.concat([assigns, tmp], ignore_index=True)
-        
-    # Determine which spin systems were correctly assigned
-    assigns["Correct"] = False
-    assigns["Status"] = ""
-    
-    mask = assigns["SS_in_pred"] & ~assigns["Dummy_SS"]
-    assigns.loc[mask & (assigns["SS_name"]==assigns["Res_name"]), 
-                "Correct"] = True
-    assigns.loc[mask & (assigns["SS_name"]==assigns["Res_name"]), 
-                "Status"] = "Correctly assigned"
-    assigns.loc[mask & (assigns["SS_name"]!=assigns["Res_name"]), 
-                "Status"] = "Misassigned"
-    assigns.loc[mask & assigns["Dummy_res"], "Status"] = "Wrongly unassigned"
-    
-    mask = ~assigns["SS_in_pred"] & ~assigns["Dummy_SS"]
-    assigns.loc[mask & (assigns["SS_name"]!=assigns["Res_name"]), 
-                "Status"] = "Wrongly assigned"
-    assigns.loc[mask & assigns["Dummy_res"], "Correct"] = True
-    assigns.loc[mask & assigns["Dummy_res"], "Status"] = "Correctly unassigned"
-    
-    assigns.loc[assigns["Dummy_SS"], "Status"] = "Dummy SS"
-    assigns.loc[:,"Status"] = assigns["Status"].astype("category")
-    
-    # Make the summary dataframe
-    ID_unique = assigns["ID"].unique()
-    Rank_unique = assigns["Rank"].unique()
-    
-    # We want:
-    # ID1 Rank1
-    # ID1 Rank2
-    # ...
-    # ID1 RankN
-    # ID2 Rank1
-    # ...
-    # ID2 RankN
-    # ID3 Rank1
-    # ...
-    Rank_list = list(Rank_unique)*len(ID_unique)
-    ID_list2 = list(ID_unique.repeat(len(Rank_unique)))
-    status_list=["Correctly assigned","Correctly unassigned","Dummy SS",
-                 "Misassigned","Wrongly assigned","Wrongly unassigned"]
-    
-    summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list}, 
-                           columns=["ID", "Rank"]+status_list)
-
-    for i in summary.index:
-        tmp = assigns.loc[(assigns["ID"] == summary.loc[i, "ID"]) &
-                          (assigns["Rank"] == summary.loc[i, "Rank"]),:]
-        for status in status_list:
-            summary.loc[i, status] = sum(tmp["Status"]==status)
-                
-    #summary = summary.loc[:,status_list].fillna(0).astype(int)
-    summary["N"] = summary.loc[:,status_list].apply(sum, axis=1)
-    summary["N_SS"] = summary["N"] - summary["Dummy SS"]
-    
-    
-    # Add rows with sums for all ranks
-    for r in Rank_unique:
-        sum_row = (summary.loc[summary["Rank"]==r,:].sum(axis=0).
-                       to_frame("Sum").transpose())
-        sum_row["ID"] = "Sum"
-        sum_row["Rank"] = r
-        summary = pd.concat([sum_row, summary], sort=False, ignore_index=True)
-
-    summary["Pc_correct"] = (summary["Correctly assigned"]+
-                             summary["Correctly unassigned"]) / summary["N_SS"]
-    
-    return([assigns, summary])
+#%% Some functions
 
 def save_summary_plot(assigns, summary, out_dir):
     plt = ggplot(data=assigns) #[~assigns["Dummy_SS"]])
@@ -201,6 +70,7 @@ def save_summary_plot(assigns, summary, out_dir):
                           format_string="{:.0%}", data=summary, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     #plt = plt + scale_x_discrete(breaks=summary["ID"].tolist())
+    
     plt.save(path/("plots/summary_"+out_dir+".pdf"), 
              height=210, width=297, units="mm")
 
@@ -218,12 +88,15 @@ def save_alt_summary_plots(assigns, summary, out_dir):
     plt = ggplot(data=tmp) + geom_bar(aes(x="ID", y="Pc_correct", fill="Rank"), stat="identity")
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
+    
     plt.save(path/"plots"/(out_dir+"_correct.pdf"), height=210, width=297, units="mm")
 
 #%% Test all proteins in the using most basic settings
 if "basic" in args.test or "all" in args.test:
     out_dir = "basic"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -238,7 +111,7 @@ if "basic" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all)
+        assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_basic.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
     
         save_summary_plot(assigns_basic, summary_basic, out_dir)
@@ -280,6 +153,8 @@ if "basic" in args.test or "all" in args.test:
 if "pred_correction" in args.test or "all" in args.test:
     out_dir = "pred_correction"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -293,7 +168,7 @@ if "pred_correction" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_pc, summary_pc = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all)
+        assigns_pc, summary_pc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_pc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
         
         save_summary_plot(assigns_pc, summary_pc, out_dir)
@@ -303,6 +178,8 @@ if "pred_correction" in args.test or "all" in args.test:
 if "delta_correlation" in args.test or "all" in args.test:
     out_dir = "delta_correlation"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -316,7 +193,7 @@ if "delta_correlation" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_dc, summary_dc = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all)
+        assigns_dc, summary_dc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_dc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
         
         save_summary_plot(assigns_dc, summary_dc, out_dir)
@@ -325,6 +202,8 @@ if "delta_correlation" in args.test or "all" in args.test:
 if "delta_correlation2" in args.test or "all" in args.test:
     out_dir = "delta_correlation2"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -338,7 +217,7 @@ if "delta_correlation2" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all)
+        assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_dc2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
         
         save_summary_plot(assigns_dc2, summary_dc2, out_dir)
@@ -348,6 +227,8 @@ if "delta_correlation2" in args.test or "all" in args.test:
 if "hadamac" in args.test or "all" in args.test:
     out_dir = "hadamac"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -362,7 +243,7 @@ if "hadamac" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_hadamac, summary_hadamac = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all)
+        assigns_hadamac, summary_hadamac = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_hadamac.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
         
         save_summary_plot(assigns_hadamac, summary_hadamac, out_dir)
@@ -386,6 +267,8 @@ if "hadamac" in args.test or "all" in args.test:
 if "alt_assign" in args.test or "all" in args.test:
     out_dir = "alt_assign"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -399,7 +282,7 @@ if "alt_assign" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_alt, summary_alt = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt, summary_alt = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt = assigns_alt.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -410,6 +293,8 @@ if "alt_assign" in args.test or "all" in args.test:
 if "alt_hadamac" in args.test or "all" in args.test:
     out_dir = "alt_hadamac"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -424,7 +309,7 @@ if "alt_hadamac" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_alt_hadamac, summary_alt_hadamac = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hadamac, summary_alt_hadamac = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hadamac = assigns_alt_hadamac.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hadamac.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -437,6 +322,8 @@ if "alt_hadamac" in args.test or "all" in args.test:
 if "alt_hnco" in args.test or "all" in args.test:
     out_dir = "alt_hnco"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -451,7 +338,7 @@ if "alt_hnco" in args.test or "all" in args.test:
             run(cmd)
             
     if args.analyse:
-        assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hnco, summary_alt_hnco = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hnco = assigns_alt_hnco.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -462,6 +349,8 @@ if "alt_hnco" in args.test or "all" in args.test:
 if "alt_hnco2" in args.test or "all" in args.test:
     out_dir = "alt_hnco2"
     if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -476,7 +365,7 @@ if "alt_hnco2" in args.test or "all" in args.test:
             run(cmd)
             
     if args.analyse:
-        assigns_alt_hnco2, summary_alt_hnco2 = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hnco2, summary_alt_hnco2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hnco2 = assigns_alt_hnco2.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco2.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -487,7 +376,9 @@ if "alt_hnco2" in args.test or "all" in args.test:
 #### HNCO + HNCACB
 if "alt_hnco_hncacb" in args.test or "all" in args.test:
     out_dir = "alt_hnco_hncacb"
-    if args.assign:        
+    if args.assign:    
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -501,7 +392,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
             run(cmd)
             
     if args.analyse:        
-        assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_hnco_hncacb = assigns_alt_hnco_hncacb.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_hnco_hncacb.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
@@ -513,6 +404,8 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
 if "alt_ca_co" in args.test or "all" in args.test:
     out_dir = "alt_ca_co"
     if args.assign:    
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
             cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
@@ -526,7 +419,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:            
-        assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output"/out_dir, ID_list=id_all_carbons, ranks=[1,2,3])
+        assigns_alt_ca_co, summary_alt_ca_co = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, ranks=[1,2,3])
         assigns_alt_ca_co = assigns_alt_ca_co.sort_values(by=["ID", "SS_name", "Rank"])
         
         assigns_alt_ca_co.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")

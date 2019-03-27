@@ -348,23 +348,43 @@ save_as_pdf_pages(filename=path/"plots/nearest prediction distribution.pdf",
                   plots=nearest_neighbour_dist_plots())
 
 #### Make figures for NMR-DG 2019 poster
+# Ranks
+tmp = rank_df.loc[~rank_df["dist_correct_most"].isna(),:]
+tmp.loc[tmp["rank_most"]>=20, "rank_most"] = 20
+tmp.loc[tmp["rank_HN"]>=20, "rank_HN"] = 20
+plt_base = ggplot(data=tmp, mapping=aes(y="100*stat(density)")) 
+plt_base += xlim(0,21) 
+plt_base += ylim(0,100)
+plt_base += ylab("Percentage of predictions with each rank")
+plt_base += xlab("Rank of the correct prediction")
+plt_base += theme_bw()
+
+plt1 = plt_base + geom_histogram(aes(x="rank_HN"), breaks=range(21))
+plt1 += ggtitle("Rank of correct predictions: HN")
+plt1.save(path/"plots/Poster rank dist HN.pdf", height=100, width=100, units="mm")
+
+plt2 = plt_base + geom_histogram(aes(x="rank_most"), breaks=range(21))
+plt2 += ggtitle("Rank of correct predictions: most")
+plt2.save(path/"plots/Poster rank dist most.pdf", height=100, width=100, units="mm")
+ 
+# Distributions
 plt_base = ggplot(data=rank_df.loc[~rank_df["dist_correct_most"].isna(),:])  
-plt_base = plt_base + scale_colour_brewer(name="Distribution:", 
+plt_base = plt_base + scale_fill_brewer(name="Distribution:", 
                                           type="qual", palette=6,
                                             labels=["Dist to correct prediction",
                                                     "Dist to nearest wrong prediction"])
-plt_base = plt_base  + theme_bw()+ theme(legend_position="bottom")
-plt_base = plt_base + xlab("Scaled combined shift difference") + xlim(0,3)
+plt_base = plt_base  + theme_bw()+ theme(legend_position="bottom") +ylim(0,7.5)
+plt_base = plt_base + xlab("Scaled combined shift difference") + xlim(0,2)
 
 plt1 = plt_base
-plt1 = plt1 + geom_density(aes(x="dist_correct_HN", colour="str(1)")) 
-plt1 = plt1 + geom_density(aes(x="nearest_wrong_pred_HN", colour="str(2)"))
+plt1 = plt1 + geom_density(aes(x="dist_correct_HN", fill="str(1)"), alpha=0.7) 
+plt1 = plt1 + geom_density(aes(x="nearest_wrong_pred_HN", fill="str(2)"), alpha=0.7)
 plt1 = plt1 + ggtitle("Distance distributions for: HN")
 plt1.save(path/"plots/Poster prediction dist HN.pdf", height=100, width=100, units="mm")
 
 plt2 = plt_base
-plt2 = plt2 + geom_density(aes(x="dist_correct_most", colour="str(1)")) 
-plt2 = plt2 + geom_density(aes(x="nearest_wrong_pred_most", colour="str(2)"))
+plt2 = plt2 + geom_density(aes(x="dist_correct_most", fill="str(1)"), alpha=0.7) 
+plt2 = plt2 + geom_density(aes(x="nearest_wrong_pred_most", fill="str(2)"), alpha=0.7)
 plt2 = plt2 + ggtitle("Distance distributions for: most")
 plt2.save(path/"plots/Poster prediction dist most.pdf", height=100, width=100, units="mm")
 
@@ -383,11 +403,15 @@ df.loc[df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_atom"] = (
          df.loc[df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_type_m1"])
 
     
-plt = ggplot(data = df) + geom_density(aes(x="Delta", colour="Atom_type")) 
+plt = ggplot(data = df[~df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"])]) 
+plt = plt + geom_density(aes(x="Delta", fill="Atom_type")) 
 plt = plt + facet_wrap("Atom_type", scales="free_y")
-plt = plt + xlim(-5,5) + xlab("Prediction error")
+plt = plt + xlim(-5,5) + xlab("Prediction error (ppm)")
 plt = plt + ggtitle("Distribution of ShiftX2 prediction errors")
+plt = plt + theme_bw()
+plt = plt + scale_fill_brewer(name="Atom", type="qual", palette=6)
 plt.save(path/"plots/ShiftX2 error distribution.pdf")
+plt.save(path/"plots/Poster shiftX2 error distribution.pdf", height=100, width=150, units="mm")
 
 plt = ggplot(data = df) 
 plt = plt + geom_point(aes(x="Shift_obs", y="Delta", colour="Res_atom"))
@@ -416,7 +440,7 @@ def error_boxplots():
         plt = plt + theme(axis_text_x = element_text(angle=90))
         plt = plt + ggtitle("Error distribution for atom "+a)
         yield(plt)
-save_as_pdf_pages(filename=path/"plots/Error distribution per ID.pdf",
+save_as_pdf_pages(filename=path/"plots/Error distribution per atom.pdf",
                   plots=error_boxplots())
 
 

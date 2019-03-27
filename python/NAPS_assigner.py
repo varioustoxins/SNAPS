@@ -151,7 +151,7 @@ class NAPS_assigner:
         self.preds = preds
         return(self.preds)
     
-    def simulate_pred_shifts(self, filename, sd, seed=1):
+    def simulate_pred_shifts(self, filename, sd, seed=None):
         """Generate a 'simulated' predicted shift DataFrame by importing some 
         observed chemical shifts (in 'test' format), and adding Gaussian 
         errors.
@@ -160,7 +160,11 @@ class NAPS_assigner:
             eg. {"H":0.1,"N":0.5}
         """
         from NAPS_importer import NAPS_importer
-        from numpy.random import normal
+        import numpy.random as rand
+        
+        if seed is not None:
+            rand.seed(seed)
+            
         
         importer = NAPS_importer()
         importer.import_testset_shifts(filename, remove_Pro=False)
@@ -173,7 +177,7 @@ class NAPS_assigner:
         
         # Add the random shifts
         for atom in self.pars["atom_set"].intersection(preds.columns):
-            preds.loc[:,atom] += normal(0, sd[atom], size=len(preds.index))
+            preds.loc[:,atom] += rand.normal(0, sd[atom], size=len(preds.index))
         
         # Add other columns back in
         preds.insert(1, "Res_name", (preds["Res_N"].astype(str) + 
