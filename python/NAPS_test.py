@@ -31,17 +31,18 @@ if True:
     args = parser.parse_args()
 else:
     #args = parser.parse_args(("C:/Users/kheyam/Documents/GitHub/NAPS/",
-    args = parser.parse_args(("/Users/aph516/GitHub/NAPS/",
+    args = parser.parse_args(("..",
                               #"--assign",
                               "--analyse",
-                              "-t","hadamac",))
+                              "-t","basic",))
 
 path = Path(args.NAPS_path)
+#path = Path("..")
 #path = Path("/Users/aph516/GitHub/NAPS/")
 #path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
 # Import metadata on the test datasets
-testset_df = import_testset_metadata()
+testset_df = import_testset_metadata(path)
 
 # Define some lists of ID's with particular characteristics
 id_all = testset_df["ID"].tolist()  # All ID's
@@ -73,6 +74,7 @@ def save_summary_plot(assigns, summary, out_dir):
     
     plt.save(path/("plots/summary_"+out_dir+".pdf"), 
              height=210, width=297, units="mm")
+    return(plt)
 
 def save_alt_summary_plots(assigns, summary, out_dir):
     plt = ggplot(data=assigns)
@@ -90,7 +92,8 @@ def save_alt_summary_plots(assigns, summary, out_dir):
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
     
     plt.save(path/"plots"/(out_dir+"_correct.pdf"), height=210, width=297, units="mm")
-
+    return(plt)
+    
 #%% Test all proteins in the using most basic settings
 if "basic" in args.test or "all" in args.test:
     out_dir = "basic"
@@ -147,8 +150,24 @@ if "basic" in args.test or "all" in args.test:
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_boxplot(aes(y="Log_prob", x="ID", colour="Correct")) 
         + ylim(-100,0) )
-    
-    
+        
+        #### Make figures for poster
+        tmp = assigns_basic[~assigns_basic["Dummy_SS"]]
+        plt = ggplot(tmp) + geom_bar(aes(x="Status", fill="Status",
+                                     y="100*stat(count)/"+str(len(tmp.index))))
+        plt += xlab("Assignment status") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_y_continuous(breaks=np.arange(0,100,10))
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm")
+        
+        plt = ggplot(tmp) + geom_bar(aes(x="(Num_good_links_prev+Num_good_links_next)", 
+                                     y="100*stat(count)/"+str(len(tmp.index)), fill="Correct"))
+        plt += xlab("Number of good sequential links") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += theme_bw()
+        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        
 #%% Test effect of correcting the predicted shifts
 if "pred_correction" in args.test or "all" in args.test:
     out_dir = "pred_correction"

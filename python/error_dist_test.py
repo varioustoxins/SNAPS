@@ -141,6 +141,14 @@ df.to_csv(path/"output/prediction_accuracy.txt", sep="\t", float_format="%.3f")
 # Then calculate how many observations are closer to the prediction than the correct one
 
 # Scaling factors
+df_q = (df.groupby("Atom_type").quantile(
+        [0,0.025,0.1,0.25,0.5,0.75,0.9,0.975,1])["Shift_obs"].unstack())
+
+df_range = df_q[1] - df_q[0]
+df_95 = df_q[0.975] - df_q[0.025]
+df_80 = df_q[0.9] - df_q[0.1]
+df_IQR = df_q[0.75] - df_q[0.25]
+
 scale = (df.groupby("Atom_type").quantile(0.75) - 
          df.groupby("Atom_type").quantile(0.25))
 scale = scale.loc[:, "Shift_obs"]
@@ -398,6 +406,10 @@ plt2.save(path/"plots/Poster prediction dist most.pdf", height=100, width=100, u
 #plt_base + geom_histogram(aes(x="rank_HN", y="stat(density)*100"), binwidth=1) + xlim(0,50)
 
 #%% Plot error distribution for each atom type
+# Calculate the overall standard deviation for each residue
+delta_stdev = df.groupby("Atom_type").std()["Delta"]
+
+# Make a column associating the i-1 residue type with i-1 shifts.
 df["Res_atom"] = df["Res_type"]
 df.loc[df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_atom"] = (
          df.loc[df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_type_m1"])
