@@ -152,6 +152,7 @@ if "basic" in args.test or "all" in args.test:
         + ylim(-100,0) )
         
         #### Make figures for poster
+        # Figure breaking down assignment accuracy
         tmp = assigns_basic[~assigns_basic["Dummy_SS"]]
         plt = ggplot(tmp) + geom_bar(aes(x="Status", fill="Status",
                                      y="100*stat(count)/"+str(len(tmp.index))))
@@ -161,12 +162,31 @@ if "basic" in args.test or "all" in args.test:
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
         plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm")
         
-        plt = ggplot(tmp) + geom_bar(aes(x="(Num_good_links_prev+Num_good_links_next)", 
-                                     y="100*stat(count)/"+str(len(tmp.index)), fill="Correct"))
-        plt += xlab("Number of good sequential links") + ylab("Percentage")
+        # Figure showing accuracy vs number of good seq links
+        # Note that NA values are always false in > or < comparisons.        
+        plt = ggplot(tmp) + geom_bar(aes(x="((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
+                                         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)", 
+                                     y="100*stat(count)/"+str(len(tmp.index)), 
+                                     fill="Correct"))
+        plt += xlab("Number of good seq links") + ylab("Percentage")
         plt += scale_fill_brewer("qual", palette=6)
         plt += theme_bw()
         plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        
+        # Some alternate ways of assessing how good the seq links are
+#        "(Num_good_links_prev==3).astype(int)+(Num_good_links_next==3).astype(int)"
+#        ("(Max_mismatch_prev<0.1).astype(int)"+
+#         "+(Max_mismatch_next<0.1).astype(int)")
+#        ("((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
+#         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)")
+        
+        # Figure showing distribution of log_probabilities
+        plt = ggplot(tmp[~tmp["Dummy_res"]])
+        plt += geom_density(aes(x="Log_prob", fill="Correct"), alpha=0.5)
+        plt += xlim(-50,0)
+        plt += scale_fill_brewer(type="qual", palette=6)
+        plt += theme_bw()
+        plt.save(path/"plots/Poster log_prob distribution.pdf", height=100, width=100, units="mm")
         
 #%% Test effect of correcting the predicted shifts
 if "pred_correction" in args.test or "all" in args.test:

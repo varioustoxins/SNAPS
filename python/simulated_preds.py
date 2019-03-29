@@ -58,7 +58,7 @@ sum((assign_df["Res_name"]==assign_df["SS_name"]))
 
 (path/"output/sim_predictions/0").mkdir(parents=True, exist_ok=True)
 
-def test_simulated_preds(output_dir, id_list, sim_pred_sd, seed=None):
+def test_simulated_preds(output_dir, id_list, sim_pred_sd, seed=None, atom_set=None):
     # Create output directory if it doesn't already exist
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     
@@ -69,7 +69,11 @@ def test_simulated_preds(output_dir, id_list, sim_pred_sd, seed=None):
         importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
         
         a = NAPS_assigner()
-        a.read_config_file(path/"config/config.txt")    
+        a.read_config_file(path/"config/config.txt")   
+        
+        if atom_set is not None:
+            a.pars["atom_set"] = atom_set
+        
         a.obs = importer.obs
         a.simulate_pred_shifts(testset_df.loc[id, "obs_file"], 
                                            sim_pred_sd, seed=seed)
@@ -104,12 +108,15 @@ summary_shiftx2.to_csv(path/("output/sim_preds/summary_shiftx2.txt"),
 qr95 = pd.Series({"C":8.24025,"CA":21.08500,"CB":21.08500,
                   "H":2.73000,"HA":2.14075,"N":23.14675})
 
+#%% Check with all atom types except HA
 summary_dict = {}
 assigns_dict = {}
 for x in [0,0.025,0.05,0.075,0.1,0.125,0.15,0.2,0.25]:
     print("****", str(x), "****")
     assigns, summary = test_simulated_preds(path/("output/sim_preds/qr95_"+str(100*x)), 
-                                            id_all_carbons, qr95*x, seed=int(x*100))
+                                            id_all_carbons, qr95*x, seed=int(x*100),
+                                            atom_set = {"H","N","C","CA","CB",
+                                                        "C_m1","CA_m1","CB_m1"})
     
     assigns_dict[x] = assigns
     summary_dict[x] = summary
@@ -122,7 +129,7 @@ for x in [0,0.025,0.05,0.075,0.1,0.125,0.15,0.2,0.25]:
 keys = list(summary_dict.keys())
 tmp = pd.DataFrame({"Error":keys, "Pc_correct":[summary_dict[k].loc[0, "Pc_correct"] for k in keys]})
 
-
+#### Make a poster figure
 from plotnine import *
 plt = ggplot(data=tmp) + geom_point(aes(x="100*Error", y="100*Pc_correct"))
 plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
@@ -136,3 +143,30 @@ plt.save(path/"plots/Poster sim preds accuracy.pdf", height=100, width=100, unit
 #                      format_string="{:.0%}", data=summary_shiftx2, angle=90)
 #plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
 #plt
+
+#%% Repeat, but restricting to HN only
+HN_summary_dict = {}
+HN_assigns_dict = {}
+for x in [0.2, 0.25]:#[0, 0.005, 0.01, 0.015, 0.02, 0.025,0.05,0.075,0.1,0.15]:
+    print("****", str(x), "****")
+    assigns, summary = test_simulated_preds(path/("output/sim_preds/qr95_"+str(100*x)), 
+                                            id_all_carbons, qr95*x, seed=int(x*100),
+                                            atom_set = {"H","N"})
+    
+    HN_assigns_dict[x] = assigns
+    HN_summary_dict[x] = summary
+    
+    assigns.to_csv(path/("output/sim_preds/HN_assigns_qr95_"+str(100*x)+".txt"), 
+                   sep="\t", float_format="%.3f",index=False)
+    summary.to_csv(path/("output/sim_preds/HN_summary_qr95_"+str(100*x)+".txt"), 
+                   sep="\t", float_format="%.3f",index=False)
+    
+keys = list(HN_summary_dict.keys())
+tmp = pd.DataFrame({"Error":keys, "Pc_correct":[HN_summary_dict[k].loc[0, "Pc_correct"] for k in keys]})
+
+plt = ggplot(data=tmp) + geom_point(aes(x="100*Error", y="100*Pc_correct"))
+plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
+plt += scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
+#plt += scale_x_continuous(breaks=np.arange(0,16,2))
+plt += theme_bw()
+plt.save(path/"plots/Poster sim preds accuracy HN.pdf", height=100, width=100, units="mm")
