@@ -14,11 +14,12 @@ from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
 from bokeh.models import WheelZoomTool
 from bokeh.io import export_png
-from bokeh.embed import json_item
+#from bokeh.embed import json_item
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
 from math import log10, sqrt
 from copy import deepcopy
+from pathlib import Path
 #from Bio.SeqUtils import seq1
 from distutils.util import strtobool
 from collections import namedtuple
@@ -878,6 +879,7 @@ class NAPS_assigner:
         tmp["Max_mismatch_p1"] = pd.Series(self.mismatch_matrix.lookup(
                                 tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
                                 index=tmp_p1.index)
+        tmp["Max_mismatch"] = tmp[["Max_mismatch_m1","Max_mismatch_p1"]].max(axis=1)
         
         tmp["Num_good_links_m1"] = pd.Series(self.consistent_links_matrix.lookup(
                                 tmp_m1["SS_name_m1"], tmp_m1["SS_name"]),
@@ -885,8 +887,11 @@ class NAPS_assigner:
         tmp["Num_good_links_p1"] = pd.Series(self.consistent_links_matrix.lookup(
                                 tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
                                 index=tmp_p1.index)
-        return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1",
-                    "Num_good_links_m1","Num_good_links_p1"]])
+        tmp["Num_good_links_m1"].fillna(0, inplace=True)
+        tmp["Num_good_links_p1"].fillna(0, inplace=True)
+        tmp["Num_good_links"] = tmp["Num_good_links_m1"] + tmp["Num_good_links_p1"]
+        return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1","Max_mismatch",
+                    "Num_good_links_m1","Num_good_links_p1","Num_good_links"]])
     
     def find_alt_assignments(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
@@ -966,7 +971,7 @@ class NAPS_assigner:
             
         return(self.alt_assign_df)
     
-    def find_kbest_assignments(self, k, verbose=False):
+    def find_kbest_assignments(self, k, init_inc=None, init_exc=None, verbose=False):
         """ Find the k best overall assignments using the Murty algorithm.
         
         k: the number of assignments to find
@@ -988,8 +993,8 @@ class NAPS_assigner:
         """
         Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
         
-        # Initial best matching
-        best_matching = self.find_best_assignments()
+        # Initial best matching (subject to initial constraints)
+        best_matching = self.find_best_assignments(inc=init_inc, exc=init_exc)
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
         
@@ -997,7 +1002,7 @@ class NAPS_assigner:
         ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
         unranked_nodes = SortedListWithKey(
                             [Node(self.calc_overall_matching_prob(best_matching),
-                            best_matching, inc=None, exc=None)],
+                            best_matching, inc=init_inc, exc=init_exc)],
                             key=lambda n: n.sum_log_prob)
         
         while len(ranked_nodes)<k:
@@ -1059,7 +1064,7 @@ class NAPS_assigner:
             
         return(ranked_nodes, unranked_nodes)                                                                                                                             
         
-    def find_kbest_consistent_assignments(self):
+    def find_consistent_assignments(self, search_depth=10):
         """Find a consistent set of assignments using kbest search
         
         Finds the best assignment, then holds constant any consistent residues. Then finds 
@@ -1068,9 +1073,54 @@ class NAPS_assigner:
         process is repeated.
         
         """
-        init_matching = self.find_best_assignments()
-        init_consistency = self.check_matching_consistency(init_matching)
-        pass          
+        
+        matching0 = self.find_best_assignments()
+        i=1
+        
+        while True:
+            consistency0 = self.check_matching_consistency(matching0)
+            consistency_sum0 = sum((consistency0["Max_mismatch"]<0.1) * 2**consistency0["Num_good_links"])
+            print(i, consistency_sum0)
+            i += 1
+            
+            mask = (consistency0["Max_mismatch"]<0.1) & (consistency0["Num_good_links"]>=4)
+            inc0 = consistency0.loc[mask,["SS_name","Res_name"]]
+        
+            ranked, unranked = self.find_kbest_assignments(search_depth, init_inc=inc0, verbose=True)
+
+            tmp = []
+            for x in ranked:
+                tmp2 = self.check_matching_consistency(x.matching)
+                tmp += [sum((tmp2["Max_mismatch"]<0.1) * 2**tmp2["Num_good_links"])]
+            
+            if max(tmp) > consistency_sum0:
+                # Prepare to loop back
+                matching0 = ranked[tmp.index(max(tmp))].matching
+                pass
+            else:
+                break
+        
+        sum(matching0["SS_name"] == matching0["SS_name"])
+        
+        return(matching0)
+#        init_consistency = self.check_matching_consistency(new_matching)
+#        old_consistency_sum = sum((init_consistency["Max_mismatch"]<0.1) * 2**init_consistency["Num_good_links"])
+#        
+#        mask = (init_consistency["Max_mismatch"]<0.1) & (init_consistency["Num_good_links"]>=4)
+#        init_inc = init_consistency.loc[mask,["SS_name","Res_name"]]
+#        
+#        ranked, unranked = self.find_kbest_assignments(search_depth, init_inc=init_inc, verbose=True)
+#        tmp = []
+#        for x in ranked:
+#            tmp2 = self.check_matching_consistency(x.matching)
+#            tmp += [sum((tmp2["Max_mismatch"]<0.1) * 2**tmp2["Num_good_links"])]
+#        
+#        if max(tmp) > old_consistency_sum:
+#            pass
+#        else:
+#            break
+#        new_matching = ranked[tmp.index(max(tmp))].matching
+        
 
     
     def output_peaklists(self, filepath, format="sparky", 
@@ -1205,13 +1255,14 @@ class NAPS_assigner:
             p = gridplot(plotlist, ncols=1)
 
             if outfile is not None:
+                Path(outfile).resolve().parents[1].mkdir(parents=True, exist_ok=True)
                 if format=="html":
                     output_file(outfile)
                     save(p)
                 elif format=="png":
                     export_png(p, outfile)
             
-            return(json_item(p))
+            #return(json_item(p))
                 
         
     

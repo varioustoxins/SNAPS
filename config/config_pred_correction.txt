@@ -11,5 +11,5 @@ delta_correlation_cov_corrected_file      ../config/dd_cov.csv        # File con
 use_ss_class_info       False   # If present, use residue type information on the observed data
 alt_assignments 0       # Number of alternative assignments to generate
 atom_set      "H, N, HA, CA, CB, C, CA_m1, CB_m1, C_m1"       # Which atom types to include. Comma separated.
-atom_sd "H:0.1711, N:1.1169, HA:0.1231, C:0.5330, CA:0.4412, CB:0.5163, C_m1:0.5530, CA_m1:0.4412, CB_m1:0.5163"    # Atom standard deviations. Comma separated.
+atom_sd "H:0.454, N:2.429, HA:0.227, C:1.030, CA:0.932, CB:1.025, C_m1:1.030, CA_m1:0.932, CB_m1:1.025"    # Atom standard deviations. Comma separated.
 plot_strips     False

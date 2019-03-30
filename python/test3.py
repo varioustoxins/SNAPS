@@ -113,6 +113,12 @@ tmp9 = kbest[9]
 #[n.sum_log_prob for n in unranked]
 unranked[-1].exc
 
+#Test with initial constraints
+kbest2, unranked2 = a.find_kbest_assignments(5, verbose=True,
+            init_inc=pd.DataFrame({"SS_name":["   1M"], "Res_name":["   1M"]}),
+            init_exc=pd.DataFrame({"SS_name":[" 111C"], "Res_name":["   0H"]}))
+
+
 #%% Test mismatch matrix and kbest consistency
 
 mismatch_mat = a.calc_mismatch_matrix()
@@ -121,7 +127,6 @@ consistent_links_mat = a.consistent_links_matrix
 d = a.neighbour_df
 tmp = a.check_matching_consistency(matching)
 tmp2 = tmp[(tmp["Num_good_links_m1"]==3) & (tmp["Num_good_links_p1"]==3)]
-
 
 
 #%% Test stuff

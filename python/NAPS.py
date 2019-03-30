@@ -51,6 +51,8 @@ def runNAPS(args):
     parser.add_argument("--plot_file", 
                         default=None,
                         help="A filename for any output plots.")
+    parser.add_argument("--iterated", action="store_true", 
+                        help="If set, use iterated procedure to resolve bad sequential links")
 
     if True:
         args = parser.parse_args(args)
@@ -109,13 +111,21 @@ def runNAPS(args):
     a.calc_log_prob_matrix2(sf=1, verbose=False)
     logging.info("Calculated log probability matrix (%dx%d).", 
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
+    a.calc_mismatch_matrix()
     matching = a.find_best_assignments()
     a.make_assign_df(matching, set_assign_df=True)
     logging.info("Calculated best assignment.")
-    assign_df = a.check_assignment_consistency(threshold=0.1)
+    a.check_assignment_consistency(threshold=0.1)
     logging.info("Checked assignment consistency.")
-
-    if a.pars["alt_assignments"]>0:
+    
+    if args.iterated:
+        
+        matching2 = a.find_consistent_assignments(10)
+        a.make_assign_df(matching2, set_assign_df=True)
+        a.check_assignment_consistency(threshold=0.1)
+        a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
+                           index=False)
+    elif a.pars["alt_assignments"]>0:
         a.find_alt_assignments(N=a.pars["alt_assignments"], verbose=False, 
                                 by_ss=True)
         logging.info("Calculated the %d next best assignments for each spin system", 

@@ -465,3 +465,28 @@ if "alt_ca_co" in args.test or "all" in args.test:
         summary_alt_ca_co.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
     
         save_alt_summary_plots(assigns_alt, summary_alt, out_dir)
+
+#%% Test iterated assignment
+if "iterated" in args.test or "all" in args.test:
+    out_dir = "iterated"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+                    testset_df.loc[i, "obs_file"].as_posix(), 
+                    testset_df.loc[i, "preds_file"].as_posix(),
+                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
+                    "--shift_type", "test",
+                    "--pred_type", "shiftx2",
+                    "-c", (path/"config/config.txt").as_posix(),
+                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix(),
+                    "--iterated"]
+            run(cmd)
+    
+    if args.analyse:        
+        assigns_iter, summary_iter = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_iter.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        
+        save_summary_plot(assigns_iter, summary_iter, out_dir)
