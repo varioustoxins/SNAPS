@@ -108,8 +108,8 @@ for i in testset_df["ID"]:
                    var_name="Atom_type", value_name="Shift")
     
     #Get rid of rows where the observed or predicted data is missing
-    obs = obs.dropna(subset=["Shift"])
-    preds = preds.dropna(subset=["Shift"])
+    #obs = obs.dropna(subset=["Shift"])
+    #preds = preds.dropna(subset=["Shift"])
     
     obs["ID"] = i
     preds["ID"] = i
@@ -133,6 +133,9 @@ df = df[["ID_Res", "ID","Res_name","Res_N","Res_type","Res_type_m1",
         
 # Calculate the prediction errors
 df["Delta"] = df["Shift_pred"] - df["Shift_obs"]
+
+df_keep_na = df.copy()
+df = df.dropna(axis=0, subset=["Delta"])
 
 # Save the data
 df.to_csv(path/"output/prediction_accuracy.txt", sep="\t", float_format="%.3f")
@@ -445,6 +448,7 @@ plt = plt + geom_density(aes(x="Delta", colour="ID"))
 plt = plt + facet_wrap("Atom_type", scales="free")
 plt.save(path/"plots/Error distribution per ID.pdf", height=210, width=297, units="mm")
 
+
 def error_boxplots():
     for a in atom_set:
         plt = ggplot(df[df["Atom_type"]==a])
@@ -454,6 +458,20 @@ def error_boxplots():
         yield(plt)
 save_as_pdf_pages(filename=path/"plots/Error distribution per atom.pdf",
                   plots=error_boxplots())
+
+# Plot the error standard deviation for each ID, in case some are less accurate
+tmp = df.groupby(["ID", "Atom_type"])["Delta"].std().reset_index()
+plt = ggplot(tmp) + geom_point(aes(x="ID", y="Delta", colour="Atom_type"))
+plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+plt.save(path/"plots/Error stdev per ID.pdf", height=210, width=297, units="mm")
+
+# Plot how much data is missing
+sum(df_keep_na["Shift_obs"].isna())
+df_keep_na["Missing_obs"] = df_keep_na["Shift_obs"].isna()
+tmp = df_keep_na.groupby(["ID","Atom_type"])["Missing_obs"].sum().reset_index()
+plt = ggplot(tmp) + geom_point(aes(x="ID", y="Missing_obs", colour="Atom_type"))
+plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+plt.save(path/"plots/Missing obs per ID.pdf", height=210, width=297, units="mm")
 
 
 #%% Make a "corrected" predicted shift that accounts for residue type and observed shift
