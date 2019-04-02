@@ -1,14 +1,13 @@
 {% extends "layout.html" %}
 {% block content %}
-			<h1 class="mt-4">NAPS</h1>
 			<h2 id=configurationSection>Configuration</h2>
 			<form id="form" style="width: 600px" action="$SCRIPT_ROOT + '/run'" enctype=multipart/form-data method="post">
 				<div class="row">
 					<div class="col">
-						<label for="observedShiftsFile">Observed shifts file</label>
+						<label for="observedShiftsFile">Observed shifts file:</label>
 					</div>
 					<div class="col">
-						<label for="observedShiftsFormat">Observed shifts format</label>
+						<label for="observedShiftsFormat">Observed shifts format:</label>
 					</div>
 				</div>
 				<div class="row">
@@ -32,10 +31,10 @@
 				</div>
 				<div class="row">
 					<div class="col">
-						<label for="predictedShiftsFile">Predicted shifts file</label>
+						<label for="predictedShiftsFile">Predicted shifts file:</label>
 					</div>
 					<div class="col">
-						<label for="predictedShiftsFormat">Predicted shifts format</label>
+						<label for="predictedShiftsFormat">Predicted shifts format:</label>
 					</div>
 				</div>
 				<div class="row">
@@ -57,21 +56,25 @@
 				<div id=advancedToggle class="collapse in">
 					<p>Predicted shift offset:</p>
 				</div>
-				<p><a href="#" id=run>Run</a></p>
-			</form>
-			<h2 id=resultsSection>Results</h2>
-            <div id="fileSender">
-                <div id="download" class="bg-light">
+                <button class="btn btn-primary" id=run>Run</button>
+            </form>
+            <div id="resultsSection" class="collapse in">
+                <h2>Results</h2>
+                <div id="fileSender" class="bg-light">
+                    <div id="email">
+                    </div>
                 </div>
-                <div id="email" class="bg-light">
+                <p id="errors"></p>
+                <div id="downloadResults">
                 </div>
+                <table id="table" data-height="500">
+                    <thead>
+                        <tr id="tableData"></tr>
+                    </thead>
+                </table>
+                <div id="downloadPlot">
+                </div>
+                <div id="plot"></div>
             </div>
-            <p id="errors"></p>
-			<table id="table" data-height="800">
-				<thead>
-					<tr id="tableData"></tr>
-				</thead>
-			</table>
-            <div id="plot"></div>
 {% endblock %}
 		

@@ -10,8 +10,7 @@
 	<!-- Bootstrap core CSS -->
 	<link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
 	<!-- Custom styles for this template -->
-	<link href="{{ url_for('static', filename='css/simple-sidebar.css') }}" rel="stylesheet">
-	<link href="{{ url_for('static', filename='css/fixed-left.css') }}" rel="stylesheet">
+	<link href="{{ url_for('static', filename='css/layout.css') }}" rel="stylesheet">
 	<!-- Bootstrap core JavaScript -->
 	<script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}" rel="stylesheet"></script>
 	<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}" rel="stylesheet"></script>
@@ -30,20 +29,33 @@
     <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.4.min.js"></script>
 </head>
 <body>
-	<div class="d-flex" id="wrapper">
-		<!-- Sidebar -->
-		<div class="sidenav bg-light border-right" id="sidebar-wrapper">
-			<a href="../" class="list-group-item list-group-item-action bg-light">Run NAPS</a>
-            <a href="../info" class="list-group-item list-group-item-action bg-light">About NAPS</a> 
+    <div class="container-fluid">
+        <img src="{{ url_for('static', filename='ratnaps.png') }}" width="150" height="45" title="NAPS"/>
+    </div>
+    <nav class="navbar navbar-expand-sm navbar-light bg-light">
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="navbar-nav">
+                <a href="../" class="nav-link nav-item active">Run NAPS</a>
+                <span class="nav-link nav-item">|</span>
+                <a href="../info" class="nav-link nav-item active">About NAPS</a>
+            </div>
         </div>
-		<!-- /#sidebar-wrapper -->
-		<!-- Page Content -->
-		<div id="page-content-wrapper" class="container-fluid main">
-			<!-- /#page-content-wrapper -->
-			{% block content %}
-			{% endblock %}
-		</div>
-		<!-- /#wrapper -->
-	</div>
+    </nav>
+    <div id="page-content-wrapper" class="container-fluid main">
+        <!-- /#page-content-wrapper -->
+        <div id="content">
+            {% block content %}
+            {% endblock %}
+        </div>
+        <!-- /#wrapper -->
+        <footer class="font-small blue">
+            <div>
+                Links &amp; info?
+            </div>
+        </footer>
+    </div>
 </body>
 </html>

@@ -1,19 +1,20 @@
 function insertDownloadLinks(files) {
-    $("#download").empty();
+    $("#downloadResults").empty();
+    $("#downloadPlot").empty();
     $("#email").empty();
 
     if (!jQuery.isEmptyObject(files)) {
         if (files['results'])
-            $("#download").append("<button id='downloadResults' class='fileSender'>Download results</button>");
+            $("#downloadResults").append("<img src='/static/save.png' id='downloadResultsButton' class='fileDownload' title='Download results'/>");
         if (files['plot'])
-            $("#download").append("<button id='downloadPlot' class='fileSender'>Download plot</button>");
+            $("#downloadPlot").append("<img src='/static/save.png' id='downloadPlotButton' class='fileDownload' title='Download plot'/>");
         if (files['results'] || files['plot'])
-            $("#email").append("<form id='emailForm'><input type='text' name='emailAddress' placeholder='your@email.com' class='fileSender'><button id='emailSubmit'>Email me</button></form>");
+            $("#email").append("<form id='emailForm'><input type='text' name='emailAddress' placeholder='your@email.com' class='fileSender'><button id='emailSubmit'>Email all results</button></form>");
     }
-    $("#downloadResults").click(function () {
+    $("#downloadResultsButton").click(function () {
         download('results', files['results']);
     });
-    $("#downloadPlot").click(function () {
+    $("#downloadPlotButton").click(function () {
         download('plot', files['plot']);
     });
     $(document).on("submit", "#emailForm", function (event) {

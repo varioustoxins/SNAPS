@@ -1,6 +1,7 @@
 $(function () {
     $("#run").click(function () {
-        $("#resultsSection").append("<div id=runLoading class=\"spinner-border\" role=\"status\"><span class=\"sr-only\">Loading...</span></div>");
+        $("#form").append("<div id=runLoading class=\"spinner-border\" role=\"status\"><span class=\"sr-only\">Loading...</span></div>");
+        $('#resultsSection').collapse('hide');
         $("#tableData").empty();
         $("#errors").empty();
         $("#plot").empty();
@@ -30,6 +31,7 @@ $(function () {
 function success(data) {
     $("#runLoading").remove();
     if (data.status === 'ok') {
+        $('#resultsSection').collapse('show');
         $.each(data.headers, function (index, header) {
             $("#tableData").append("<th data-field=" + header + ">" + header + "</th>");
         });
