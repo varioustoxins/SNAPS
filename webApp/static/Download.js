@@ -1,7 +1,3 @@
-$(function () {
-    insertDownloadLinks(files);
-});
-
 function insertDownloadLinks(files) {
     $("#download").empty();
     $("#email").empty();
@@ -15,18 +11,23 @@ function insertDownloadLinks(files) {
             $("#email").append("<form id='emailForm'><input type='text' name='emailAddress' placeholder='your@email.com' class='fileSender'><button id='emailSubmit'>Email me</button></form>");
     }
     $("#downloadResults").click(function () {
-        download('results');
+        download('results', files['results']);
     });
     $("#downloadPlot").click(function () {
-        download('plot');
+        download('plot', files['plot']);
     });
     $(document).on("submit", "#emailForm", function (event) {
         event.preventDefault();
+        var data = new FormData(this);
+        $.each(files, function (key, value) {
+            if (value)
+                data.append(key, value);
+        });
         $.ajax({
             url: $SCRIPT_ROOT + '/email',
             type: "POST",
             dataType: "JSON",
-            data: new FormData(this),
+            data: data,
             processData: false,
             contentType: false,
             success: function (data) {
@@ -45,19 +46,7 @@ function insertDownloadLinks(files) {
     });
 }
 
-function download(fileName) {
-    $.ajax({
-        type: "POST",
-        url: $SCRIPT_ROOT + '/download',
-        data: { fileName: fileName },
-        success: function (output) {
-            if (output.error_message) {
-                alert(output.error_message); //even better, add a failure icon with hover
-            }
-            else {
-                var naps_download = new Blob([output], { type: "application / octet - stream" });
-                saveAs(naps_download, fileName);
-            }
-        }
-    });
+function download(fileName, file) {
+    var naps_download = new Blob([file], { type: "application / octet - stream" });
+    saveAs(naps_download, fileName);
 }

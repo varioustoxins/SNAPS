@@ -9,7 +9,7 @@ from flask_mail import Mail
 from os import environ
 from validation import Validate
 from args import Args
-from fileSender import downloadFile, emailFiles
+from fileSender import emailFiles
 from fileHandler import saveFiles, deleteFiles
 
 mainNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
@@ -38,15 +38,12 @@ def run():
     saveFiles(request, args)
     validationResult = Validate(args)
     response = run(args) if validationResult.isValid else validationResult.response
-    #This needs replacing with a clean-up script
-    #deleteFiles(args)
+    deleteFiles(args)
     return response
 
 def run(args):
     try:
         args.plot = runNAPS(args.argsToList())
-        files = {'results': args.getResultsLocation(), 'plot': args.getPlotLocation()}
-        saveSession(files)
         return createJSONForTable(args)
     except Exception as e:
         #log errors
@@ -67,40 +64,21 @@ def createJSONForTable(args):
             result.append(row)
             line = output_file.readline()
 
-    return jsonify(status='ok', headers=headers, result=result, plot=args.plot, files=getFileBools())
-
-def getFileBools():
-    files = getSessionInfo()
-    return {'results': 'results' in files, 'plot': 'plot' in files}
+    return jsonify(status='ok', headers=headers, result=result, files=args.getFiles())
 
 @app.route('/')
 def index():
-    return render_template('index.html', files=getFileBools())
+    return render_template('index.html')
     
 @app.route('/info')
 def info():
-    return render_template('info.html', files=getFileBools())
-
-@app.route('/download', methods = ['POST'])
-def download():
-    return downloadFile(getSessionInfo(), request)
+    return render_template('info.html')
 
 @app.route('/email', methods = ['POST'])
 def email():
     if not app.config.get("MAIL_SERVER"):
         return jsonify(status='no_email_server', message='The email server is not configured on the views.py page.')
-    return emailFiles(getSessionInfo(), request, mail, app)
-
-def saveSession(sessionInfo):
-    session['userSession'] = sessionInfo
-
-def getSessionInfo():
-    files = {}
-    if 'userSession' in session:
-        for file,path in session['userSession'].items():
-            if (os.path.isfile(path)):
-                files[file] = path
-    return files
+    return emailFiles(request, mail, app)
 
 if __name__ == '__main__':
     HOST = environ.get('SERVER_HOST', 'localhost')

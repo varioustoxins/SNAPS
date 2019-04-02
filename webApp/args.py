@@ -1,5 +1,7 @@
 import uuid
 import os
+from pathlib import Path
+from flask import send_file
 
 class Args:
     """args for NAPS"""
@@ -26,8 +28,15 @@ class Args:
             #'-l', '../output/test.log'
         ]
 
-    def getResultsLocation(self):
-        return self.output_file
+    def getResults(self):
+        with open(self.output_file,mode='r') as f:
+            return f.read()
 
-    def getPlotLocation(self):
-        return self.plot_file if self.plot else ''
+    def getPlot(self):
+        hmm = self.plot if self.plot else ''
+
+    def getFiles(self):
+        return {
+            'results': self.getResults(),
+            'plot': self.getPlot()
+        }

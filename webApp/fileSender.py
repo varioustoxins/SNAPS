@@ -1,17 +1,9 @@
-from flask import send_file, jsonify
+from flask import jsonify
 from flask_mail import Message
 import re
 
-def downloadFile(files, request):
-    try:
-        if (request.values['fileName'] in files):
-            return send_file(files[request.values['fileName']])
-        else:
-            raise(Exception)
-    except Exception as e:
-        return jsonify(error_message='Your file was not found, it may have reached a time-out limit. Please re-run NAPS.')
-
-def emailFiles(files, request, mail, app):
+def emailFiles(request, mail, app):
+    files = request.values
     if files:
         emailAddress = request.form['emailAddress']
         if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", emailAddress):
@@ -24,11 +16,9 @@ def emailFiles(files, request, mail, app):
         msg.body = "NAPS results"
 
         if 'results' in files:
-            with app.open_resource(files['results']) as fp:
-                msg.attach("results.txt", "text/plain", fp.read())
+            msg.attach("results.txt", "text/plain", files['results'])
         if 'plot' in files:
-            with app.open_resource(files['plot']) as fp:
-                msg.attach("plot.html", "text/html", fp.read())
+            msg.attach("plot.html", "text/html", files['plot'])
         mail.send(msg)
         return jsonify(status='ok')
     else:

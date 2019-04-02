@@ -4,6 +4,7 @@ $(function () {
         $("#tableData").empty();
         $("#errors").empty();
         $("#plot").empty();
+        $("#files").empty();
         $("#form").submit();
         return false;
     });
@@ -35,10 +36,9 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
-        if (data.plot) {
-            Bokeh.embed.embed_item(data.plot, "plot");
+        if (data.files.plot) {
+            Bokeh.embed.embed_item(data.files.plot, "plot");
         }
-        $("#files").empty();
         insertDownloadLinks(data.files);
     }
     else if (data.status === 'validation_failed') {
