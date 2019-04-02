@@ -493,23 +493,23 @@ if "iterated" in args.test or "all" in args.test:
 #%% Test stuff
 
 # Try to work out why A063 and some others are so inaccurate
-tmp = summary_basic[["ID","N","Dummy SS"]]
-tmp["Dummy_res"] = summary_basic["Correctly unassigned"] + summary_basic["Wrongly unassigned"]
-tmp["basic"] = summary_basic["Pc_correct"]
-tmp["iter"] = summary_iter["Pc_correct"]
-tmp["diff"] = tmp["iter"] - tmp["basic"]
-
-obs_only = {}
-preds_only = {}
-for i in assigns_basic["ID"].unique():
-    Res_list = assigns_basic.loc[assigns_basic["ID"]==i, "Res_name"]
-    SS_list = assigns_basic.loc[assigns_basic["ID"]==i, "SS_name"]
-    preds_only[i] = len(set(Res_list).difference(SS_list))
-    obs_only[i] = len(set(SS_list).difference(Res_list))
-
-diffs = pd.DataFrame({"ID":list(obs_only.keys()), "obs_only":list(obs_only.values()),
-                      "preds_only":list(preds_only.values())})
-
-tmp = tmp.merge(diffs, how="outer")
-
-ggplot(tmp) + geom_point(aes(x="N_diffs", y="iter.astype(float)"))
+#tmp = summary_basic[["ID","N","Dummy SS"]]
+#tmp["Dummy_res"] = summary_basic["Correctly unassigned"] + summary_basic["Wrongly unassigned"]
+#tmp["basic"] = summary_basic["Pc_correct"]
+#tmp["iter"] = summary_iter["Pc_correct"]
+#tmp["diff"] = tmp["iter"] - tmp["basic"]
+#
+#obs_only = {}
+#preds_only = {}
+#for i in assigns_basic["ID"].unique():
+#    Res_list = assigns_basic.loc[assigns_basic["ID"]==i, "Res_name"]
+#    SS_list = assigns_basic.loc[assigns_basic["ID"]==i, "SS_name"]
+#    preds_only[i] = len(set(Res_list).difference(SS_list))
+#    obs_only[i] = len(set(SS_list).difference(Res_list))
+#
+#diffs = pd.DataFrame({"ID":list(obs_only.keys()), "obs_only":list(obs_only.values()),
+#                      "preds_only":list(preds_only.values())})
+#
+#tmp = tmp.merge(diffs, how="outer")
+#
+#ggplot(tmp) + geom_point(aes(x="N_diffs", y="iter.astype(float)"))

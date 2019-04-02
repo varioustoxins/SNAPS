@@ -604,11 +604,14 @@ tmp=df.groupby(["ID","Atom_type"]).size().unstack(fill_value=0)
 # ID's which have at least some observations for all three carbons
 tmp.index[(tmp["CA"]>0) & (tmp["CB"]>0) & (tmp["C"]>0)]
 
-
-
-
-
-
+#%% Check for regions which lack either obs or preds
+tmp = obs_all.groupby("ID")["Res_N"]
+tmp2 = pd.DataFrame({"Obs_min":tmp.min(), "Obs_max":tmp.max()})
+tmp = preds_all.groupby("ID")["Res_N"]
+tmp2["Preds_min"] = tmp.min()
+tmp2["Preds_max"] = tmp.max()
+tmp2["Common_length"] = tmp2[["Obs_max","Preds_max"]].min(axis=1) - tmp2[["Obs_min","Preds_min"]].max(axis=1)
+tmp2["Overhang"] = (tmp2[["Obs_max","Preds_max"]].max(axis=1) - tmp2[["Obs_min","Preds_min"]].min(axis=1)) - tmp2["Common_length"]
 
 #%% Not updated below this point to account for long vs wide dataframe, so won't work.
 
