@@ -1137,7 +1137,51 @@ class NAPS_assigner:
 #            break
 #        new_matching = ranked[tmp.index(max(tmp))].matching
         
-
+    def output_shiftlist(self, filepath, format="sparky"):
+        """Export a chemical shift list for use with other programs
+        """
+        
+        atoms = {"H","N","HA","C","CA","CB"}.intersection(self.assign_df.columns)
+        
+        df_wide = self.assign_df[["Res_N","Res_type"]+list(atoms)]
+        df = df_wide.melt(id_vars=["Res_N","Res_type"], value_vars=atoms, 
+                          var_name="Atom_type", value_name="Shift")
+        df = df.sort_values(["Res_N","Atom_type"])
+        
+        if format=="sparky":
+            df["Group"] = df["Res_type"] + df["Res_N"].astype(str)
+            
+            df = df.rename(columns={"Atom_type":"Atom"})
+            df.loc[df["Atom"]=="H","Atom"] = "HN"
+            
+            nuc_dict = {"HN":"1H", "N":"15N", "HA":"1H",
+                        "C":"13C", "CA":"13C", "CB":"13C"}
+            df["Nuc"] = [nuc_dict[a] for a in df["Atom"]]
+            
+            output_df = df[["Group","Atom","Nuc","Shift"]]
+            output_df["Sdev"] = 0.0
+            output_df["Assignments"] = int(1)
+            
+            output_df = output_df.dropna()
+            
+            if filepath is not None:
+                output_df.to_csv(filepath, sep="\t", float_format="%.3f",
+                                 index=False)
+        elif format=="xeasy":
+            df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
+            
+            output_df = df[["Shift","Atom_type","Res_N"]]
+            output_df.insert(1, "Sdev", 0)
+            
+            output_df["Shift"] = output_df["Shift"].fillna(999.0)
+            output_df = output_df.dropna()
+            output_df = output_df.reset_index(drop=True)
+        
+            if filepath is not None:
+                output_df.to_csv(filepath, sep="\t", float_format="%.3f",
+                                 index=True, header=False)
+            
+        return(output_df)
     
     def output_peaklists(self, filepath, format="sparky", 
                          spectra=["hsqc","hnco","hncaco","hncacb", "hncocacb"]):
