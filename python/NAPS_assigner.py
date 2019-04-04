@@ -1257,13 +1257,23 @@ class NAPS_assigner:
             print("No sequential links in data - strip plot not drawn.")
             return(None)
         else:
-            tmp = figure(x_range=df["Res_name"].tolist())
+            #Add extra rows for missing residues (eg Prolines)
+            tmp = list(range(df["Res_N"].min(), df["Res_N"].max()))
+            tmp2 = pd.DataFrame({"Res_N":tmp, 
+                                 "Dummy_res":[False]*len(tmp)})
+            df = pd.merge(tmp2,df, on=None, how="outer")
+            mask = df["Res_name"].isna()
+            df.loc[mask,"Res_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
+            df["Res_name"] = [s.rjust(5) for s in df["Res_name"]]
+            df["Dummy_res"] = df["Dummy_res"].astype(bool)
+            
+            tmp_plt = figure(x_range=df["Res_name"].tolist())
             for atom in seq_atoms:
                 # Setup plot
                 plt = figure(title="Strip plot",
                                 x_axis_label="Residue number",
                                 y_axis_label="Carbon shift",
-                                x_range=tmp.x_range,
+                                x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,reset",
                                 height=250, width=1000)
                 plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
@@ -1285,11 +1295,18 @@ class NAPS_assigner:
                          line_color="black", line_dash="dashed")
                 
                 ## Plot the horizontal lines
-                hlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
+                hlines = df.loc[~df["Dummy_res"], ["Res_N","Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_a" in name ensures it sorts between the atom and atom+"_m1" shifts
                 # eg. CA, CA_a, CA_m1
                 hlines[atom+"_a"] = np.NaN  
+                # Add extra lines for missing residues
+                tmp = list(range(hlines["Res_N"].min(), hlines["Res_N"].max()))
+                tmp2 = pd.DataFrame({"Res_N":tmp})
+                hlines = pd.merge(tmp2,hlines, on=None)
+                mask = hlines["Res_name"].isna()
+                hlines.loc[mask,"Res_name"] = hlines.loc[mask,"Res_N"].astype(str)
+                hlines["Res_name"] = [s.rjust(5) for s in hlines["Res_name"]]
                 # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"], 
                                      value_vars=[atom, atom+"_m1", atom+"_a"], 
@@ -1314,6 +1331,52 @@ class NAPS_assigner:
                 
                 plotlist = plotlist + [plt]
             
+            # Make mismatch plot
+            plt = figure(title="Mismatch plot",
+                                x_axis_label="Residue number",
+                                y_axis_label="Mismatch (ppm)",
+                                x_range=tmp_plt.x_range,
+                                tools="xpan, xwheel_zoom,reset",
+                                height=150, width=1000)
+            plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
+
+            
+            plt.vbar(x=df["Res_name"], 
+                     top=df[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1), 
+                     width=1)
+            #plt.vbar(x=df["Res_name"], top=-df["Max_mismatch_prev"], width=1)
+            # Change axis label orientation
+            plt.xaxis.major_label_orientation = 3.14159/2
+            plotlist = [plt] + plotlist
+            
+            # Make confidence plot
+            plt = figure(title="Confidence plot",
+                                x_axis_label="Residue number",
+                                y_axis_label="Mismatch (ppm)",
+                                x_range=tmp_plt.x_range,
+                                tools="xpan, xwheel_zoom,reset",
+                                height=250, width=1000)
+            plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
+            
+            # Create a colour map based on confidence
+            colourmap = {"Strong":"green",
+                         "Weak":"orange",
+                         "Uncertain":"grey",
+                         "Mismatched":"red"}
+            
+            # Plot the peaks
+            for k in colourmap.keys():
+                tmp = df[df["Confidence"]==k]
+                plt.vbar(x=df.loc[df["Confidence"]==k,"Res_name"], top=1, width=1, 
+                         color=colourmap[k], legend=k)
+            
+            plt.legend.orientation = "horizontal"
+            plt.legend.location = "top_center"
+            # Change axis label orientation
+            plt.xaxis.major_label_orientation = 3.14159/2
+            plotlist = [plt] + plotlist
+            
+            # Put them all together, and export
             p = gridplot(plotlist, ncols=1)
 
             if outfile is not None:

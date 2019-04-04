@@ -104,11 +104,13 @@ sum(tmp1["SS_name"] == tmp2["SS_name"])
 
 tmp = a.output_shiftlist("../output/test.txt", format="xeasy")
 
-#%% Test HSQC plot
+#%% Test plots
 
 from bokeh.io import show
 
 show(a.plot_hsqc_bokeh(return_json=False))
+
+show(a.plot_strips_bokeh(return_json=False))
 
 
 #%% Test kbest assignments
