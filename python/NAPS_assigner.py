@@ -1271,11 +1271,12 @@ class NAPS_assigner:
                 ## Plot the vertical lines
                 vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
-                # "x" in name is to ensure it sorts after the atom+"_m1" shifts
-                vlines[atom+"x"] = np.NaN  
+                # "_z" in name is to ensure it sorts after the atom+"_m1" shifts
+                # eg. CA, CA_m1, CA_z
+                vlines[atom+"_z"] = np.NaN  
                 # Convert from wide to long
                 vlines = vlines.melt(id_vars=["Res_name"], 
-                                     value_vars=[atom, atom+"_m1", atom+"x"], 
+                                     value_vars=[atom, atom+"_m1", atom+"_z"], 
                                      var_name="Atom_type", 
                                      value_name="Shift")
                 vlines = vlines.sort_values(["Res_name","Atom_type"], 
@@ -1286,11 +1287,12 @@ class NAPS_assigner:
                 ## Plot the horizontal lines
                 hlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
-                # "a" in name ensures it sorts between the atom and atom+"_m1" shifts
-                hlines[atom+"a"] = np.NaN  
+                # "_a" in name ensures it sorts between the atom and atom+"_m1" shifts
+                # eg. CA, CA_a, CA_m1
+                hlines[atom+"_a"] = np.NaN  
                 # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"], 
-                                     value_vars=[atom, atom+"_m1", atom+"a"], 
+                                     value_vars=[atom, atom+"_m1", atom+"_a"], 
                                      var_name="Atom_type", 
                                      value_name="Shift")
                 hlines = hlines.sort_values(["Res_name","Atom_type"], 
