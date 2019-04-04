@@ -1175,7 +1175,7 @@ class NAPS_assigner:
         
         return(plt)
     
-    def plot_strips_bokeh(self, outfile=None, format="html"):
+    def plot_strips_bokeh(self, outfile=None, format="html", return_json=True):
         """Make a strip plot of the assignment.
         
         Uses bokeh module for plotting. Returns the bokeh plot object.
@@ -1262,7 +1262,10 @@ class NAPS_assigner:
                 elif format=="png":
                     export_png(p, outfile)
             
-            #return(json_item(p))
+            if return_json:
+                return(json_item(p))
+            else:
+                return(p)
                 
         
     

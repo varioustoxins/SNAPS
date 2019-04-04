@@ -24,7 +24,7 @@ class Args:
             '--shift_type', self.shift_type,
             '--pred_type', self.pred_type,
             '--plot_file', self.plot_file,
-            '-c', '../config/config.txt',
+            '-c', '../config/config_plot.txt',
             #'-l', '../output/test.log'
         ]
 
@@ -34,6 +34,7 @@ class Args:
 
     def getPlot(self):
         hmm = self.plot if self.plot else ''
+        return hmm
 
     def getFiles(self):
         return {
