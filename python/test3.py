@@ -87,9 +87,9 @@ log_prob_matrix2 = b.log_prob_matrix
 sum(assign_df["SS_name"] == assign_df["Res_name"])
 sum(assign_df2["SS_name"] == assign_df2["Res_name"])
 
-tmp1 = assign_df
+tmp1 = assign_df.copy()
 tmp1.index = tmp1["Res_name"]
-tmp2 = assign_df2
+tmp2 = assign_df2.copy()
 tmp2.index = tmp2["Res_name"]
 
 sum(tmp1["SS_name"] == tmp2["SS_name"])
@@ -101,6 +101,12 @@ sum(tmp1["SS_name"] == tmp2["SS_name"])
 #df = pd.DataFrame(d)
 #df["Res_name"] = df.index
 #df2 = pd.merge(df, p1, how="left", left_index=True, right_index=True)
+
+#%% Test HSQC plot
+
+from bokeh.io import show
+
+show(a.plot_hsqc_bokeh(return_json=False))
 
 
 #%% Test kbest assignments

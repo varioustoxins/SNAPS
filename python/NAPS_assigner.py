@@ -12,9 +12,9 @@ import pandas as pd
 from bokeh.plotting import figure, output_file, save
 from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
-from bokeh.models import WheelZoomTool
+from bokeh.models import WheelZoomTool, LabelSet, ColumnDataSource
 from bokeh.io import export_png
-#from bokeh.embed import json_item
+from bokeh.embed import json_item
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import linear_sum_assignment
 from math import log10, sqrt
@@ -843,13 +843,29 @@ class NAPS_assigner:
             tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
             tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
             
+            # Add an assignment confidence column
+            tmp["Confidence"] = "Uncertain"
+            strong_mask = (((tmp["Num_good_links_prev"]+tmp["Num_good_links_next"])>=4) & 
+                           (tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)<threshold))
+            weak_mask = (((tmp["Num_good_links_prev"]+tmp["Num_good_links_next"]).between(1,3)) & 
+                           (tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)<threshold))
+            mismatched_mask = tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)>=threshold
+            
+            tmp.loc[weak_mask,"Confidence"] = "Weak"
+            tmp.loc[strong_mask,"Confidence"] = "Strong"
+            tmp.loc[mismatched_mask,"Confidence"] = "Mismatched"
+            
             # Join relevant columns back onto assign_df
             tmp["Res_N"] = tmp.index
+            tmp.index.name = None
             assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", 
                                                   "Max_mismatch_next", 
                                                   "Num_good_links_prev", 
-                                                  "Num_good_links_next"]], 
+                                                  "Num_good_links_next",
+                                                  "Confidence"]], 
                                        on="Res_N")
+            
+            
             if set_assign_df:
                 self.assign_df = assign_df
             return(assign_df)
@@ -1267,7 +1283,49 @@ class NAPS_assigner:
             else:
                 return(p)
                 
+    def plot_hsqc_bokeh(self, outfile=None, format="html", return_json=True):
+        """Plot an HSQC coloured by prediction confidence"""
         
+        assign_df = self.assign_df.copy()
+        
+        plt = figure(title="HSQC",
+                        x_axis_label="1H (ppm)",
+                        y_axis_label="15N (ppm)",
+                        height=500, width=500)
+        
+        # Create a colour map based on confidence
+        colourmap = {"Strong":"green",
+                     "Weak":"orange",
+                     "Uncertain":"grey",
+                     "Mismatched":"red"}
+
+        
+        # Plot the peaks
+        for k in colourmap.keys():
+            tmp = assign_df[assign_df["Confidence"]==k]
+            plt.circle(tmp["H"], tmp["N"], color=colourmap[k], legend=k)
+        
+        # Label the points
+        df = ColumnDataSource(assign_df)
+        labels = LabelSet(x="H", y="N", text="Res_name", source=df)
+        plt.add_layout(labels)
+        
+        # Reverse the axes and set range
+        plt.x_range = Range1d(assign_df["H"].max()+1, assign_df["H"].min()-1)
+        plt.y_range = Range1d(assign_df["N"].max()+5, assign_df["N"].min()-5)
+        
+        if outfile is not None:
+            Path(outfile).resolve().parents[1].mkdir(parents=True, exist_ok=True)
+            if format=="html":
+                output_file(outfile)
+                save(plt)
+            elif format=="png":
+                export_png(plt, outfile)
+        
+        if return_json:
+            return(json_item(plt))
+        else:
+            return(plt)
     
     def plot_seq_mismatch(self):
         """ Make a plot of the maximum sequential mismatch between i-1, i and 
