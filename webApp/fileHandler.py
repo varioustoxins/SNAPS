@@ -6,13 +6,13 @@ def saveFiles(request, args):
 
     #For now, default files are used if files are not provided
     if 'observedShiftsFile' in request.form:
-        args.shift_file = '../data/testset/simplified_BMRB/6338.txt'
+        args.shift_file = '../data/testset/simplified_BMRB/4834.txt'
         args.shift_type = 'test'
     else:
         request.files['observedShiftsFile'].save(args.shift_file)
 
     if 'predictedShiftsFile' in request.form:
-        args.pred_file = '../data/testset/shiftx2_results/A002_1XMTA.cs'
+        args.pred_file = '../data/testset/shiftx2_results/A003_1LM4B.cs'
         args.pred_type = 'shiftx2'
     else:
         request.files['predictedShiftsFile'].save(args.pred_file)

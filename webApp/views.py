@@ -74,11 +74,11 @@ def index():
 def info():
     return render_template('info.html')
 
-@app.route('/email', methods = ['POST'])
-def email():
-    if not app.config.get("MAIL_SERVER"):
-        return jsonify(status='no_email_server', message='The email server is not configured on the views.py page.')
-    return emailFiles(request, mail, app)
+#@app.route('/email', methods = ['POST'])
+#def email():
+#    if not app.config.get("MAIL_SERVER"):
+#        return jsonify(status='no_email_server', message='The email server is not configured on the views.py page.')
+#    return emailFiles(request, mail, app)
 
 if __name__ == '__main__':
     HOST = environ.get('SERVER_HOST', 'localhost')
