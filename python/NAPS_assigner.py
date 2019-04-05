@@ -1264,18 +1264,18 @@ class NAPS_assigner:
             df = pd.merge(tmp2,df, on=None, how="outer")
             mask = df["Res_name"].isna()
             df.loc[mask,"Res_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
+            #df.loc[mask,"SS_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
             df["Res_name"] = [s.rjust(5) for s in df["Res_name"]]
+            
             df["Dummy_res"] = df["Dummy_res"].astype(bool)
             
             tmp_plt = figure(x_range=df["Res_name"].tolist())
             for atom in seq_atoms:
                 # Setup plot
-                plt = figure(title="Strip plot",
-                                x_axis_label="Residue number",
-                                y_axis_label="Carbon shift",
-                                x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,reset",
-                                height=250, width=1000)
+                plt = figure(y_axis_label=atom+" (ppm)",
+                             x_range=tmp_plt.x_range,
+                             tools="xpan, xwheel_zoom,reset",
+                             height=200, width=1000)
                 plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
                 ## Plot the vertical lines
@@ -1328,12 +1328,14 @@ class NAPS_assigner:
                 
                 # Change axis label orientation
                 plt.xaxis.major_label_orientation = 3.14159/2
+                plt.xaxis.visible = False
                 
                 plotlist = plotlist + [plt]
             
+            plotlist[-1].xaxis.visible = True
+            
             # Make mismatch plot
             plt = figure(title="Mismatch plot",
-                                x_axis_label="Residue number",
                                 y_axis_label="Mismatch (ppm)",
                                 x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,reset",
@@ -1350,12 +1352,11 @@ class NAPS_assigner:
             plotlist = [plt] + plotlist
             
             # Make confidence plot
-            plt = figure(title="Confidence plot",
-                                x_axis_label="Residue number",
-                                y_axis_label="Mismatch (ppm)",
+            plt = figure(title="Confidence plot (mouseover to see observed spin system name)",
                                 x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,reset",
-                                height=250, width=1000)
+                                tools="xpan, xwheel_zoom,hover,reset",
+                                tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
+                                height=100, width=1000)
             plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
             
             # Create a colour map based on confidence
@@ -1366,14 +1367,16 @@ class NAPS_assigner:
             
             # Plot the peaks
             for k in colourmap.keys():
-                tmp = df[df["Confidence"]==k]
-                plt.vbar(x=df.loc[df["Confidence"]==k,"Res_name"], top=1, width=1, 
-                         color=colourmap[k], legend=k)
+                tmp = ColumnDataSource(df[df["Confidence"]==k])
+                plt.vbar(x="Res_name", top=1, width=1, 
+                         color=colourmap[k], legend=k, source=tmp)
             
             plt.legend.orientation = "horizontal"
             plt.legend.location = "top_center"
             # Change axis label orientation
-            plt.xaxis.major_label_orientation = 3.14159/2
+            #plt.xaxis.major_label_orientation = 3.14159/2
+            plt.axis.visible = False
+            
             plotlist = [plt] + plotlist
             
             # Put them all together, and export
