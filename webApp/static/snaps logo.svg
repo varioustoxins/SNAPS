@@ -15,7 +15,10 @@
    id="svg2"
    version="1.1"
    inkscape:version="0.48.5 r10040"
-   sodipodi:docname="snaps logo.svg">
+   sodipodi:docname="snaps logo.svg"
+   inkscape:export-filename="/Users/aph516/GitHub/NAPS/webApp/static/snaps logo.png"
+   inkscape:export-xdpi="90"
+   inkscape:export-ydpi="90">
   <defs
      id="defs4">
     <inkscape:path-effect
@@ -30,16 +33,16 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.4"
-     inkscape:cx="210.84337"
-     inkscape:cy="728.13878"
+     inkscape:zoom="0.7"
+     inkscape:cx="391.55766"
+     inkscape:cy="748.85307"
      inkscape:document-units="px"
      inkscape:current-layer="svg2"
      showgrid="false"
      inkscape:window-width="1489"
      inkscape:window-height="894"
-     inkscape:window-x="0"
-     inkscape:window-y="1"
+     inkscape:window-x="61"
+     inkscape:window-y="60"
      inkscape:window-maximized="0" />
   <metadata
      id="metadata7">
@@ -3964,4 +3967,15 @@ CiiigAooooAKKKKACiiigAooooAKKKKAP//Z
      id="layer3"
      inkscape:label="tmp"
      style="display:none" />
+  <text
+     xml:space="preserve"
+     style="font-size:136.4342041px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:sans-serif"
+     x="245.78613"
+     y="406.44147"
+     id="text4038"
+     sodipodi:linespacing="125%"><tspan
+       sodipodi:role="line"
+       id="tspan4040"
+       x="245.78613"
+       y="406.44147">SNAPS</tspan></text>
 </svg>

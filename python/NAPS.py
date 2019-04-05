@@ -97,6 +97,7 @@ def runNAPS(args):
                                            SS_class_m1=AA_class_m1.split(","))
     else:
         importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
+        
     a.obs = importer.obs
     logging.info("Read in %d spin systems from %s.", 
                  len(a.obs["SS_name"]), args.shift_file)
@@ -107,15 +108,15 @@ def runNAPS(args):
                  len(a.preds["Res_name"]), args.pred_file)
 
     #### Do the analysis
-    if args.shift_type=="test":
-        # Limit observations and predictions to their common range
-#        a.obs = a.obs[a.obs["Res_N"]>=a.preds["Res_N"].min()]
-#        a.obs = a.obs[a.obs["Res_N"]<=a.preds["Res_N"].max()]
-#        a.preds = a.preds[a.preds["Res_N"]>=a.obs["Res_N"].min()]
-#        a.preds = a.preds[a.preds["Res_N"]<=a.obs["Res_N"].max()]
-        # Delete any unmatchable observations or predictions
-        a.obs = a.obs[a.obs["SS_name"].isin(a.preds["Res_name"])]
-        a.preds = a.preds[a.preds["Res_name"].isin(a.obs["SS_name"])]
+#    if args.shift_type=="test":
+#        # Limit observations and predictions to their common range
+##        a.obs = a.obs[a.obs["Res_N"]>=a.preds["Res_N"].min()]
+##        a.obs = a.obs[a.obs["Res_N"]<=a.preds["Res_N"].max()]
+##        a.preds = a.preds[a.preds["Res_N"]>=a.obs["Res_N"].min()]
+##        a.preds = a.preds[a.preds["Res_N"]<=a.obs["Res_N"].max()]
+#        # Delete any unmatchable observations or predictions
+#        a.obs = a.obs[a.obs["SS_name"].isin(a.preds["Res_name"])]
+#        a.preds = a.preds[a.preds["Res_name"].isin(a.obs["SS_name"])]
         
     a.add_dummy_rows()
     a.calc_log_prob_matrix2(sf=1, verbose=False)

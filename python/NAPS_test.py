@@ -5,12 +5,14 @@ Script to test NAPS functionality
 Run with a single argument, the path to the NAPS directory
 eg "python NAPS_test.py /Users/aph516/GitHub/NAPS/"
 
+/anaconda3/bin/python3 NAPS_test.py .. -p /anaconda3/bin/python3 --assign -t basic
+
 @author: aph516
 """
 
 import numpy as np
 import pandas as pd
-from NAPS_analyse import import_testset_metadata, check_assignment_accuracy
+from NAPS_analyse import import_testset_metadata, check_assignment_accuracy, collect_assignment_results, summarise_results
 from subprocess import run
 from pathlib import Path
 import argparse
@@ -93,6 +95,21 @@ def save_alt_summary_plots(assigns, summary, out_dir):
     plt.save(path/"plots"/(out_dir+"_correct.pdf"), height=210, width=297, units="mm")
     return(plt)
     
+def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
+    """Extra_args is a list of additional command line arguments"""
+    cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
+            testset_df.loc[id, "obs_file"].as_posix(), 
+            testset_df.loc[id, "preds_file"].as_posix(),
+            (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".txt")).as_posix(),
+            "--shift_type", "test",
+            "--pred_type", "shiftx2",
+            "-c", (path/"config"/config_file).as_posix(),
+            "-l", (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".log")).as_posix()]
+    cmd = cmd + extra_args
+            
+    return(cmd)
+
+
 #%% Test all proteins in the using most basic settings
 if "basic" in args.test or "all" in args.test:
     out_dir = "basic"
@@ -101,19 +118,14 @@ if "basic" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(),
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config_plot.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                    "--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_plot.txt",
+                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     
     if args.analyse:        
-        assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        #assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        assigns_basic = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_basic = summarise_results(assigns_basic)
         summary_basic.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
     
         save_summary_plot(assigns_basic, summary_basic, out_dir)
@@ -195,14 +207,7 @@ if "pred_correction" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(),
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config_pred_correction.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_pred_correction.txt")
             run(cmd)
     
     if args.analyse:        
@@ -220,14 +225,7 @@ if "delta_correlation" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(),
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config_delta_corr.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_delta_corr.txt")
             run(cmd)
     
     if args.analyse:        
@@ -244,14 +242,7 @@ if "delta_correlation2" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(),
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config_delta_corr2.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_delta_corr2.txt")
             run(cmd)
     
     if args.analyse:        
@@ -269,15 +260,8 @@ if "hadamac" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(),
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
-                    "-c", (path/"config/config_hadamac.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_hadamac.txt",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
     
     if args.analyse:        
@@ -309,14 +293,7 @@ if "alt_assign" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config_alt_assign.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_assign.txt")
             run(cmd)
     
     if args.analyse:        
@@ -335,15 +312,8 @@ if "alt_hadamac" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
-                    "-c", (path/"config/config_alt_hadamac.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_hadamac.txt",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
     
     if args.analyse:        
@@ -364,15 +334,8 @@ if "alt_hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2", 
-                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
-                    "-c", (path/"config/config_alt_hnco.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_hnco.txt",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
             
     if args.analyse:
@@ -391,15 +354,8 @@ if "alt_hnco2" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML",
-                    "-c", (path/"config/config_alt_hnco2.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_hnco2.txt",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
             
     if args.analyse:
@@ -419,14 +375,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2", 
-                    "-c", (path/"config/config_alt_hnco_hncacb.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_hnco_hncacb.txt")
             run(cmd)
             
     if args.analyse:        
@@ -446,14 +395,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])    
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(), 
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2", 
-                    "-c", (path/"config/config_alt_ca_co.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix()]
+            cmd = make_cmd(i, out_dir, "config_alt_ca_co.txt")
             run(cmd)
     
     if args.analyse:            
@@ -473,15 +415,7 @@ if "iterated" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = [args.python_cmd, (path/"python/NAPS.py").as_posix(),
-                    testset_df.loc[i, "obs_file"].as_posix(), 
-                    testset_df.loc[i, "preds_file"].as_posix(),
-                    (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".txt")).as_posix(),
-                    "--shift_type", "test",
-                    "--pred_type", "shiftx2",
-                    "-c", (path/"config/config.txt").as_posix(),
-                    "-l", (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+".log")).as_posix(),
-                    "--iterated"]
+            cmd = make_cmd(i, out_dir, "config.txt", ["--iterated"])
             run(cmd)
     
     if args.analyse:        
