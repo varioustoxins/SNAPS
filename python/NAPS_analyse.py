@@ -260,7 +260,8 @@ def summarise_results(assigns, output_file=None):
     ID_list2 = list(ID_unique.repeat(len(Rank_unique)))
     status_list = ["Correctly assigned","Correctly unassigned","Dummy SS",
                    "Misassigned","Wrongly assigned","Wrongly unassigned"]
-    confidence_list = ["Strong","Weak","Uncertain","Mismatched"]
+    confidence_list = ["Strong","Weak","Uncertain","Mismatched",
+                       "Dummy_res","Dummy_SS"]
     
     summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list}, 
                            columns=["ID", "Rank"]+status_list)
@@ -272,8 +273,8 @@ def summarise_results(assigns, output_file=None):
             summary.loc[i, status] = sum(tmp["Status"]==status)
         for c in confidence_list:
             summary.loc[i, c] = sum(tmp["Confidence"]==c)
-            summary.loc[i, c+"_accuracy"] = sum((tmp["Confidence"]==c) & 
-                                               tmp["Correct"])/summary.loc[i, c]
+            summary.loc[i, c+"_correct"] = sum((tmp["Confidence"]==c) & 
+                                               tmp["Correct"])
                 
     #summary = summary.loc[:,status_list].fillna(0).astype(int)
     summary["N"] = summary.loc[:,status_list].apply(sum, axis=1)
@@ -288,8 +289,11 @@ def summarise_results(assigns, output_file=None):
         sum_row["Rank"] = r
         summary = pd.concat([sum_row, summary], sort=False, ignore_index=True)
     
-    summary["Pc_correct"] = (summary["Correctly assigned"]+
+    summary["Pc_correct"] = 100 * (summary["Correctly assigned"]+
                              summary["Correctly unassigned"]) / summary["N_SS"]
+    for c in confidence_list:
+        summary[c+"_pc"] = 100 * summary[c]/summary["N_SS"]
+        summary[c+"_pc_correct"] = 100 * summary[c+"_correct"]/summary[c].replace({0:np.NaN})
     
     if output_file is not None:
         assigns.to_csv(output_file, sep="\t", float_format="%.3f")

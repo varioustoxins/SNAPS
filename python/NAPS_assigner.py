@@ -821,7 +821,7 @@ class NAPS_assigner:
             # succeeding residues
             tmp = assign_df.copy()
             tmp.index = tmp["Res_N"]
-            tmp = tmp.loc[tmp["Dummy_res"]==False, list(seq_atoms)+list(seq_atoms_m1)]
+            tmp = tmp.loc[~tmp["Dummy_res"], list(seq_atoms)+list(seq_atoms_m1)]
             
             tmp_next = tmp.copy()
             tmp_next.index -= 1
@@ -864,6 +864,8 @@ class NAPS_assigner:
                                                   "Num_good_links_next",
                                                   "Confidence"]], 
                                        on="Res_N")
+            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Dummy_res"
+            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
             
             
             if set_assign_df:
@@ -1258,7 +1260,7 @@ class NAPS_assigner:
             return(None)
         else:
             #Add extra rows for missing residues (eg Prolines)
-            tmp = list(range(df["Res_N"].min(), df["Res_N"].max()))
+            tmp = list(range(int(df["Res_N"].min()), int(df["Res_N"].max())))
             tmp2 = pd.DataFrame({"Res_N":tmp, 
                                  "Dummy_res":[False]*len(tmp)})
             df = pd.merge(tmp2,df, on=None, how="outer")
@@ -1301,13 +1303,13 @@ class NAPS_assigner:
                 # eg. CA, CA_a, CA_m1
                 hlines[atom+"_a"] = np.NaN  
                 # Add extra lines for missing residues
-                tmp = list(range(hlines["Res_N"].min(), hlines["Res_N"].max()))
-                tmp2 = pd.DataFrame({"Res_N":tmp})
-                hlines = pd.merge(tmp2,hlines, on=None)
-                mask = hlines["Res_name"].isna()
-                hlines.loc[mask,"Res_name"] = hlines.loc[mask,"Res_N"].astype(str)
-                hlines["Res_name"] = [s.rjust(5) for s in hlines["Res_name"]]
-                # Convert from wide to long
+#                tmp = list(range(hlines["Res_N"].min(), hlines["Res_N"].max()))
+#                tmp2 = pd.DataFrame({"Res_N":tmp})
+#                hlines = pd.merge(tmp2,hlines, on=None)
+#                mask = hlines["Res_name"].isna()
+#                hlines.loc[mask,"Res_name"] = hlines.loc[mask,"Res_N"].astype(str)
+#                hlines["Res_name"] = [s.rjust(5) for s in hlines["Res_name"]]
+#                # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"], 
                                      value_vars=[atom, atom+"_m1", atom+"_a"], 
                                      var_name="Atom_type", 

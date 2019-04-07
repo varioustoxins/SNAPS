@@ -132,6 +132,76 @@ if "basic" in args.test or "all" in args.test:
         
         summary_basic.iloc[1:,:]["Pc_correct"].quantile([0,0.25,0.5,0.75,1])
         
+        #### Make figures for poster
+        # Figure breaking down assignment accuracy
+        tmp = assigns_basic[~assigns_basic["Dummy_SS"]]
+        plt = ggplot(tmp) + geom_bar(aes(x="Status", fill="Status",
+                                     y="100*stat(count)/"+str(len(tmp.index))))
+        plt += xlab("Assignment status") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_y_continuous(breaks=np.arange(0,100,10))
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm")
+        
+        # Figure showing accuracy vs number of good seq links
+        # Note that NA values are always false in > or < comparisons.        
+        plt = ggplot(tmp) + geom_bar(aes(x="((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
+                                         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)", 
+                                     y="100*stat(count)/"+str(len(tmp.index)), 
+                                     fill="Correct"))
+        plt += xlab("Number of matching neighbours") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += theme_bw()
+        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        
+        plt = ggplot(tmp) + geom_bar(aes(x="(Num_good_links_prev + Num_good_links_next)"+
+                                     "*(Max_mismatch_prev<0.1).astype(int)"+
+                                     "*(Max_mismatch_next<0.1).astype(int)", 
+                                     y="100*stat(count)/"+str(len(tmp.index)), 
+                                     fill="Correct"))
+        plt += xlab("Number of matching neighbours") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += theme_bw()
+        plt#.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        
+        # Some alternate ways of assessing how good the seq links are
+#        "(Num_good_links_prev==3).astype(int)+(Num_good_links_next==3).astype(int)"
+#        ("(Max_mismatch_prev<0.1).astype(int)"+
+#         "+(Max_mismatch_next<0.1).astype(int)")
+#        ("((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
+#         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)")
+        
+        # Figures showing confidence proportion and accuracy
+        conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
+                                                  "Mismatched","Dummy_res"],
+                                                 ordered=True)
+        tmp["Confidence"] = tmp["Confidence"].astype(conf_type)
+        plt = ggplot(tmp) + geom_bar(aes(x="Confidence", 
+                    y="100*stat(count)/"+str(sum(~tmp["Dummy_SS"])),
+                    fill="Correct"))
+        plt += xlab("Assignment confidence") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster confidence.pdf", height=100, width=100, units="mm")
+        
+        plt = ggplot(tmp) + geom_bar(aes(x="Confidence", 
+                    fill="Correct"), position="fill")
+        plt += xlab("Assignment confidence") + ylab("Accuracy")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster confidence accuracy.pdf", height=100, width=100, units="mm")
+        
+        # Figure showing distribution of log_probabilities
+        plt = ggplot(tmp[~tmp["Dummy_res"]])
+        plt += geom_density(aes(x="Log_prob", fill="Correct"), alpha=0.5)
+        plt += xlim(-50,0)
+        plt += scale_fill_brewer(type="qual", palette=6)
+        plt += theme_bw()
+        plt.save(path/"plots/Poster log_prob distribution.pdf", height=100, width=100, units="mm")
+        
+        #### Exploratory analysis
         # Make a matrix showing how often each residue type is misassigned to a different type
         misassigned_types_basic = assigns_basic[["SS_type","Res_type"]].groupby(["SS_type","Res_type"]).size().unstack().fillna(0)
         type_count = misassigned_types_basic.sum(axis=1)    # Count occurrences of each residue type in observations
@@ -161,43 +231,6 @@ if "basic" in args.test or "all" in args.test:
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_boxplot(aes(y="Log_prob", x="ID", colour="Correct")) 
         + ylim(-100,0) )
-        
-        #### Make figures for poster
-        # Figure breaking down assignment accuracy
-        tmp = assigns_basic[~assigns_basic["Dummy_SS"]]
-        plt = ggplot(tmp) + geom_bar(aes(x="Status", fill="Status",
-                                     y="100*stat(count)/"+str(len(tmp.index))))
-        plt += xlab("Assignment status") + ylab("Percentage")
-        plt += scale_fill_brewer("qual", palette=6)
-        plt += scale_y_continuous(breaks=np.arange(0,100,10))
-        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm")
-        
-        # Figure showing accuracy vs number of good seq links
-        # Note that NA values are always false in > or < comparisons.        
-        plt = ggplot(tmp) + geom_bar(aes(x="((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
-                                         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)", 
-                                     y="100*stat(count)/"+str(len(tmp.index)), 
-                                     fill="Correct"))
-        plt += xlab("Number of good seq links") + ylab("Percentage")
-        plt += scale_fill_brewer("qual", palette=6)
-        plt += theme_bw()
-        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
-        
-        # Some alternate ways of assessing how good the seq links are
-#        "(Num_good_links_prev==3).astype(int)+(Num_good_links_next==3).astype(int)"
-#        ("(Max_mismatch_prev<0.1).astype(int)"+
-#         "+(Max_mismatch_next<0.1).astype(int)")
-#        ("((Num_good_links_prev>=2) & (Max_mismatch_prev<0.1)).astype(int)"+
-#         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)")
-        
-        # Figure showing distribution of log_probabilities
-        plt = ggplot(tmp[~tmp["Dummy_res"]])
-        plt += geom_density(aes(x="Log_prob", fill="Correct"), alpha=0.5)
-        plt += xlim(-50,0)
-        plt += scale_fill_brewer(type="qual", palette=6)
-        plt += theme_bw()
-        plt.save(path/"plots/Poster log_prob distribution.pdf", height=100, width=100, units="mm")
         
 #%% Test effect of correcting the predicted shifts
 if "pred_correction" in args.test or "all" in args.test:
