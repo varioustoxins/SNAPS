@@ -452,10 +452,44 @@ if "iterated" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_iter, summary_iter = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_iter.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
-        
+        assigns_iter = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_iter = summarise_results(assigns_iter)
+        summary_iter.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+
         save_summary_plot(assigns_iter, summary_iter, out_dir)
+        
+        #### Make plots
+        tmp = assigns_iter[~assigns_iter["Dummy_SS"]]
+        plt = ggplot(tmp) + geom_bar(aes(x="Status", fill="Status",
+                                     y="100*stat(count)/"+str(len(tmp.index))))
+        plt += xlab("Assignment status") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_y_continuous(breaks=np.arange(0,100,10))
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster iterated accuracy.pdf", height=100, width=100, units="mm")
+        
+        # Figures showing confidence proportion and accuracy
+        conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
+                                                  "Mismatched","Dummy_res"],
+                                                 ordered=True)
+        tmp["Confidence"] = tmp["Confidence"].astype(conf_type)
+        plt = ggplot(tmp) + geom_bar(aes(x="Confidence", 
+                    y="100*stat(count)/"+str(sum(~tmp["Dummy_SS"])),
+                    fill="Correct"))
+        plt += xlab("Assignment confidence") + ylab("Percentage")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster confidence iterated.pdf", height=100, width=100, units="mm")
+        
+        plt = ggplot(tmp) + geom_bar(aes(x="Confidence", 
+                    fill="Correct"), position="fill")
+        plt += xlab("Assignment confidence") + ylab("Accuracy")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster confidence accuracy iterated.pdf", height=100, width=100, units="mm")
+        
 
 #%% Test stuff
 
