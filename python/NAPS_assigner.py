@@ -1237,7 +1237,7 @@ class NAPS_assigner:
         
         return(plt)
     
-    def plot_strips_bokeh(self, outfile=None, format="html", return_json=True):
+    def plot_strips_bokeh(self, outfile=None, format="html", return_json=True, plot_width=1000):
         """Make a strip plot of the assignment.
         
         Uses bokeh module for plotting. Returns the bokeh plot object.
@@ -1277,7 +1277,7 @@ class NAPS_assigner:
                 plt = figure(y_axis_label=atom+" (ppm)",
                              x_range=tmp_plt.x_range,
                              tools="xpan, xwheel_zoom,reset",
-                             height=200, width=1000)
+                             height=200, width=plot_width)
                 plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
                 ## Plot the vertical lines
@@ -1341,7 +1341,7 @@ class NAPS_assigner:
                                 y_axis_label="Mismatch (ppm)",
                                 x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,reset",
-                                height=150, width=1000)
+                                height=150, width=plot_width)
             plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
 
             
@@ -1358,7 +1358,7 @@ class NAPS_assigner:
                                 x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,hover,reset",
                                 tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
-                                height=100, width=1000)
+                                height=100, width=plot_width)
             plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
             
             # Create a colour map based on confidence
