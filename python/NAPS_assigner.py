@@ -813,9 +813,12 @@ class NAPS_assigner:
             # You can't do a comparison
             assign_df["Max_mismatch_prev"] = np.NaN
             assign_df["Max_mismatch_next"] = np.NaN
-            assign_df["Num_good_links_prev"] = np.NaN
-            assign_df["Num_good_links_next"] = np.NaN
-            return(assign_df)
+            assign_df["Num_good_links_prev"] = 0
+            assign_df["Num_good_links_next"] = 0
+            assign_df["Confidence"] = "Uncertain"
+            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Dummy_res"
+            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
+
         else:
             # First, get the i and i-1 shifts for the preceeding and 
             # succeeding residues
@@ -868,9 +871,9 @@ class NAPS_assigner:
             assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
             
             
-            if set_assign_df:
-                self.assign_df = assign_df
-            return(assign_df)
+        if set_assign_df:
+            self.assign_df = assign_df
+        return(assign_df)
     
     def check_matching_consistency(self, matching):
         """Calculate mismatch scores for a given matching"""
@@ -1276,7 +1279,7 @@ class NAPS_assigner:
                 # Setup plot
                 plt = figure(y_axis_label=atom+" (ppm)",
                              x_range=tmp_plt.x_range,
-                             tools="xpan, xwheel_zoom,reset",
+                             tools="xpan, xwheel_zoom,save,reset",
                              height=200, width=plot_width)
                 plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
@@ -1340,7 +1343,7 @@ class NAPS_assigner:
             plt = figure(title="Mismatch plot",
                                 y_axis_label="Mismatch (ppm)",
                                 x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,reset",
+                                tools="xpan, xwheel_zoom,save,reset",
                                 height=150, width=plot_width)
             plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
 
@@ -1356,7 +1359,7 @@ class NAPS_assigner:
             # Make confidence plot
             plt = figure(title="Confidence plot (mouseover to see observed spin system name)",
                                 x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,hover,reset",
+                                tools="xpan, xwheel_zoom,hover,save,reset",
                                 tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
                                 height=100, width=plot_width)
             plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)

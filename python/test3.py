@@ -107,11 +107,18 @@ tmp = a.output_shiftlist("../output/test.txt", format="xeasy")
 #%% Test plots
 
 from bokeh.io import show
+from bokeh.io import export_svgs
+
+#plot.output_backend = "svg"
+#export_svgs(plot, filename="plot.svg")
 
 show(a.plot_hsqc_bokeh(return_json=False))
 
-show(a.plot_strips_bokeh(return_json=False))
+a.plot_strips_bokeh(path/"plots/example_strips.png", "png",return_json=False, plot_width=1500)
 
+plt = a.plot_strips_bokeh(return_json=False, plot_width=1500)
+plt.output_backend = "svg"
+export_svgs(plt, path/"plots/example_strips.svg")
 
 #%% Test kbest assignments
 kbest, unranked = a.find_kbest_assignments(10, verbose=True)

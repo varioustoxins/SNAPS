@@ -298,8 +298,8 @@ if "hadamac" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:        
-        assigns_hadamac, summary_hadamac = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_hadamac.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        assigns_hadamac = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_hadamac = summarise_results(assigns_hadamac)
         
         save_summary_plot(assigns_hadamac, summary_hadamac, out_dir)
        
@@ -318,6 +318,113 @@ if "hadamac" in args.test or "all" in args.test:
         misassigned_types2_hadamac = (misassigned_types_hadamac/type_count_hadamac)*100
         
         
+#%% Test reduced data
+if "hnco" in args.test or "all" in args.test:
+    out_dir = "hnco"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config_hnco.txt",
+                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            run(cmd)
+    if args.analyse:        
+        assigns_hnco = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_hnco = summarise_results(assigns_hnco)
+        summary_hnco.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+    
+        save_summary_plot(assigns_hnco, summary_hnco, out_dir)
+
+if "hnco_hnca" in args.test or "all" in args.test:
+    out_dir = "hnco_hnca"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config_hnco_hnca.txt",
+                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            run(cmd)
+    if args.analyse:        
+        assigns_hnco_hnca = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_hnco_hnca = summarise_results(assigns_hnco_hnca)
+        summary_hnco_hnca.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+    
+        save_summary_plot(assigns_hnco, summary_hnco, out_dir)
+
+if "no_CB" in args.test or "all" in args.test:
+    out_dir = "no_CB"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config_no_CB.txt",
+                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            run(cmd)
+    if args.analyse:        
+        assigns_no_CB = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_no_CB = summarise_results(assigns_no_CB)
+        summary_no_CB.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+    
+        save_summary_plot(assigns_no_CB, summary_no_CB, out_dir)
+            
+if "no_CO" in args.test or "all" in args.test:
+    out_dir = "no_CO"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config_no_CO.txt",
+                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            run(cmd)
+    if args.analyse:        
+        assigns_no_CO = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_no_CO = summarise_results(assigns_no_CO)
+        summary_no_CO.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+    
+        save_summary_plot(assigns_no_CO, summary_no_CO, out_dir)
+        
+#%% Summarise results so far
+if False:
+    assigns_basic["Test"] = "basic"
+    assigns_no_CO["Test"] = "no_CO"
+    assigns_no_CB["Test"] = "no_CB"
+    assigns_hnco_hnca["Test"] = "hnco_hnca"
+    assigns_hnco["Test"] = "hnco"
+    assigns_hadamac["Test"] = "hadamac"
+    
+    assigns = pd.concat([assigns_basic, assigns_no_CO, assigns_no_CB,
+                         assigns_hnco_hnca, assigns_hnco, assigns_hadamac])
+    
+    #### Figures for poster
+    # Summarise proportion of correct assignment
+    plt = ggplot(assigns)
+    plt += geom_bar(aes(x="Test", y="100*stat(count)/"+str(len(assigns_basic.index)), 
+                        fill="Correct"))
+    plt += xlab("Available data") + ylab("Accuracy")
+    plt += scale_fill_brewer("qual", palette=6)
+    plt += scale_y_continuous(breaks=np.arange(0,100,10))
+    plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+    plt.save(path/"plots/Poster reduced atoms accuracy.pdf", height=100, width=100, units="mm")
+    
+    # Break down assignment confidence
+#    conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
+#                                              "Mismatched","Dummy_res"],
+#                                             ordered=True)
+#    assigns["Confidence"] = assigns["Confidence"].astype(conf_type)
+    plt = ggplot(assigns)
+    plt += geom_bar(aes(x="Test",# y="100*stat(count)",#/"+str(len(assigns_basic.index)), 
+                        fill="Confidence"))
+    plt += xlab("Available data") + ylab("Percentage")
+    plt += scale_fill_brewer("qual", palette=6)
+    plt += scale_y_continuous(breaks=np.arange(0,100,10))
+    plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+    plt.save(path/"plots/Poster reduced atoms confidence.pdf", height=100, width=100, units="mm")
+    
+    
 #%% Test alternative assignments with and without HADAMAC
 if "alt_assign" in args.test or "all" in args.test:
     out_dir = "alt_assign"

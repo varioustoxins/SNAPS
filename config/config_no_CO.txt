@@ -1,0 +1,15 @@
+# Configuration file for NAPS
+pred_offset  0       # Residue numbering offset for shiftx2
+prob_method     pdf     # Method for calculating probability (options are cdf or pdf)
+pred_correction False   # Apply a linear correction to the predicted shifts
+pred_correction_file      ../config/lin_model_shiftx2.csv    # File containing parameters for linear correction to predicted shift
+delta_correlation       False   # Account for correlations in prediction errors
+delta_correlation_mean_file     ../config/d_mean.csv       # File containing mean prediction errors
+delta_correlation_cov_file      ../config/d_cov.csv        # File containing covariances between the prediction errors
+delta_correlation_mean_corrected_file     ../config/dd_mean.csv       # File containing mean prediction errors, assuming the predictions have been corrected
+delta_correlation_cov_corrected_file      ../config/dd_cov.csv        # File containing covariances between the prediction errors, assuming the predictions have been corrected
+use_ss_class_info       False   # If present, use residue type information on the observed data
+alt_assignments 0       # Number of alternative assignments to generate
+atom_set      "H, N, CB, CA, CB_m1, CA_m1"       # Which atom types to include. Comma separated.
+atom_sd "H:0.454, N:2.429, HA:0.227, C:1.030, CA:0.932, CB:1.025, C_m1:1.030, CA_m1:0.932, CB_m1:1.025"    # Atom standard deviations. Comma separated.
+plot_strips     False
