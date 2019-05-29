@@ -55,20 +55,43 @@
 				<p><a href="#" id=advanced>Advanced</a></p>
 				<div id=advancedToggle class="collapse in">
                                     <div class="row">
-                                       <div class="col">Residue number offset for predicted shifts:</div>
-                                       <div class="col"><input type="number" name="Pred shift residue offset" value=0></div>
-                                    </div>
-                                    <div class="row">
-                                       <div class="col"><p>Account for correlated prediction errors:</p></div>
-                                       <div class="col"><input type="checkbox"></div>
-                                    </div>
-                                    <div class="row">
                                        <div class="col"><p>Output formats:</p></div>
                                        <div class="col">
-                                         <p><input type="checkbox"> Sparky</p>
-                                         <p><input type="checkbox"> XEasy</p>
+                                         <input type="checkbox" name="outputSparky"> Sparky<br>
+                                         <input type="checkbox" name="outputXeasy"> XEasy<br>
                                        </div>
                                     </div>
+                                    <div class="row">
+                                       <div class="col">Sequence numbering offset for predicted shifts:</div>
+                                       <div class="col"><input type="number" name="predResOffset" value=0></div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col"><p>Atom types to include in analysis:</p></div>
+                                        <div class="col">
+                                           <input type="checkbox" checked name="atomType" value="H"> H<br>
+                                           <input type="checkbox" checked name="atomType" value="HA"> HA<br>
+                                           <input type="checkbox" checked name="atomType" value="N"> N<br>
+                                           <input type="checkbox" checked name="atomType" value="C"> C<br>
+                                           <input type="checkbox" checked name="atomType" value="CA"> CA<br>
+                                           <input type="checkbox" checked name="atomType" value="CB"> CB<br>
+                                           <input type="checkbox" checked name="atomType" value="C_m1"> C_m1<br>
+                                           <input type="checkbox" checked name="atomType" value="CA_m1"> CA_m1<br>
+                                           <input type="checkbox" checked name="atomType" value="CB_m1"> CB_m1<br>
+                                        </div>
+                                    </div>
+                                    <!-- Not yet added in main SNAPS program
+                                    <div class="row">
+                                       <div class="col"><p>Upload file containing amino acid type information (eg. HADAMAC):</p></div>
+                                       <div class="col"><input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" /></div>
+                                    </div>
+                                    -->
+                                    <div class="row">
+                                        <div class="col">
+                                            <p>Account for correlations between prediction errors (recommended):</p>
+                                        </div>
+                                       <div class="col"><input type="checkbox" name="deltaCorrelation" checked></div>
+                                    </div>
+                                    
 				</div>
                 <p><button class="btn btn-primary" id=run>Run</button></p>
             </form>
