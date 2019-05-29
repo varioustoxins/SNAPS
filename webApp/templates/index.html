@@ -54,9 +54,23 @@
 				</div>
 				<p><a href="#" id=advanced>Advanced</a></p>
 				<div id=advancedToggle class="collapse in">
-					<p>Predicted shift offset:</p>
+                                    <div class="row">
+                                       <div class="col">Residue number offset for predicted shifts:</div>
+                                       <div class="col"><input type="number" name="Pred shift residue offset" value=0></div>
+                                    </div>
+                                    <div class="row">
+                                       <div class="col"><p>Account for correlated prediction errors:</p></div>
+                                       <div class="col"><input type="checkbox"></div>
+                                    </div>
+                                    <div class="row">
+                                       <div class="col"><p>Output formats:</p></div>
+                                       <div class="col">
+                                         <p><input type="checkbox"> Sparky</p>
+                                         <p><input type="checkbox"> XEasy</p>
+                                       </div>
+                                    </div>
 				</div>
-                <button class="btn btn-primary" id=run>Run</button>
+                <p><button class="btn btn-primary" id=run>Run</button></p>
             </form>
             <div id="resultsSection" class="collapse in">
                 <h2>Results</h2>
