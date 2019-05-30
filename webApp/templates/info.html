@@ -22,7 +22,7 @@ from some demonstration data.
 </p>
 <p>
 After running SNAPS, two pieces of information are returned:
-<ul><
+<ul>
      <li>a table containing the maximum likelihood assignment.</li>
     <li>an interactive strip plot which allows you to quickly locate residues with 
     poor sequential links. (This will only be generated if your input data contains 
@@ -31,9 +31,25 @@ After running SNAPS, two pieces of information are returned:
 </ul>
 </p>
 <p>
-SNAPS is available at GitHub: you can find it at https://github.com/aheyam/NAPS. 
+SNAPS is available at GitHub: you can find it at <a href="https://github.com/aheyam/NAPS">https://github.com/aheyam/NAPS</a>. 
 Any feedback would be gratefully received at alex.heyam at york.ac.uk.
 </p>
+<h2>How it works</h2>
+<p>SNAPS works by assigning a probability to each possible pairing between observed 
+spin systems and predicted residues. This is calculated assuming the error in the 
+predicted shift follows a Gaussian distribution, with a 
+standard deviation determined from a set of roughly 60 test proteins. Probabilities
+for each atom type are multiplied to get the overall spin system-residue match 
+probability. Information on up to 9 atom types can be incorporated (H, HA, N, C, 
+CA and CB, and also C, CA and CB of the preceeding residue).</p>
+<p>SNAPS then finds the assignment which maximises the overall probability (ie. the 
+product of the probabilities of the individual peak assignments). This is done 
+efficiently using a linear optimisation algorithm for solving general assignment 
+problems. Note that chemical shift matching between adjacent residues is *not* 
+used when generating the assignments (except indirectly), so this can be used 
+to assess assignment quality. SNAPS generates a strip plot highlighting areas 
+of sequential mismatch which require manual inspection.</p>
+
 <h2>Disclaimer</h2>
 <p>
 SNAPS is currently under development, and is available for demonstration or 

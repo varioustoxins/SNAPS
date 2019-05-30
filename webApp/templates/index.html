@@ -1,121 +1,123 @@
 {% extends "layout.html" %}
 {% block content %}
-			<h2 id=configurationSection>Configuration</h2>
-			<form id="form" style="width: 600px" action="$SCRIPT_ROOT + '/run'" enctype=multipart/form-data method="post">
-				<div class="row">
-					<div class="col">
-						<label for="observedShiftsFile">Observed shifts file:</label>
-					</div>
-					<div class="col">
-						<label for="observedShiftsFormat">Observed shifts format:</label>
-					</div>
-				</div>
-				<div class="row">
-					<div class="col">
-						<input type="file" name="observedShiftsFile" class="form-control-file" id="observedShiftsFile" />
-					</div>
-					<div class="col">
-						<div class="dropdown">
-							<button class="btn btn-secondary dropdown-toggle" type="button" id="observedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Naps</button>
-                            <input type="hidden" name="shift_type" value="Naps">
-                            <div class="dropdown-menu" aria-labelledby="observedShiftsFormatDropdown">
-								<span class="dropdown-item">Naps</span>
-                                <span class="dropdown-item">CCPN</span>
-                                <span class="dropdown-item">Sparky</span>
-                                <span class="dropdown-item">XEasy</span>
-                                <span class="dropdown-item">NMRPipe</span>
-								<span class="dropdown-item">Test</span>
-							</div>
-						</div>
-					</div>
-				</div>
-				<div class="row">
-					<div class="col">
-						<label for="predictedShiftsFile">Predicted shifts file:</label>
-					</div>
-					<div class="col">
-						<label for="predictedShiftsFormat">Predicted shifts format:</label>
-					</div>
-				</div>
-				<div class="row">
-					<div class="col">
-						<input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" />
-					</div>
-					<div class="col">
-						<div class="dropdown">
-                            <button class="btn btn-secondary dropdown-toggle" type="button" id="predictedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Shiftx2</button>
-                            <input type="hidden" name="pred_type" value="Shiftx2">
-                            <div class="dropdown-menu" aria-labelledby="predictedShiftsFormatDropdown">
-								<span class="dropdown-item">Shiftx2</span>
-								<span class="dropdown-item">Sparta+</span>
-							</div>
-						</div>
-					</div>
-				</div>
-				<p><a href="#" id=advanced>Advanced</a></p>
-				<div id=advancedToggle class="collapse in">
-                                    <div class="row">
-                                       <div class="col"><p>Output formats:</p></div>
-                                       <div class="col">
-                                         <input type="checkbox" name="outputSparky"> Sparky<br>
-                                         <input type="checkbox" name="outputXeasy"> XEasy<br>
-                                       </div>
-                                    </div>
-                                    <div class="row">
-                                       <div class="col">Sequence numbering offset for predicted shifts:</div>
-                                       <div class="col"><input type="number" name="predResOffset" value=0></div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col"><p>Atom types to include in analysis:</p></div>
-                                        <div class="col">
-                                           <input type="checkbox" checked name="atomType" value="H"> H<br>
-                                           <input type="checkbox" checked name="atomType" value="HA"> HA<br>
-                                           <input type="checkbox" checked name="atomType" value="N"> N<br>
-                                           <input type="checkbox" checked name="atomType" value="C"> C<br>
-                                           <input type="checkbox" checked name="atomType" value="CA"> CA<br>
-                                           <input type="checkbox" checked name="atomType" value="CB"> CB<br>
-                                           <input type="checkbox" checked name="atomType" value="C_m1"> C_m1<br>
-                                           <input type="checkbox" checked name="atomType" value="CA_m1"> CA_m1<br>
-                                           <input type="checkbox" checked name="atomType" value="CB_m1"> CB_m1<br>
-                                        </div>
-                                    </div>
-                                    <!-- Not yet added in main SNAPS program
-                                    <div class="row">
-                                       <div class="col"><p>Upload file containing amino acid type information (eg. HADAMAC):</p></div>
-                                       <div class="col"><input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" /></div>
-                                    </div>
-                                    -->
-                                    <div class="row">
-                                        <div class="col">
-                                            <p>Account for correlations between prediction errors (recommended):</p>
-                                        </div>
-                                       <div class="col"><input type="checkbox" name="deltaCorrelation" checked></div>
-                                    </div>
-                                    
-				</div>
-                <p><button class="btn btn-primary" id=run>Run</button></p>
-            </form>
-            <div id="resultsSection" class="collapse in">
-                <h2>Results</h2>
-                <!-- Have removed email for the moment.
-                <div id="fileSender" class="bg-light">
-                    <div id="email">
-                    </div>
+<p>SNAPS is a program for assigning protein backbone NMR data, using chemical shift predictions derived from 3D structures.</p>
+<p>To use, submit files in the form below, and results will be displayed on this page. Leave both observed and predicted shift files empty to run SNAPS on demonstration data.</p>
+<h2 id=configurationSection>Configuration</h2>
+<form id="form" style="width: 600px" action="$SCRIPT_ROOT + '/run'" enctype=multipart/form-data method="post">
+    <div class="row">
+        <div class="col">
+            <label for="observedShiftsFile">Observed shifts file:</label>
+        </div>
+        <div class="col">
+            <label for="observedShiftsFormat">Observed shifts format:</label>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <input type="file" name="observedShiftsFile" class="form-control-file" id="observedShiftsFile" />
+        </div>
+        <div class="col">
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" id="observedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Naps</button>
+                <input type="hidden" name="shift_type" value="Naps">
+                <div class="dropdown-menu" aria-labelledby="observedShiftsFormatDropdown">
+                    <span class="dropdown-item">Naps</span>
+                    <span class="dropdown-item">CCPN</span>
+                    <span class="dropdown-item">Sparky</span>
+                    <span class="dropdown-item">XEasy</span>
+                    <span class="dropdown-item">NMRPipe</span>
+                    <span class="dropdown-item">Test</span>
                 </div>
-                -->
-                <p id="errors"></p>
-                <div id="downloadResults">
-                </div>
-                <div id="plotTopLevel"><div id="plot"></div></div>
-                <div id="tableTopLevel">
-                    <table id="table" data-height="500">
-                        <thead>
-                            <tr id="tableData"></tr>
-                        </thead>
-                    </table>
-                </div>
-                
-                
             </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <label for="predictedShiftsFile">Predicted shifts file:</label>
+        </div>
+        <div class="col">
+            <label for="predictedShiftsFormat">Predicted shifts format:</label>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" />
+        </div>
+        <div class="col">
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" id="predictedShiftsFormatDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Shiftx2</button>
+                <input type="hidden" name="pred_type" value="Shiftx2">
+                <div class="dropdown-menu" aria-labelledby="predictedShiftsFormatDropdown">
+                    <span class="dropdown-item">Shiftx2</span>
+                    <span class="dropdown-item">Sparta+</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <p><a href="#" id=advanced>Advanced</a></p>
+    <div id=advancedToggle class="collapse in">
+    <div class="row">
+       <div class="col"><p>Output formats:</p></div>
+       <div class="col">
+         <input type="checkbox" name="outputSparky"> Sparky<br>
+         <input type="checkbox" name="outputXeasy"> XEasy<br>
+       </div>
+    </div>
+    <div class="row">
+       <div class="col">Sequence numbering offset for predicted shifts:</div>
+       <div class="col"><input type="number" name="predResOffset" value=0></div>
+    </div>
+    <div class="row">
+        <div class="col"><p>Atom types to include in analysis:</p></div>
+        <div class="col">
+           <input type="checkbox" checked name="atomType" value="H"> H<br>
+           <input type="checkbox" checked name="atomType" value="HA"> HA<br>
+           <input type="checkbox" checked name="atomType" value="N"> N<br>
+           <input type="checkbox" checked name="atomType" value="C"> C<br>
+           <input type="checkbox" checked name="atomType" value="CA"> CA<br>
+           <input type="checkbox" checked name="atomType" value="CB"> CB<br>
+           <input type="checkbox" checked name="atomType" value="C_m1"> C_m1<br>
+           <input type="checkbox" checked name="atomType" value="CA_m1"> CA_m1<br>
+           <input type="checkbox" checked name="atomType" value="CB_m1"> CB_m1<br>
+        </div>
+    </div>
+    <!-- Not yet added in main SNAPS program
+    <div class="row">
+       <div class="col"><p>Upload file containing amino acid type information (eg. HADAMAC):</p></div>
+       <div class="col"><input type="file" name="predictedShiftsFile" class="form-control-file" id="predictedShiftsFile" /></div>
+    </div>
+    -->
+    <div class="row">
+        <div class="col">
+            <p>Account for correlations between prediction errors (recommended):</p>
+        </div>
+       <div class="col"><input type="checkbox" name="deltaCorrelation" checked></div>
+    </div>
+                        
+    </div>
+    <p><button class="btn btn-primary" id=run>Run</button></p>
+</form>
+<div id="resultsSection" class="collapse in">
+    <h2>Results</h2>
+    <!-- Have removed email for the moment.
+    <div id="fileSender" class="bg-light">
+        <div id="email">
+        </div>
+    </div>
+    -->
+    <p id="errors"></p>
+    <div id="downloadResults">
+    </div>
+    <div id="plotTopLevel"><div id="plot"></div></div>
+    <div id="tableTopLevel">
+        <table id="table" data-height="500">
+            <thead>
+                <tr id="tableData"></tr>
+            </thead>
+        </table>
+    </div>
+    
+    
+</div>
 {% endblock %}
-		
+        
