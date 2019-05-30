@@ -1281,7 +1281,7 @@ class NAPS_assigner:
                              x_range=tmp_plt.x_range,
                              tools="xpan, xwheel_zoom,save,reset",
                              height=200, width=plot_width)
-                plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
+                #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
                 ## Plot the vertical lines
                 vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
@@ -1345,7 +1345,7 @@ class NAPS_assigner:
                                 x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,save,reset",
                                 height=150, width=plot_width)
-            plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
+            #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
 
             
             plt.vbar(x=df["Res_name"], 
@@ -1362,7 +1362,7 @@ class NAPS_assigner:
                                 tools="xpan, xwheel_zoom,hover,save,reset",
                                 tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
                                 height=100, width=plot_width)
-            plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
+            #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
             
             # Create a colour map based on confidence
             colourmap = {"Strong":"green",
