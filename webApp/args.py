@@ -36,7 +36,6 @@ class Args:
             return f.read()
         
     def getLog(self):
-        print("getLog()")
         with open(self.log_file,mode='r') as f:
             return f.read()
 
@@ -48,6 +47,6 @@ class Args:
         return {
             'results': self.getResults(),
             'plot': self.getPlot(),
-            'log': self.getLog()
+            #'log': self.getLog()
             
         }

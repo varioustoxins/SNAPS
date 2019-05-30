@@ -32,15 +32,17 @@ $(function () {
 function success(data) {
     $("#runLoading").remove();
     if (data.status === 'ok') {
+        $("#tableData").empty();
+        $("#errors").empty();
+        $("#plotTopLevel").replaceWith('<div id="plotTopLevel"><div id="plot"></div></div>');
+        $("#files").empty();
+        $("#log").empty();
+        $("#downloadResults").empty();
+        $("#tableTopLevel").replaceWith("<div id='tableTopLevel'><table id='table' data-height='500'><thead><tr id='tableData'></tr></thead></table></div>");
         $('#resultsSection').collapse('show');
         insertDownloadLinks(data.files);
-        if (data.files.plot) {
-            Bokeh.embed.embed_item(data.files.plot, "plot");
-            $("#downloadResults").before("<a href='#plot'>Jump to assignment strip plot</a> | ")
-            $("#plot").prepend("<h4>Strip plot</h4>")
-            $("#plot").after("<a href='#resultsSection'>Return to top of results</a>")
-        }
-        $("#downloadResults").before("<a href='#tableTopLevel'>Jump to assignment results table</a>")
+        
+        $("#downloadResults").prepend("<a href='#tableTopLevel'>Jump to assignment results table</a><br>")
         $("#tableTopLevel").prepend("<h4>Assignment results table</h4>")
         $("#tableTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
         $.each(data.headers, function (index, header) {
@@ -49,6 +51,12 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
+        if (data.files.plot) {
+            Bokeh.embed.embed_item(data.files.plot, "plot");
+            $("#downloadResults").prepend("<a href='#plotTopLevel'>Jump to assignment strip plot</a> | ")
+            $("#plotTopLevel").prepend("<h4>Strip plot</h4>")
+            $("#plotTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
+        }
     }
     else if (data.status === 'validation_failed') {
         $.each(data.errors, function (index, error) {
