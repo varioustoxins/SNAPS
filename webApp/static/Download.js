@@ -5,13 +5,11 @@ function insertDownloadLinks(files) {
 
     if (!jQuery.isEmptyObject(files)) {
         if (files['results'])
-//            $("#downloadResults").append("<img src='/static/save.png' id='downloadResultsButton' class='fileDownload' title='Download results'/>");
-            $("#downloadResults").append("<button id='downloadResultsButton'>Download results table</button>");
+            $("#downloadResults").append("<button id='downloadResultsButton'>Download results table</button><br>");
         if (files['plot'])
-//            $("#downloadPlot").append("<img src='/static/save.png' id='downloadPlotButton' class='fileDownload' title='Download plot'/>");
-            $("#downloadPlot").append("<button id='downloadPlotButton'>Download results strip plot</button>");
+            $("#downloadResults").append("<button id='downloadPlotButton'>Download results strip plot</button><br>");
         if (files['log'])
-            $("#downloadLog").append("<button id='downloadLogButton'>Download logs</button>");
+            $("#downloadResults").append("<button id='downloadLogButton'>Download log file</button><br>");
 
 //        if (files['results'] || files['plot'])
 //            $("#email").append("<form id='emailForm'><input type='text' name='emailAddress' placeholder='your@email.com' class='fileSender'><button id='emailSubmit'>Email all results</button></form>");

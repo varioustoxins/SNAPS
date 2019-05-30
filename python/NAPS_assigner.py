@@ -1396,7 +1396,7 @@ class NAPS_assigner:
                     export_png(p, outfile)
             
             if return_json:
-                return(json_item(p))
+                return(json_item(p, "strip_plot"))
             else:
                 return(p)
                 
