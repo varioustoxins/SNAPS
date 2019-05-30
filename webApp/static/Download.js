@@ -10,6 +10,8 @@ function insertDownloadLinks(files) {
         if (files['plot'])
 //            $("#downloadPlot").append("<img src='/static/save.png' id='downloadPlotButton' class='fileDownload' title='Download plot'/>");
             $("#downloadPlot").append("<button id='downloadPlotButton'>Download results strip plot</button>");
+        if (files['log'])
+            $("#downloadLog").append("<button id='downloadLogButton'>Download logs</button>");
 
 //        if (files['results'] || files['plot'])
 //            $("#email").append("<form id='emailForm'><input type='text' name='emailAddress' placeholder='your@email.com' class='fileSender'><button id='emailSubmit'>Email all results</button></form>");
@@ -19,6 +21,9 @@ function insertDownloadLinks(files) {
     });
     $("#downloadPlotButton").click(function () {
         download('plot', files['plot']);
+    });
+    $("#downloadLogButton").click(function () {
+        download('log', files['log']);
     });
 /*    $(document).on("submit", "#emailForm", function (event) {
         event.preventDefault();

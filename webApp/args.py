@@ -12,6 +12,7 @@ class Args:
         self.pred_file = os.path.join(self.directory, 'pred.txt')
         self.config_file = os.path.join(self.directory, 'config.txt')
         self.output_file = os.path.join(self.directory, 'results.txt')
+        self.log_file = os.path.join(self.directory, 'log.txt')
         self.plot = {}
         self.plot_file = os.path.join(self.directory, 'plot.html')
         self.shift_type = form['shift_type'].strip().lower()
@@ -26,12 +27,17 @@ class Args:
             '--pred_type', self.pred_type,
             '--plot_file', self.plot_file,
             '-c', self.config_file,
-            #'-l', '../output/test.log'
+            '-l', self.log_file
         ]
         return arg_list
 
     def getResults(self):
         with open(self.output_file,mode='r') as f:
+            return f.read()
+        
+    def getLog(self):
+        print("getLog()")
+        with open(self.log_file,mode='r') as f:
             return f.read()
 
     def getPlot(self):
@@ -41,5 +47,7 @@ class Args:
     def getFiles(self):
         return {
             'results': self.getResults(),
-            'plot': self.getPlot()
+            'plot': self.getPlot(),
+            'log': self.getLog()
+            
         }

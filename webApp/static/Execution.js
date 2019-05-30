@@ -6,6 +6,7 @@ $(function () {
         $("#errors").empty();
         $("#plot").empty();
         $("#files").empty();
+        $("#log").empty();
         $("#form").submit();
         return false;
     });
