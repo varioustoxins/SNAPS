@@ -292,6 +292,8 @@ def summarise_results(assigns, output_file=None):
     summary["Pc_correct"] = 100 * (summary["Correctly assigned"]+
                              summary["Correctly unassigned"]) / summary["N_SS"]
     for c in confidence_list:
+        if c=="Dummy_SS":
+            continue
         summary[c+"_pc"] = 100 * summary[c]/summary["N_SS"]
         summary[c+"_pc_correct"] = 100 * summary[c+"_correct"]/summary[c].replace({0:np.NaN})
     

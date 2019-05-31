@@ -94,16 +94,18 @@ for x in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.
 keys = list(summary_dict.keys())
 tmp = pd.DataFrame({"Fraction_removed":keys, 
                     "Pc_correct":[summary_dict[k].loc[0, "Pc_correct"] for k in keys],
-                    "Strong_pc":[summary_dict[k].loc[0, "Strong_pc"] for k in keys],
-                    "Weak_pc":[summary_dict[k].loc[0, "Weak_pc"] for k in keys],
-                    "Mismatched_pc":[summary_dict[k].loc[0, "Mismatched_pc"] for k in keys]})
+                    "High_pc":[summary_dict2[k].loc[0, "High_pc"] for k in keys2],
+                    "Medium_pc":[summary_dict2[k].loc[0, "Medium_pc"] for k in keys2],
+                    "Low_pc":[summary_dict2[k].loc[0, "Low_pc"] for k in keys2],
+                    "Likely wrong_pc":[summary_dict2[k].loc[0, "Likely wrong_pc"] for k in keys2]})
 
 #### Make a poster figure
 plt = ggplot(data=tmp) + geom_point(aes(x="100*Fraction_removed", y="Pc_correct", colour="'a'"))
-plt += geom_point(aes(x="100*Fraction_removed", y="Strong_pc", colour="'b'"))
-plt += geom_point(aes(x="100*Fraction_removed", y="Weak_pc", colour="'c'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="High_pc", colour="'b'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="Medium_pc", colour="'c'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="Low_pc", colour="'d'"))
 plt += scale_colour_brewer("qual", palette=6, name="",
-                           labels=["Overall accuracy","% High confidence","% Low confidence"])
+                           labels=["Overall accuracy","% High confidence","% Medium confidence","% Low confidence"])
 plt = plt + ylab("Percentage") + xlab("% spin systems removed")
 plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
 plt += theme_bw()
@@ -117,20 +119,22 @@ rand.seed(1)
 
 for x in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9]:
     print("#### "+str(x))
-    assigns_dict2[x], summary_dict2[x] = test_removed_obs(path/("output/removed_SS/remove_"+str(x)), id_all_carbons, x, "carbons")
+    assigns_dict2[x], summary_dict2[x] = test_removed_obs(path/("output/removed_carbons/remove_"+str(x)), id_all_carbons, x, "carbons")
 
 keys2 = list(summary_dict2.keys())
 tmp2 = pd.DataFrame({"Fraction_removed":keys2, 
                     "Pc_correct":[summary_dict2[k].loc[0, "Pc_correct"] for k in keys2],
-                    "Strong_pc":[summary_dict2[k].loc[0, "Strong_pc"] for k in keys2],
-                    "Weak_pc":[summary_dict2[k].loc[0, "Weak_pc"] for k in keys2],
-                    "Mismatched_pc":[summary_dict2[k].loc[0, "Mismatched_pc"] for k in keys2]})
+                    "High_pc":[summary_dict2[k].loc[0, "High_pc"] for k in keys2],
+                    "Medium_pc":[summary_dict2[k].loc[0, "Medium_pc"] for k in keys2],
+                    "Low_pc":[summary_dict2[k].loc[0, "Low_pc"] for k in keys2],
+                    "Likely wrong_pc":[summary_dict2[k].loc[0, "Likely wrong_pc"] for k in keys2]})
 
 plt = ggplot(data=tmp2) + geom_point(aes(x="100*Fraction_removed", y="Pc_correct", colour="'a'"))
-plt += geom_point(aes(x="100*Fraction_removed", y="Strong_pc", colour="'b'"))
-plt += geom_point(aes(x="100*Fraction_removed", y="Weak_pc", colour="'c'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="High_pc", colour="'b'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="Medium_pc", colour="'c'"))
+plt += geom_point(aes(x="100*Fraction_removed", y="Low_pc", colour="'d'"))
 plt += scale_colour_brewer("qual", palette=6, name="",
-                           labels=["Overall accuracy","% High confidence","% Low confidence"])
+                           labels=["Overall accuracy","% High confidence","% Medium confidence","% Low confidence"])
 plt = plt + ylab("Percentage") + xlab("% carbons removed")
 plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
 plt += theme_bw()
