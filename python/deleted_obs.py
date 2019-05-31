@@ -94,10 +94,10 @@ for x in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.
 keys = list(summary_dict.keys())
 tmp = pd.DataFrame({"Fraction_removed":keys, 
                     "Pc_correct":[summary_dict[k].loc[0, "Pc_correct"] for k in keys],
-                    "High_pc":[summary_dict2[k].loc[0, "High_pc"] for k in keys2],
-                    "Medium_pc":[summary_dict2[k].loc[0, "Medium_pc"] for k in keys2],
-                    "Low_pc":[summary_dict2[k].loc[0, "Low_pc"] for k in keys2],
-                    "Likely wrong_pc":[summary_dict2[k].loc[0, "Likely wrong_pc"] for k in keys2]})
+                    "High_pc":[summary_dict[k].loc[0, "High_pc"] for k in keys],
+                    "Medium_pc":[summary_dict[k].loc[0, "Medium_pc"] for k in keys],
+                    "Low_pc":[summary_dict[k].loc[0, "Low_pc"] for k in keys],
+                    "Likely wrong_pc":[summary_dict[k].loc[0, "Likely wrong_pc"] for k in keys]})
 
 #### Make a poster figure
 plt = ggplot(data=tmp) + geom_point(aes(x="100*Fraction_removed", y="Pc_correct", colour="'a'"))
