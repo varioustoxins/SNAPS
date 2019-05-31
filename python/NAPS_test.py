@@ -172,8 +172,8 @@ if "basic" in args.test or "all" in args.test:
 #         "+((Num_good_links_next>=2) & (Max_mismatch_next<0.1)).astype(int)")
         
         # Figures showing confidence proportion and accuracy
-        conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
-                                                  "Mismatched","Dummy_res"],
+        conf_type = pd.api.types.CategoricalDtype(["High","Medium","Low",
+                                                  "Likely wrong","Dummy_res"],
                                                  ordered=True)
         tmp["Confidence"] = tmp["Confidence"].astype(conf_type)
         plt = ggplot(tmp) + geom_bar(aes(x="Confidence", 
@@ -181,7 +181,7 @@ if "basic" in args.test or "all" in args.test:
                     fill="Correct"))
         plt += xlab("Assignment confidence") + ylab("Percentage")
         plt += scale_fill_brewer("qual", palette=6)
-        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+#        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
         plt.save(path/"plots/Poster confidence.pdf", height=100, width=100, units="mm")
         
@@ -189,9 +189,35 @@ if "basic" in args.test or "all" in args.test:
                     fill="Correct"), position="fill")
         plt += xlab("Assignment confidence") + ylab("Accuracy")
         plt += scale_fill_brewer("qual", palette=6)
-        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+#        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
+        plt += scale_y_continuous(breaks=np.linspace(0,1,11))
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
         plt.save(path/"plots/Poster confidence accuracy.pdf", height=100, width=100, units="mm")
+        
+        # Break down confidence by prev and next residues
+        # S=Strong evidence for link, W=Weak, N=no links, X=mismatch
+        tmp["Conf_prev"] = "N"
+        tmp.loc[tmp["Num_good_links_prev"]>0,"Conf_prev"] = "W"
+        tmp.loc[tmp["Num_good_links_prev"]>1,"Conf_prev"] = "S"
+        tmp.loc[tmp["Max_mismatch_prev"]>0.1,"Conf_prev"] = "X"
+        
+        tmp["Conf_next"] = "N"
+        tmp.loc[tmp["Num_good_links_next"]>0,"Conf_next"] = "W"
+        tmp.loc[tmp["Num_good_links_next"]>1,"Conf_next"] = "S"
+        tmp.loc[tmp["Max_mismatch_next"]>0.1,"Conf_next"] = "X"
+        
+        tmp["Conf2"] = tmp["Conf_prev"]+tmp["Conf_next"]
+        tmp["Conf2"] = tmp["Conf2"].replace(["WS","NS","XS","NW","XW","XN"], 
+                                             ["SW","SN","SX","WN","WX","NX"])
+        
+        plt = ggplot(tmp) + geom_bar(aes(x="Conf2", 
+                    fill="Correct"), position="fill")
+        plt += xlab("Assignment confidence") + ylab("Accuracy")
+        plt += scale_fill_brewer("qual", palette=6)
+        plt += scale_y_continuous(breaks=np.linspace(0,1,11))
+        #plt += scale_x_discrete(breaks=["SS","SW","SN","SX","WW","WN","WX","NN","NX","XX"])
+        plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
+        plt.save(path/"plots/Poster confidence accuracy2.pdf", height=100, width=100, units="mm")
         
         # Figure showing distribution of log_probabilities
         plt = ggplot(tmp[~tmp["Dummy_res"]])

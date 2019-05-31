@@ -847,16 +847,26 @@ class NAPS_assigner:
             tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
             
             # Add an assignment confidence column
-            tmp["Confidence"] = "Uncertain"
-            strong_mask = (((tmp["Num_good_links_prev"]+tmp["Num_good_links_next"])>=4) & 
-                           (tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)<threshold))
-            weak_mask = (((tmp["Num_good_links_prev"]+tmp["Num_good_links_next"]).between(1,3)) & 
-                           (tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)<threshold))
-            mismatched_mask = tmp[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1)>=threshold
+            tmp["Conf_prev"] = "N"
+            tmp.loc[tmp["Num_good_links_prev"]>0,"Conf_prev"] = "W"
+            tmp.loc[tmp["Num_good_links_prev"]>1,"Conf_prev"] = "S"
+            tmp.loc[tmp["Max_mismatch_prev"]>0.1,"Conf_prev"] = "X"
             
-            tmp.loc[weak_mask,"Confidence"] = "Weak"
-            tmp.loc[strong_mask,"Confidence"] = "Strong"
-            tmp.loc[mismatched_mask,"Confidence"] = "Mismatched"
+            tmp["Conf_next"] = "N"
+            tmp.loc[tmp["Num_good_links_next"]>0,"Conf_next"] = "W"
+            tmp.loc[tmp["Num_good_links_next"]>1,"Conf_next"] = "S"
+            tmp.loc[tmp["Max_mismatch_next"]>0.1,"Conf_next"] = "X"
+            
+            tmp["Conf2"] = tmp["Conf_prev"]+tmp["Conf_next"]
+            # Reorder letters eg WS -> SW
+            tmp["Conf2"] = tmp["Conf2"].replace(["WS","NS","XS","NW","XW","XN"], 
+                                               ["SW","SN","SX","WN","WX","NX"])
+
+            tmp["Confidence"] = tmp["Conf2"]
+            tmp["Confidence"] = tmp["Confidence"].replace(["SS","SW","SN","WW"],"High")
+            tmp["Confidence"] = tmp["Confidence"].replace(["SX","WN"],"Medium")
+            tmp["Confidence"] = tmp["Confidence"].replace("WX","Low")
+            tmp["Confidence"] = tmp["Confidence"].replace(["NN","NX","XX"],"Likely wrong")
             
             # Join relevant columns back onto assign_df
             tmp["Res_N"] = tmp.index
@@ -1365,10 +1375,10 @@ class NAPS_assigner:
             #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
             
             # Create a colour map based on confidence
-            colourmap = {"Strong":"green",
-                         "Weak":"orange",
-                         "Uncertain":"grey",
-                         "Mismatched":"red"}
+            colourmap = {"High":"green",
+                         "Medium":"orange",
+                         "Low":"grey",
+                         "Likely wrong":"red"}
             
             # Plot the peaks
             for k in colourmap.keys():
