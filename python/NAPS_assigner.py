@@ -1424,10 +1424,10 @@ class NAPS_assigner:
                         height=500, width=500)
         
         # Create a colour map based on confidence
-        colourmap = {"Strong":"green",
-                     "Weak":"orange",
-                     "Uncertain":"grey",
-                     "Mismatched":"red"}
+        colourmap = {"High":"green",
+                     "Medium":"orange",
+                     "Low":"grey",
+                     "Likely wrong":"red"}
 
         
         # Plot the peaks
@@ -1443,6 +1443,9 @@ class NAPS_assigner:
         # Reverse the axes and set range
         plt.x_range = Range1d(assign_df["H"].max()+1, assign_df["H"].min()-1)
         plt.y_range = Range1d(assign_df["N"].max()+5, assign_df["N"].min()-5)
+        
+        # Change legend layout
+        plt.legend.orientation = "horizontal"
         
         if outfile is not None:
             Path(outfile).resolve().parents[1].mkdir(parents=True, exist_ok=True)
