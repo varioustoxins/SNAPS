@@ -12,7 +12,7 @@ import pandas as pd
 from bokeh.plotting import figure, output_file, save
 from bokeh.layouts import gridplot
 from bokeh.models.ranges import Range1d
-from bokeh.models import WheelZoomTool, LabelSet, ColumnDataSource
+from bokeh.models import WheelZoomTool, LabelSet, ColumnDataSource, Span
 from bokeh.io import export_png
 from bokeh.embed import json_item
 from scipy.stats import norm, multivariate_normal
@@ -251,13 +251,13 @@ class NAPS_assigner:
         
         if N>M:     # If there are more spin systems than predictions
             dummies = pd.DataFrame(np.NaN, columns = preds.columns, 
-                        index=["dummy_res_"+str(i) for i in 1+np.arange(N-M)])
+                        index=["DR_"+str(i) for i in 1+np.arange(N-M)])
             dummies["Res_name"] = dummies.index
             dummies["Dummy_res"] = True
             preds = preds.append(dummies)        
         elif M>N:
             dummies = pd.DataFrame(np.NaN, columns = obs.columns, 
-                        index=["dummy_SS_"+str(i) for i in 1+np.arange(M-N)])
+                        index=["DSS_"+str(i) for i in 1+np.arange(M-N)])
             dummies["SS_name"] = dummies.index
             dummies["Dummy_SS"] = True
             obs = obs.append(dummies)
@@ -817,7 +817,7 @@ class NAPS_assigner:
             assign_df["Max_mismatch_next"] = np.NaN
             assign_df["Num_good_links_prev"] = 0
             assign_df["Num_good_links_next"] = 0
-            assign_df["Confidence"] = "Uncertain"
+            assign_df["Confidence"] = "NA"
             assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Dummy_res"
             assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
 
@@ -868,7 +868,7 @@ class NAPS_assigner:
             tmp["Confidence"] = tmp["Confidence"].replace(["SS","SW","SN","WW"],"High")
             tmp["Confidence"] = tmp["Confidence"].replace(["SX","WN"],"Medium")
             tmp["Confidence"] = tmp["Confidence"].replace("WX","Low")
-            tmp["Confidence"] = tmp["Confidence"].replace(["NN","NX","XX"],"Likely wrong")
+            tmp["Confidence"] = tmp["Confidence"].replace(["NN","NX","XX"],"Unreliable")
             
             # Join relevant columns back onto assign_df
             tmp["Res_N"] = tmp.index
@@ -879,8 +879,8 @@ class NAPS_assigner:
                                                   "Num_good_links_next",
                                                   "Confidence"]], 
                                        on="Res_N")
-            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Dummy_res"
-            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
+            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "NA"
+            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "NA"
             
             
         if set_assign_df:
@@ -1354,18 +1354,24 @@ class NAPS_assigner:
             
             plotlist[-1].xaxis.visible = True
             
-            # Make mismatch plot
+            #### Make mismatch plot ####
             plt = figure(title="Mismatch plot",
                                 y_axis_label="Mismatch (ppm)",
                                 x_range=tmp_plt.x_range,
                                 tools="xpan, xwheel_zoom,save,reset",
-                                height=150, width=plot_width)
+                                height=200, width=plot_width)
             #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
-
             
             plt.vbar(x=df["Res_name"], 
                      top=df[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1), 
                      width=1)
+            
+            # Draw a line showing the threshold for mismatches
+            threshold_line = Span(location=self.pars["seq_link_threshold"], 
+                                  dimension="width", line_dash="dashed", 
+                                  line_color="red")
+            plt.add_layout(threshold_line)
+            
             #plt.vbar(x=df["Res_name"], top=-df["Max_mismatch_prev"], width=1)
             # Change axis label orientation
             plt.xaxis.major_label_orientation = 3.14159/2
@@ -1381,9 +1387,10 @@ class NAPS_assigner:
             
             # Create a colour map based on confidence
             colourmap = {"High":"green",
-                         "Medium":"orange",
-                         "Low":"grey",
-                         "Likely wrong":"red"}
+                         "Medium":"yellowgreen",
+                         "Low":"orange",
+                         "Unreliable":"red",
+                         "NA":"grey"}
             
             # Plot the peaks
             for k in colourmap.keys():

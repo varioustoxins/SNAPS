@@ -260,7 +260,7 @@ def summarise_results(assigns, output_file=None):
     ID_list2 = list(ID_unique.repeat(len(Rank_unique)))
     status_list = ["Correctly assigned","Correctly unassigned","Dummy SS",
                    "Misassigned","Wrongly assigned","Wrongly unassigned"]
-    confidence_list = ["High","Medium","Low","Likely wrong","Unknown",
+    confidence_list = ["High","Medium","Low","Unreliable","Unknown",
                        "Dummy_res","Dummy_SS"]
     
     summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list}, 
