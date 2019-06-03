@@ -818,8 +818,8 @@ class NAPS_assigner:
             assign_df["Num_good_links_prev"] = 0
             assign_df["Num_good_links_next"] = 0
             assign_df["Confidence"] = "NA"
-            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Dummy_res"
-            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Dummy_SS"
+            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Undefined"
+            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Undefined"
 
         else:
             # First, get the i and i-1 shifts for the preceeding and 
@@ -879,8 +879,8 @@ class NAPS_assigner:
                                                   "Num_good_links_next",
                                                   "Confidence"]], 
                                        on="Res_N")
-            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "NA"
-            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "NA"
+            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Undefined"
+            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Undefined"
             
             
         if set_assign_df:
@@ -1390,7 +1390,7 @@ class NAPS_assigner:
                          "Medium":"yellowgreen",
                          "Low":"orange",
                          "Unreliable":"red",
-                         "NA":"grey"}
+                         "Undefined":"grey"}
             
             # Plot the peaks
             for k in colourmap.keys():
