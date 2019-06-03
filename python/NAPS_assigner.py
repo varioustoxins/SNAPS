@@ -44,7 +44,8 @@ class NAPS_assigner:
                 "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
                             'C':0.5330, 'CA':0.4412, 'CB':0.5163,
                             'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163},
-                "plot_strips": False}
+                "plot_strips": False,
+                "seq_link_threshold": 0.1}
             
     def read_config_file(self, filename):
         config = pd.read_table(filename, sep="\s+", comment="#", header=None,
@@ -69,6 +70,7 @@ class NAPS_assigner:
         tmp = [s.strip() for s in config["atom_sd"].split(",")]
         self.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
         self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
+        self.pars["seq_link_threshold"] = float(config["seq_link_threshold"])
         return(self.pars)
     
     def import_pred_shifts(self, input_file, filetype, offset=None):
@@ -850,12 +852,12 @@ class NAPS_assigner:
             tmp["Conf_prev"] = "N"
             tmp.loc[tmp["Num_good_links_prev"]>0,"Conf_prev"] = "W"
             tmp.loc[tmp["Num_good_links_prev"]>1,"Conf_prev"] = "S"
-            tmp.loc[tmp["Max_mismatch_prev"]>0.1,"Conf_prev"] = "X"
+            tmp.loc[tmp["Max_mismatch_prev"]>threshold,"Conf_prev"] = "X"
             
             tmp["Conf_next"] = "N"
             tmp.loc[tmp["Num_good_links_next"]>0,"Conf_next"] = "W"
             tmp.loc[tmp["Num_good_links_next"]>1,"Conf_next"] = "S"
-            tmp.loc[tmp["Max_mismatch_next"]>0.1,"Conf_next"] = "X"
+            tmp.loc[tmp["Max_mismatch_next"]>threshold,"Conf_next"] = "X"
             
             tmp["Conf2"] = tmp["Conf_prev"]+tmp["Conf_next"]
             # Reorder letters eg WS -> SW

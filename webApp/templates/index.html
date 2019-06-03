@@ -93,6 +93,13 @@
         </div>
        <div class="col"><input type="checkbox" name="deltaCorrelation" checked></div>
     </div>
+    <div class="row">
+        <div class="col">
+            <p>Maximum allowed carbon shift difference between sequential residues:<br>
+            (Only used to calculate confidence of assignments)</p>
+        </div>
+       <div class="col"><input type="number" name="seqLinkThreshold" value=0.1 min=0 step=0.1></div>
+    </div>
                         
     </div>
     <p><button class="btn btn-primary" id=run>Run</button></p>

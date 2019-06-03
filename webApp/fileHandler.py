@@ -52,7 +52,8 @@ plot_strips     True\n"""
         s += "delta_correlation       False\n"
     s += "use_ss_class_info       False\n"
     s += """atom_set      "%s"\n""" % ",".join(request.form.getlist("atomType"))
-    #print(s)
+    s += "seq_link_threshold    %s\n" % str(request.form.get("seqLinkThreshold"))
+    print(s)
     f.write(s)
 
     f.close()
