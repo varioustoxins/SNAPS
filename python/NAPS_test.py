@@ -199,12 +199,12 @@ if "basic" in args.test or "all" in args.test:
         tmp["Conf_prev"] = "N"
         tmp.loc[tmp["Num_good_links_prev"]>0,"Conf_prev"] = "W"
         tmp.loc[tmp["Num_good_links_prev"]>1,"Conf_prev"] = "S"
-        tmp.loc[tmp["Max_mismatch_prev"]>self.pars["seq_link_threshold"],"Conf_prev"] = "X"
+        tmp.loc[tmp["Max_mismatch_prev"]>0.2,"Conf_prev"] = "X"
         
         tmp["Conf_next"] = "N"
         tmp.loc[tmp["Num_good_links_next"]>0,"Conf_next"] = "W"
         tmp.loc[tmp["Num_good_links_next"]>1,"Conf_next"] = "S"
-        tmp.loc[tmp["Max_mismatch_next"]>self.pars["seq_link_threshold"],"Conf_next"] = "X"
+        tmp.loc[tmp["Max_mismatch_next"]>0.2,"Conf_next"] = "X"
         
         tmp["Conf2"] = tmp["Conf_prev"]+tmp["Conf_next"]
         tmp["Conf2"] = tmp["Conf2"].replace(["WS","NS","XS","NW","XW","XN"], 
