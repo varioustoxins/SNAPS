@@ -53,7 +53,7 @@ plot_strips     True\n"""
     s += "use_ss_class_info       False\n"
     s += """atom_set      "%s"\n""" % ",".join(request.form.getlist("atomType"))
     s += "seq_link_threshold    %s\n" % str(request.form.get("seqLinkThreshold"))
-    print(s)
+    #print(s)
     f.write(s)
 
     f.close()

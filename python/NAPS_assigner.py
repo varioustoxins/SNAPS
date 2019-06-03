@@ -1279,13 +1279,13 @@ class NAPS_assigner:
             tmp2 = pd.DataFrame({"Res_N":tmp, 
                                  "Dummy_res":[False]*len(tmp)})
             df = pd.merge(tmp2,df, on=None, how="outer")
-            #return(df)
+            
             mask = df["Res_name"].isna()
-            df.loc[mask,"Res_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
+            df.loc[mask,"Res_name"] = df.loc[mask,"Res_N"].astype(int).astype(str) + "_"
             df.loc[mask,"Dummy_SS"] = True
             df.loc[mask,"Dummy_res"] = False
             #df.loc[mask,"SS_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
-            df.loc[mask,"Res_name"] = [s.rjust(7) for s in df.loc[mask,"Res_name"]]
+            df.loc[mask,"Res_name"] = [s.rjust(5) for s in df.loc[mask,"Res_name"]]
             
             df["Dummy_res"] = df["Dummy_res"].astype(bool)
             
