@@ -361,6 +361,23 @@ if "hnco" in args.test or "all" in args.test:
         summary_hnco.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
     
         save_summary_plot(assigns_hnco, summary_hnco, out_dir)
+        
+if "hnco_hadamac" in args.test or "all" in args.test:
+    out_dir = "hnco_hadamac"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config_hnco_hadamac.txt",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
+            run(cmd)
+    if args.analyse:        
+        assigns_hnco_hadamac = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_hnco_hadamac = summarise_results(assigns_hnco_hadamac)
+        summary_hnco_hadamac.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+    
+        save_summary_plot(assigns_hnco_hadamac, summary_hnco_hadamac, out_dir)
 
 if "hnco_hnca" in args.test or "all" in args.test:
     out_dir = "hnco_hnca"
@@ -377,7 +394,7 @@ if "hnco_hnca" in args.test or "all" in args.test:
         summary_hnco_hnca = summarise_results(assigns_hnco_hnca)
         summary_hnco_hnca.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
     
-        save_summary_plot(assigns_hnco, summary_hnco, out_dir)
+        save_summary_plot(assigns_hnco_hnca, summary_hnco_hnca, out_dir)
 
 if "no_CB" in args.test or "all" in args.test:
     out_dir = "no_CB"
@@ -420,33 +437,42 @@ if False:
     assigns_no_CB["Test"] = "no_CB"
     assigns_hnco_hnca["Test"] = "hnco_hnca"
     assigns_hnco["Test"] = "hnco"
-    assigns_hadamac["Test"] = "hadamac"
+    assigns_hnco_hadamac["Test"] = "hnco_hadamac"
     
     assigns = pd.concat([assigns_basic, assigns_no_CO, assigns_no_CB,
-                         assigns_hnco_hnca, assigns_hnco, assigns_hadamac])
+                         assigns_hnco_hnca, assigns_hnco, assigns_hnco_hadamac])
+    assigns.loc[assigns["Confidence"].isna(), "Confidence"] = "Undefined"
     
     #### Figures for poster
     # Summarise proportion of correct assignment
+    exp_type = pd.api.types.CategoricalDtype(["basic","no_CO","no_CB",
+                                              "hnco_hnca","hnco","hnco_hadamac"],
+                                             ordered=True)
+    assigns["Test"] = assigns["Test"].astype(exp_type)
     plt = ggplot(assigns)
-    plt += geom_bar(aes(x="Test", y="100*stat(count)/"+str(len(assigns_basic.index)), 
+    plt += geom_bar(aes(x="Test", y="100*stat(count)/"+str((~assigns_basic["Dummy_res"]).sum()), 
                         fill="Correct"))
     plt += xlab("Available data") + ylab("Accuracy")
     plt += scale_fill_brewer("qual", palette=6)
-    plt += scale_y_continuous(breaks=np.arange(0,100,10))
+    plt += scale_y_continuous(breaks=np.linspace(0,100,11))
     plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/Poster reduced atoms accuracy.pdf", height=100, width=100, units="mm")
     
     # Break down assignment confidence
-#    conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
-#                                              "Mismatched","Dummy_res"],
-#                                             ordered=True)
-#    assigns["Confidence"] = assigns["Confidence"].astype(conf_type)
+    conf_type = pd.api.types.CategoricalDtype(["High","Medium","Low",
+                                              "Unreliable","Undefined"][::-1],
+                                             ordered=True)
+    assigns["Confidence"] = assigns["Confidence"].astype(conf_type)
+    exp_type = pd.api.types.CategoricalDtype(["basic","no_CO","no_CB",
+                                              "hnco_hnca","hnco","hnco_hadamac"],
+                                             ordered=True)
+    assigns["Test"] = assigns["Test"].astype(exp_type)
     plt = ggplot(assigns)
-    plt += geom_bar(aes(x="Test",# y="100*stat(count)",#/"+str(len(assigns_basic.index)), 
+    plt += geom_bar(aes(x="Test", y="100*stat(count)/"+str((~assigns_basic["Dummy_res"]).sum()), 
                         fill="Confidence"))
     plt += xlab("Available data") + ylab("Percentage")
     plt += scale_fill_brewer("qual", palette=6)
-    plt += scale_y_continuous(breaks=np.arange(0,100,10))
+    plt += scale_y_continuous(breaks=np.linspace(0,100,11))
     plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
     plt.save(path/"plots/Poster reduced atoms confidence.pdf", height=100, width=100, units="mm")
     

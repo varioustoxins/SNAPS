@@ -147,6 +147,13 @@ df.to_csv(path/"output/prediction_accuracy.txt", sep="\t", float_format="%.3f")
 df_q = (df.groupby("Atom_type").quantile(
         [0,0.025,0.1,0.25,0.5,0.75,0.9,0.975,1])["Shift_obs"].unstack())
 
+# Recalculate for CB, removing S and T
+df_q.loc["CB",:] = df[(df["Atom_type"]=="CB") & (~df["Res_type"].isin(["S","T"]))].quantile(
+        [0,0.025,0.1,0.25,0.5,0.75,0.9,0.975,1])["Shift_obs"]
+df_q.loc["CB_m1",:] = df[(df["Atom_type"]=="CB_m1") & (~df["Res_type_m1"].isin(["S","T"]))].quantile(
+        [0,0.025,0.1,0.25,0.5,0.75,0.9,0.975,1])["Shift_obs"]
+
+
 df_range = df_q[1] - df_q[0]
 df_95 = df_q[0.975] - df_q[0.025]
 df_80 = df_q[0.9] - df_q[0.1]
