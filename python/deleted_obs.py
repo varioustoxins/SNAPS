@@ -97,7 +97,7 @@ tmp = pd.DataFrame({"Fraction_removed":keys,
                     "High_pc":[summary_dict[k].loc[0, "High_pc"] for k in keys],
                     "Medium_pc":[summary_dict[k].loc[0, "Medium_pc"] for k in keys],
                     "Low_pc":[summary_dict[k].loc[0, "Low_pc"] for k in keys],
-                    "Likely wrong_pc":[summary_dict[k].loc[0, "Likely wrong_pc"] for k in keys]})
+                    "Unreliable_pc":[summary_dict[k].loc[0, "Unreliable_pc"] for k in keys]})
 
 #### Make a poster figure
 plt = ggplot(data=tmp) + geom_point(aes(x="100*Fraction_removed", y="Pc_correct", colour="'a'"))
@@ -127,7 +127,7 @@ tmp2 = pd.DataFrame({"Fraction_removed":keys2,
                     "High_pc":[summary_dict2[k].loc[0, "High_pc"] for k in keys2],
                     "Medium_pc":[summary_dict2[k].loc[0, "Medium_pc"] for k in keys2],
                     "Low_pc":[summary_dict2[k].loc[0, "Low_pc"] for k in keys2],
-                    "Likely wrong_pc":[summary_dict2[k].loc[0, "Likely wrong_pc"] for k in keys2]})
+                    "Unreliable_pc":[summary_dict2[k].loc[0, "Unreliable_pc"] for k in keys2]})
 
 plt = ggplot(data=tmp2) + geom_point(aes(x="100*Fraction_removed", y="Pc_correct", colour="'a'"))
 plt += geom_point(aes(x="100*Fraction_removed", y="High_pc", colour="'b'"))
