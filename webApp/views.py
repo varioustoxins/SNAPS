@@ -5,11 +5,11 @@ import base64
 import json
 
 from flask import Flask, render_template, jsonify, request, session
-from flask_mail import Mail
+#from flask_mail import Mail
 from os import environ
 from validation import Validate
 from args import Args
-from fileSender import emailFiles
+#from fileSender import emailFiles
 from fileHandler import saveFiles, deleteFiles
 
 mainNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
@@ -20,17 +20,17 @@ from NAPS import runNAPS
 app = Flask(__name__)
 app.secret_key = 'napsnapsnapsnaps' #should be changed to an external config value in production
 
-mail_settings = {
-    "MAIL_SERVER": '',
-    "MAIL_PORT": 0,
-    "MAIL_USE_TLS": False,
-    "MAIL_USE_SSL": True,
-    "MAIL_USERNAME": '',
-    "MAIL_PASSWORD": ''
-}
-
-app.config.update(mail_settings)
-mail = Mail(app)
+#mail_settings = {
+#    "MAIL_SERVER": '',
+#    "MAIL_PORT": 0,
+#    "MAIL_USE_TLS": False,
+#    "MAIL_USE_SSL": True,
+#    "MAIL_USERNAME": '',
+#    "MAIL_PASSWORD": ''
+#}
+#
+#app.config.update(mail_settings)
+#mail = Mail(app)
 
 @app.route('/run', methods = ['POST'])
 def run():
