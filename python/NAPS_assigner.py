@@ -1434,9 +1434,10 @@ class NAPS_assigner:
         
         # Create a colour map based on confidence
         colourmap = {"High":"green",
-                     "Medium":"orange",
-                     "Low":"grey",
-                     "Likely wrong":"red"}
+                         "Medium":"yellowgreen",
+                         "Low":"orange",
+                         "Unreliable":"red",
+                         "Undefined":"grey"}
 
         
         # Plot the peaks
