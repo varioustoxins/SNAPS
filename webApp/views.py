@@ -74,6 +74,10 @@ def index():
 def info():
     return render_template('info.html')
 
+@app.route('/howto')
+def howto():
+    return render_template('howto.html')
+
 #@app.route('/email', methods = ['POST'])
 #def email():
 #    if not app.config.get("MAIL_SERVER"):
