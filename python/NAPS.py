@@ -31,12 +31,11 @@ def runNAPS(args):
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2", 
                         help="The format of the predicted shifts")
-    parser.add_argument("--shift_output_type", nargs="*", default=[],
+    parser.add_argument("--shift_output_type", default="sparky",
                         choices=["sparky","xeasy"],
                         help="One or more output formats for chemical shift export")
-    parser.add_argument("--shift_output_stem",
-                        help="""The filename stem for exported assigned shift lists
-                        eg. if '~/output' is given, files like '~/output_sparky.txt' will be produced.'""")
+    parser.add_argument("--shift_output_file", default=None,
+                        help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("-c", "--config_file", 
                         default="/Users/aph516/GitHub/NAPS/python/config.txt",
                         help="A file containing parameters for the analysis.")
@@ -156,8 +155,8 @@ def runNAPS(args):
     logging.info("Wrote results to %s", args.output_file)
     
     #### Write chemical shift lists
-    for format in args.shift_output_type:
-        a.output_shiftlist(args.shift_output_stem+"_"+format+".txt")
+    if args.shift_output_file is not None:
+        a.output_shiftlist(args.shift_output_file, args.shift_output_type)
     
     #### Make some plots
     if a.pars["plot_strips"]:

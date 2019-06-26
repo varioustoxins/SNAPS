@@ -6,6 +6,8 @@ function insertDownloadLinks(files) {
     if (!jQuery.isEmptyObject(files)) {
         if (files['results'])
             $("#downloadResults").append("<button id='downloadResultsButton'>Download results table</button><br>");
+        if (files['shiftlist'])
+            $("#downloadResults").append("<button id='downloadShiftlistButton'>Download assigned chemical shifts</button><br>");
         if (files['plot'])
             $("#downloadResults").append("<button id='downloadPlotButton'>Download results strip plot</button><br>");
         if (files['log'])
@@ -16,6 +18,9 @@ function insertDownloadLinks(files) {
     }
     $("#downloadResultsButton").click(function () {
         download('results', files['results']);
+    });
+    $("#downloadShiftlistButton").click(function () {
+        download('shiftlist', files['shiftlist']);
     });
     $("#downloadPlotButton").click(function () {
         download('plot', files['plot']);

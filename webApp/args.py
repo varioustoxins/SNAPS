@@ -17,6 +17,8 @@ class Args:
         self.plot_file = os.path.join(self.directory, 'plot.html')
         self.shift_type = form['shift_type'].strip().lower()
         self.pred_type = form['pred_type'].strip().lower()
+        self.output_shiftlist = os.path.join(self.directory, 'output_shiftlist.txt')
+        self.shift_output_type = form['outShiftType'].strip().lower()
 
     def argsToList(self):
         arg_list = [
@@ -26,6 +28,8 @@ class Args:
             '--shift_type', self.shift_type,
             '--pred_type', self.pred_type,
             '--plot_file', self.plot_file,
+            '--shift_output_type', self.shift_output_type,
+            '--shift_output_file', self.output_shiftlist,
             '-c', self.config_file,
             '-l', self.log_file
         ]
@@ -33,6 +37,10 @@ class Args:
 
     def getResults(self):
         with open(self.output_file,mode='r') as f:
+            return f.read()
+        
+    def getShiftlist(self):
+        with open(self.output_shiftlist,mode='r') as f:
             return f.read()
         
     def getLog(self):
@@ -46,6 +54,7 @@ class Args:
     def getFiles(self):
         return {
             'results': self.getResults(),
+            'shiftlist':self.getShiftlist(),
             'plot': self.getPlot(),
             #'log': self.getLog()
             
