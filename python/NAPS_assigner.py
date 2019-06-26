@@ -1197,6 +1197,9 @@ class NAPS_assigner:
             if filepath is not None:
                 output_df.to_csv(filepath, sep="\t", float_format="%.3f",
                                  index=True, header=False)
+        else:
+            print("format string '%s' no recognised." % format)
+            return(None)
             
         return(output_df)
     

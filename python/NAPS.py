@@ -31,6 +31,12 @@ def runNAPS(args):
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2", 
                         help="The format of the predicted shifts")
+    parser.add_argument("--shift_output_type", nargs="*", default=[],
+                        choices=["sparky","xeasy"],
+                        help="One or more output formats for chemical shift export")
+    parser.add_argument("--shift_output_stem",
+                        help="""The filename stem for exported assigned shift lists
+                        eg. if '~/output' is given, files like '~/output_sparky.txt' will be produced.'""")
     parser.add_argument("-c", "--config_file", 
                         default="/Users/aph516/GitHub/NAPS/python/config.txt",
                         help="A file containing parameters for the analysis.")
@@ -58,8 +64,8 @@ def runNAPS(args):
         args = parser.parse_args(args)
     else:   # For testing
         args = parser.parse_args(("../data/P3a_L273R/naps_shifts.txt",
-                                  "../output/test.txt",
                                   "../data/P3a_L273R/shiftx2.cs",
+                                  "../output/test.txt",
                                   "--shift_type","naps",
                                   "--pred_type","shiftx2",
                                   "-c","../config/config.txt",
@@ -129,8 +135,8 @@ def runNAPS(args):
     a.check_assignment_consistency(threshold=a.pars["seq_link_threshold"])
     logging.info("Checked assignment consistency.")
     
+    #### Output the results
     if args.iterated:
-        
         matching2 = a.find_consistent_assignments(10)
         a.make_assign_df(matching2, set_assign_df=True)
         a.check_assignment_consistency(threshold=a.pars["seq_link_threshold"])
@@ -148,7 +154,11 @@ def runNAPS(args):
                            index=False)
     
     logging.info("Wrote results to %s", args.output_file)
-
+    
+    #### Write chemical shift lists
+    for format in args.shift_output_type:
+        a.output_shiftlist(args.shift_output_stem+"_"+format+".txt")
+    
     #### Make some plots
     if a.pars["plot_strips"]:
         plt1 = a.plot_strips_bokeh(args.plot_file, "html")

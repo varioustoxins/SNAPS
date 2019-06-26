@@ -102,7 +102,7 @@ sum(tmp1["SS_name"] == tmp2["SS_name"])
 #df["Res_name"] = df.index
 #df2 = pd.merge(df, p1, how="left", left_index=True, right_index=True)
 
-tmp = a.output_shiftlist("../output/test.txt", format="xeasy")
+tmp = a.output_shiftlist("../output/test.txt", format="sparky")
 
 #%% Test plots
 
