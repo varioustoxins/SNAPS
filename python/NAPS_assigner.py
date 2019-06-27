@@ -736,7 +736,7 @@ class NAPS_assigner:
         return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
                                                    matching["Res_name"])))    
     
-    def calc_mismatch_matrix(self, threshold=0.1):
+    def calc_mismatch_matrix(self, threshold=0.2):
         """Calculate matrix of the mismatch between i and i-1 observed shifts 
         for all spin system pairs. Also, make matrix of number of consistent 
         links for all spin system pairs.
@@ -787,7 +787,7 @@ class NAPS_assigner:
             self.consistent_links_matrix = consistent_links_matrix
             return(self.mismatch_matrix)
             
-    def check_assignment_consistency(self, assign_df=None, threshold=0.1):
+    def check_assignment_consistency(self, assign_df=None, threshold=0.2):
         """ Find maximum mismatch and number of 'significant' mismatches for 
         each residue
         
@@ -1205,6 +1205,25 @@ class NAPS_assigner:
             if filepath is not None:
                 output_df.to_csv(filepath, sep="\t", float_format="%.3f",
                                  index=True, header=False)
+        elif format=="nmrpipe":
+            # TODO: Add in FIRST_RESID and SEQUENCE lines
+            df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
+            
+            output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
+            
+            if filepath is not None:
+                f = open(filepath, 'w+')
+                f.write("REMARK Chemical shifts (automatically assigned using SNAPS)\n\n")
+                f.write("VARS   RESID RESNAME ATOMNAME SHIFT\n")
+                f.write("FORMAT %4d   %1s     %4s      %8.3f\n\n")
+                
+                for i in output_df.index:
+                    f.write("%4d %1s %4s %8.3f\n" % (output_df.loc[i, "Res_N"],
+                                                     output_df.loc[i, "Res_type"],
+                                                     output_df.loc[i, "Atom_type"],
+                                                     output_df.loc[i, "Shift"]))
+                f.close()
+                
         else:
             print("format string '%s' no recognised." % format)
             return(None)
