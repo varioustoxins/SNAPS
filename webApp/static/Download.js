@@ -12,7 +12,7 @@ function insertDownloadLinks(files) {
             $("#downloadResults").append("<button id='downloadHsqcPlotButton'>Download HSQC plot</button><br>");
         if (files['strip_plot'])
             $("#downloadResults").append("<button id='downloadStripPlotButton'>Download strip plot</button><br>");
-        if (files['log'])
+        if (files['log_file'])
             $("#downloadResults").append("<button id='downloadLogButton'>Download log file</button><br>");
 
 //        if (files['results'] || files['plot'])
@@ -31,7 +31,7 @@ function insertDownloadLinks(files) {
         download('stripPlot.htm', files['strip_plot_file']);
     });
     $("#downloadLogButton").click(function () {
-        download('log', files['log']);
+        download('log', files['log_file']);
     });
 /*    $(document).on("submit", "#emailForm", function (event) {
         event.preventDefault();

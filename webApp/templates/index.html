@@ -57,15 +57,25 @@
     <p><a href="#" id=advanced>Advanced</a></p>
     <div id=advancedToggle class="collapse in">
     <div class="row">
-       <div class="col"><p>Output formats:</p></div>
+       <div class="col">Sequence numbering offset for predicted shifts:</div>
+       <div class="col"><input type="number" name="predResOffset" value=0></div>
+    </div>
+    <div class="row">
+       <div class="col"><p>Format for assigned chemical shift list:</p></div>
        <div class="col">
          <input type="radio" name="outShiftType" id="outputSparky" value="sparky" checked> Sparky<br>
          <input type="radio" name="outShiftType" id="outputXeasy" value="xeasy"> XEasy<br>
        </div>
     </div>
     <div class="row">
-       <div class="col">Sequence numbering offset for predicted shifts:</div>
-       <div class="col"><input type="number" name="predResOffset" value=0></div>
+        <div class="col"><p>What confidence level predictions should be included in shift list?:</p></div>
+        <div class="col">
+           <input type="checkbox" checked name="confidence" value="High"> High<br>
+           <input type="checkbox" checked name="confidence" value="Medium"> Medium<br>
+           <input type="checkbox" checked name="confidence" value="Low"> Low<br>
+           <input type="checkbox" checked name="confidence" value="Unreliable"> Unreliable<br>
+           <input type="checkbox" checked name="confidence" value="Undefined"> Undefined<br>
+        </div>
     </div>
     <div class="row">
         <div class="col"><p>Atom types to include in analysis:</p></div>

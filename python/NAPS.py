@@ -31,16 +31,30 @@ def runNAPS(args):
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2", 
                         help="The format of the predicted shifts")
-    parser.add_argument("--shift_output_type", default="sparky",
-                        choices=["sparky","xeasy"],
-                        help="One or more output formats for chemical shift export")
-    parser.add_argument("--shift_output_file", default=None,
-                        help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("-c", "--config_file", 
                         default="/Users/aph516/GitHub/NAPS/python/config.txt",
                         help="A file containing parameters for the analysis.")
     parser.add_argument("-l", "--log_file", default=None,
                         help="A file logging information will be written to.")
+    
+    parser.add_argument("--shift_output_file", default=None,
+                        help="""The file the assigned shiftlist will be written to.""")
+    parser.add_argument("--shift_output_type", default="sparky",
+                        choices=["sparky","xeasy"],
+                        help="One or more output formats for chemical shift export")
+    parser.add_argument("--shift_output_confidence", nargs="*",
+                        choices=["High","Medium","Low","Unreliable","Undefined"],
+                        default=["High","Medium","Low","Unreliable","Undefined"],
+                        help="""Limits the shiftlist output to assignments with 
+                        particular confidence levels. More than one level is allowed""")
+        
+    parser.add_argument("--strip_plot_file", 
+                        default=None,
+                        help="A filename for an output strip plot.")
+    parser.add_argument("--hsqc_plot_file", 
+                        default=None,
+                        help="A filename for an output HSQC plot.")
+    
     #parser.add_argument("--delta_correlation", action="store_true", 
     #                    help="If set, account for correlations between prediction errors of different atom types")
     parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
@@ -53,15 +67,10 @@ def runNAPS(args):
                         classes for the i-1 residue. No spaces. 
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
                         a sequential HADAMAC """)
-    parser.add_argument("--strip_plot_file", 
-                        default=None,
-                        help="A filename for an output strip plot.")
-    parser.add_argument("--hsqc_plot_file", 
-                        default=None,
-                        help="A filename for an output HSQC plot.")
     parser.add_argument("--iterated", action="store_true", 
                         help="If set, use iterated procedure to resolve bad sequential links")
-
+    
+    
     if True:
         args = parser.parse_args(args)
     else:   # For testing
@@ -74,9 +83,19 @@ def runNAPS(args):
                                   "-l","../output/test.log"))    
 
     # Set up logging
-    if isinstance(args.log_file, str):
-        logging.basicConfig(filename=args.log_file, filemode='w', level=logging.DEBUG,
-                            format="%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s")
+    if args.log_file is not None:
+        # Create a logger
+        logger = logging.getLogger("SNAPS")
+        logger.setLevel(logging.DEBUG)
+        # Create a log handler that writes to a specific file.
+        # In principle you could have multiple handlers, but here I just have one.
+        # Need to explicitly define a handler so it can be explicitly closed 
+        # once the analysis is complete.
+        log_handler = logging.FileHandler(args.log_file, mode='w')
+        log_handler.setLevel(logging.DEBUG)
+        log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
+        logger.addHandler(log_handler)
+
     else:
         logging.basicConfig(level=logging.ERROR)
 
@@ -86,7 +105,7 @@ def runNAPS(args):
 
     # Import config file
     a.read_config_file(args.config_file)
-    logging.info("Read in configuration from %s.", args.config_file)
+    logger.info("Read in configuration from %s.", args.config_file)
 
     # Account for any command line arguments that overide config file
     if args.alt_assignments>=0:
@@ -107,12 +126,12 @@ def runNAPS(args):
         importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
         
     a.obs = importer.obs
-    logging.info("Read in %d spin systems from %s.", 
+    logger.info("Read in %d spin systems from %s.", 
                  len(a.obs["SS_name"]), args.shift_file)
 
 
     a.import_pred_shifts(args.pred_file, args.pred_type)
-    logging.info("Read in %d predicted residues from %s.", 
+    logger.info("Read in %d predicted residues from %s.", 
                  len(a.preds["Res_name"]), args.pred_file)
 
     #### Do the analysis
@@ -128,14 +147,14 @@ def runNAPS(args):
         
     a.add_dummy_rows()
     a.calc_log_prob_matrix2(sf=1, verbose=False)
-    logging.info("Calculated log probability matrix (%dx%d).", 
+    logger.info("Calculated log probability matrix (%dx%d).", 
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
     a.calc_mismatch_matrix()
     matching = a.find_best_assignments()
     a.make_assign_df(matching, set_assign_df=True)
-    logging.info("Calculated best assignment.")
+    logger.info("Calculated best assignment.")
     a.check_assignment_consistency(threshold=a.pars["seq_link_threshold"])
-    logging.info("Checked assignment consistency.")
+    logger.info("Checked assignment consistency.")
     
     #### Output the results
     if args.iterated:
@@ -147,7 +166,7 @@ def runNAPS(args):
     elif a.pars["alt_assignments"]>0:
         a.find_alt_assignments(N=a.pars["alt_assignments"], verbose=False, 
                                 by_ss=True)
-        logging.info("Calculated the %d next best assignments for each spin system", 
+        logger.info("Calculated the %d next best assignments for each spin system", 
                      a.pars["alt_assignments"])
         a.alt_assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                                index=False)
@@ -155,25 +174,28 @@ def runNAPS(args):
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
     
-    logging.info("Wrote results to %s", args.output_file)
+    logger.info("Wrote results to %s", args.output_file)
     
     #### Write chemical shift lists
     if args.shift_output_file is not None:
-        a.output_shiftlist(args.shift_output_file, args.shift_output_type)
+        a.output_shiftlist(args.shift_output_file, args.shift_output_type, 
+                           confidence_list=args.shift_output_confidence)
     
     #### Make some plots
     plots = []
     if args.hsqc_plot_file is not None:
         hsqc_plot = a.plot_hsqc_bokeh(args.hsqc_plot_file, "html")
-        logging.info("Wrote HSQC plot to %s", args.hsqc_plot_file)
+        logger.info("Wrote HSQC plot to %s", args.hsqc_plot_file)
         plots += [hsqc_plot]
         
     if args.strip_plot_file is not None:
         strip_plot = a.plot_strips_bokeh(args.strip_plot_file, "html")
-        logging.info("Wrote strip plot to %s", args.strip_plot_file)
+        logger.info("Wrote strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
     
-    
+    # Close the log file
+    logger.handlers[0].close()
+    logger.removeHandler(logger.handlers[0])
 
     return(plots)
 

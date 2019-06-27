@@ -21,6 +21,7 @@ class Args:
         self.pred_type = form['pred_type'].strip().lower()
         self.output_shiftlist = os.path.join(self.directory, 'output_shiftlist.txt')
         self.shift_output_type = form['outShiftType'].strip().lower()
+        self.shift_output_confidence = form.getlist("confidence")
 
     def argsToList(self):
         arg_list = [
@@ -33,11 +34,13 @@ class Args:
             '--strip_plot_file', self.strip_plot_file,
             '--shift_output_type', self.shift_output_type,
             '--shift_output_file', self.output_shiftlist,
+            '--shift_output_confidence'] + self.shift_output_confidence + [
             '-c', self.config_file,
             '-l', self.log_file
         ]
         return arg_list
 
+    # Nb: the below functions don't fail gracefully if the file is missing
     def getResults(self):
         with open(self.output_file,mode='r') as f:
             return f.read()
@@ -74,6 +77,6 @@ class Args:
             'hsqc_plot_file': self.getHsqcPlotFile(),
             'strip_plot': self.getStripPlot(),
             'strip_plot_file': self.getStripPlotFile(),
-            #'log': self.getLog()
+            'log_file': self.getLog()
             
         }

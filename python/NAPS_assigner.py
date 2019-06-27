@@ -1154,13 +1154,21 @@ class NAPS_assigner:
 #            break
 #        new_matching = ranked[tmp.index(max(tmp))].matching
         
-    def output_shiftlist(self, filepath, format="sparky"):
+    def output_shiftlist(self, filepath, format="sparky", 
+                         confidence_list=["High","Medium","Low","Unreliable","Undefined"]):
         """Export a chemical shift list for use with other programs
         """
-        
         atoms = {"H","N","HA","C","CA","CB"}.intersection(self.assign_df.columns)
         
-        df_wide = self.assign_df[["Res_N","Res_type"]+list(atoms)]
+        df_wide = self.assign_df.loc[self.assign_df["Confidence"].isin(confidence_list),["Res_N","Res_type"]+list(atoms)]
+        # Check in case no shifts were selected
+        if df_wide.empty:   
+            print("No chemical shifts selected for export.")
+            # Create an empty file
+            df_wide.to_csv(filepath, sep="\t", float_format="%.3f",
+                           index=True, header=False)
+            return(None)
+        
         df = df_wide.melt(id_vars=["Res_N","Res_type"], value_vars=atoms, 
                           var_name="Atom_type", value_name="Shift")
         df = df.sort_values(["Res_N","Atom_type"])
