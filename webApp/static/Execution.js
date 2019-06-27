@@ -4,7 +4,7 @@ $(function () {
         $('#resultsSection').collapse('hide');
         $("#tableData").empty();
         $("#errors").empty();
-        $("#plot").empty();
+        $("#stripPlot").empty();
         $("#files").empty();
         $("#log").empty();
         $("#form").submit();
@@ -34,7 +34,7 @@ function success(data) {
     if (data.status === 'ok') {
         $("#tableData").empty();
         $("#errors").empty();
-        $("#plotTopLevel").replaceWith('<div id="plotTopLevel"><div id="plot"></div></div>');
+        $("#stripPlotTopLevel").replaceWith('<div id="stripPlotTopLevel"><div id="stripPlot"></div></div>');
         $("#files").empty();
         $("#log").empty();
         $("#downloadResults").empty();
@@ -51,11 +51,11 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
-        if (data.files.plot) {
-            Bokeh.embed.embed_item(data.files.plot, "plot");
-            $("#downloadResults").prepend("<a href='#plotTopLevel'>Jump to assignment strip plot</a> | ")
-            $("#plotTopLevel").prepend("<h4>Strip plot</h4>")
-            $("#plotTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
+        if (data.files.stripPlot) {
+            Bokeh.embed.embed_item(data.files.stripPlot, "stripPlot");
+            $("#downloadResults").prepend("<a href='#stripPlotTopLevel'>Jump to assignment strip plot</a> | ")
+            $("#stripPlotTopLevel").prepend("<h4>Strip plot</h4>")
+            $("#stripPlotTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
         }
     }
     else if (data.status === 'validation_failed') {

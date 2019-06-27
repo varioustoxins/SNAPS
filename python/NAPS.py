@@ -160,12 +160,12 @@ def runNAPS(args):
     
     #### Make some plots
     if a.pars["plot_strips"]:
-        plt1 = a.plot_strips_bokeh(args.plot_file, "html")
+        strip_plt = a.plot_strips_bokeh(args.plot_file, "html")
 
         if args.plot_file:
             logging.info("Wrote strip plot to %s", args.plot_file)
 
-        return plt1
+        return(strip_plt, 1)
 
 
 #%% Run the actual script
