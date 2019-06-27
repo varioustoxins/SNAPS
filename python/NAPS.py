@@ -56,6 +56,9 @@ def runNAPS(args):
     parser.add_argument("--strip_plot_file", 
                         default=None,
                         help="A filename for an output strip plot.")
+    parser.add_argument("--hsqc_plot_file", 
+                        default=None,
+                        help="A filename for an output HSQC plot.")
     parser.add_argument("--iterated", action="store_true", 
                         help="If set, use iterated procedure to resolve bad sequential links")
 
@@ -159,13 +162,20 @@ def runNAPS(args):
         a.output_shiftlist(args.shift_output_file, args.shift_output_type)
     
     #### Make some plots
-    if a.pars["plot_strips"]:
+    plots = []
+    if args.hsqc_plot_file is not None:
+        hsqc_plot = a.plot_hsqc_bokeh(args.hsqc_plot_file, "html")
+        logging.info("Wrote HSQC plot to %s", args.hsqc_plot_file)
+        plots += [hsqc_plot]
+        
+    if args.strip_plot_file is not None:
         strip_plot = a.plot_strips_bokeh(args.strip_plot_file, "html")
+        logging.info("Wrote strip plot to %s", args.strip_plot_file)
+        plots += [strip_plot]
+    
+    
 
-        if args.strip_plot_file:
-            logging.info("Wrote strip plot to %s", args.strip_plot_file)
-
-        return(strip_plot, 1)
+    return(plots)
 
 
 #%% Run the actual script

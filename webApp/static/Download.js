@@ -25,7 +25,7 @@ function insertDownloadLinks(files) {
         download('shiftlist', files['shiftlist']);
     });
     $("#downloadHsqcPlotButton").click(function () {
-        download('hsqcPlot', files['hsqc_plot']);
+        download('hsqcPlot.htm', files['hsqc_plot_file']);
     });
     $("#downloadStripPlotButton").click(function () {
         download('stripPlot.htm', files['strip_plot_file']);

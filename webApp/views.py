@@ -43,7 +43,7 @@ def run():
 
 def run(args):
     try:
-        args.strip_plot, args.hsqc_plot = runNAPS(args.argsToList())
+        args.hsqc_plot, args.strip_plot = runNAPS(args.argsToList())
         return createJSONForTable(args)
     except Exception as e:
         #log errors

@@ -69,7 +69,7 @@ class NAPS_assigner:
         self.pars["atom_set"] = {s.strip() for s in config["atom_set"].split(",")}
         tmp = [s.strip() for s in config["atom_sd"].split(",")]
         self.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
-        self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
+        #self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
         self.pars["seq_link_threshold"] = float(config["seq_link_threshold"])
         return(self.pars)
     
@@ -1433,7 +1433,7 @@ class NAPS_assigner:
         plt = figure(title="HSQC",
                         x_axis_label="1H (ppm)",
                         y_axis_label="15N (ppm)",
-                        height=500, width=500)
+                        height=750, width=750)
         
         # Create a colour map based on confidence
         colourmap = {"High":"green",
@@ -1450,7 +1450,7 @@ class NAPS_assigner:
         
         # Label the points
         df = ColumnDataSource(assign_df)
-        labels = LabelSet(x="H", y="N", text="Res_name", source=df)
+        labels = LabelSet(x="H", y="N", text="Res_name", source=df, text_font_size="10pt")
         plt.add_layout(labels)
         
         # Reverse the axes and set range

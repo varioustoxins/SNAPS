@@ -41,8 +41,7 @@ delta_correlation_mean_corrected_file     ../config/dd_mean.csv       # File con
 delta_correlation_cov_corrected_file      ../config/dd_cov.csv        # File containing covariances between the prediction errors, assuming the predictions have been corrected
 alt_assignments 0       # Number of alternative assignments to generate
 #atom_sd "H:0.1711, N:1.1169, HA:0.1231, C:0.5330, CA:0.4412, CB:0.5163, C_m1:0.5530, CA_m1:0.4412, CB_m1:0.5163"    # Atom standard deviations. Comma separated.
-atom_sd "H:0.454, N:2.429, HA:0.227, C:1.030, CA:0.932, CB:1.025, C_m1:1.030, CA_m1:0.932, CB_m1:1.025"    # Atom standard deviations. Comma separated.
-plot_strips     True\n"""
+atom_sd "H:0.454, N:2.429, HA:0.227, C:1.030, CA:0.932, CB:1.025, C_m1:1.030, CA_m1:0.932, CB_m1:1.025"    # Atom standard deviations. Comma separated.\n"""
 
     # Write the user-submitted parameters
     s += "pred_offset %s\n" % str(request.form.get("predResOffset"))
