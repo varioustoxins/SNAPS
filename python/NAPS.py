@@ -53,9 +53,9 @@ def runNAPS(args):
                         classes for the i-1 residue. No spaces. 
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
                         a sequential HADAMAC """)
-    parser.add_argument("--plot_file", 
+    parser.add_argument("--strip_plot_file", 
                         default=None,
-                        help="A filename for any output plots.")
+                        help="A filename for an output strip plot.")
     parser.add_argument("--iterated", action="store_true", 
                         help="If set, use iterated procedure to resolve bad sequential links")
 
@@ -160,12 +160,12 @@ def runNAPS(args):
     
     #### Make some plots
     if a.pars["plot_strips"]:
-        strip_plt = a.plot_strips_bokeh(args.plot_file, "html")
+        strip_plot = a.plot_strips_bokeh(args.strip_plot_file, "html")
 
-        if args.plot_file:
-            logging.info("Wrote strip plot to %s", args.plot_file)
+        if args.strip_plot_file:
+            logging.info("Wrote strip plot to %s", args.strip_plot_file)
 
-        return(strip_plt, 1)
+        return(strip_plot, 1)
 
 
 #%% Run the actual script

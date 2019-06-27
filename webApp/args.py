@@ -13,8 +13,9 @@ class Args:
         self.config_file = os.path.join(self.directory, 'config.txt')
         self.output_file = os.path.join(self.directory, 'results.txt')
         self.log_file = os.path.join(self.directory, 'log.txt')
-        self.stripPlot = {}
-        self.plot_file = os.path.join(self.directory, 'plot.html')
+        self.hsqc_plot = {}
+        self.strip_plot = {}
+        self.strip_plot_file = os.path.join(self.directory, 'strip_plot.html')
         self.shift_type = form['shift_type'].strip().lower()
         self.pred_type = form['pred_type'].strip().lower()
         self.output_shiftlist = os.path.join(self.directory, 'output_shiftlist.txt')
@@ -27,7 +28,7 @@ class Args:
             self.output_file,
             '--shift_type', self.shift_type,
             '--pred_type', self.pred_type,
-            '--plot_file', self.plot_file,
+            '--strip_plot_file', self.strip_plot_file,
             '--shift_output_type', self.shift_output_type,
             '--shift_output_file', self.output_shiftlist,
             '-c', self.config_file,
@@ -47,15 +48,25 @@ class Args:
         with open(self.log_file,mode='r') as f:
             return f.read()
 
-    def getStripPlot(self):
-        hmm = self.stripPlot if self.stripPlot else ''
+    def getHsqcPlot(self):
+        hmm = self.hsqc_plot if self.hsqc_plot else ''
         return hmm
+
+    def getStripPlot(self):
+        hmm = self.strip_plot if self.strip_plot else ''
+        return hmm
+    
+    def getStripPlotFile(self):
+        with open(self.strip_plot_file,mode='r') as f:
+            return f.read()
 
     def getFiles(self):
         return {
             'results': self.getResults(),
             'shiftlist':self.getShiftlist(),
-            'stripPlot': self.getStripPlot(),
+            'hsqc_plot': self.getHsqcPlot(),
+            'strip_plot': self.getStripPlot(),
+            'strip_plot_file': self.getStripPlotFile(),
             #'log': self.getLog()
             
         }

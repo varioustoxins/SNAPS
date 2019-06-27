@@ -4,6 +4,7 @@ $(function () {
         $('#resultsSection').collapse('hide');
         $("#tableData").empty();
         $("#errors").empty();
+        $("#hsqcPlot").empty();
         $("#stripPlot").empty();
         $("#files").empty();
         $("#log").empty();
@@ -34,6 +35,7 @@ function success(data) {
     if (data.status === 'ok') {
         $("#tableData").empty();
         $("#errors").empty();
+        $("#hsqcPlotTopLevel").replaceWith('<div id="hsqcPlotTopLevel"><div id="hsqcPlot"></div></div>');
         $("#stripPlotTopLevel").replaceWith('<div id="stripPlotTopLevel"><div id="stripPlot"></div></div>');
         $("#files").empty();
         $("#log").empty();
@@ -51,11 +53,17 @@ function success(data) {
         $('#table').bootstrapTable({
             data: data.result
         });
-        if (data.files.stripPlot) {
-            Bokeh.embed.embed_item(data.files.stripPlot, "stripPlot");
+        if (data.files.strip_plot) {
+            Bokeh.embed.embed_item(data.files.strip_plot, "stripPlot");
             $("#downloadResults").prepend("<a href='#stripPlotTopLevel'>Jump to assignment strip plot</a> | ")
             $("#stripPlotTopLevel").prepend("<h4>Strip plot</h4>")
             $("#stripPlotTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
+        }
+        if (data.files.hsqc_plot) {
+            Bokeh.embed.embed_item(data.files.hsqc_plot, "hsqcPlot");
+            $("#downloadResults").prepend("<a href='#hsqcPlotTopLevel'>Jump to assigned HSQC</a> | ")
+            $("#hsqcPlotTopLevel").prepend("<h4>Assigned HSQC</h4>")
+            $("#hsqcPlotTopLevel").append("<a href='#resultsSection'>Return to top of results</a>")
         }
     }
     else if (data.status === 'validation_failed') {

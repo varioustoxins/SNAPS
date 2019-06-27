@@ -119,7 +119,7 @@ if "basic" in args.test or "all" in args.test:
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "config_plot.txt",
-                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     
     if args.analyse:        
@@ -353,7 +353,7 @@ if "hnco" in args.test or "all" in args.test:
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "config_hnco.txt",
-                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:        
         assigns_hnco = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -387,7 +387,7 @@ if "hnco_hnca" in args.test or "all" in args.test:
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "config_hnco_hnca.txt",
-                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:        
         assigns_hnco_hnca = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -404,7 +404,7 @@ if "no_CB" in args.test or "all" in args.test:
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "config_no_CB.txt",
-                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:        
         assigns_no_CB = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -421,7 +421,7 @@ if "no_CO" in args.test or "all" in args.test:
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "config_no_CO.txt",
-                           ["--plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:        
         assigns_no_CO = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)

@@ -1,6 +1,6 @@
 function insertDownloadLinks(files) {
     $("#downloadResults").empty();
-    $("#downloadPlot").empty();
+//    $("#downloadStripPlot").empty();
 //    $("#email").empty();
 
     if (!jQuery.isEmptyObject(files)) {
@@ -8,8 +8,10 @@ function insertDownloadLinks(files) {
             $("#downloadResults").append("<button id='downloadResultsButton'>Download results table</button><br>");
         if (files['shiftlist'])
             $("#downloadResults").append("<button id='downloadShiftlistButton'>Download assigned chemical shifts</button><br>");
-        if (files['plot'])
-            $("#downloadResults").append("<button id='downloadPlotButton'>Download results strip plot</button><br>");
+        if (files['hsqc_plot'])
+            $("#downloadResults").append("<button id='downloadHsqcPlotButton'>Download HSQC plot</button><br>");
+        if (files['strip_plot'])
+            $("#downloadResults").append("<button id='downloadStripPlotButton'>Download strip plot</button><br>");
         if (files['log'])
             $("#downloadResults").append("<button id='downloadLogButton'>Download log file</button><br>");
 
@@ -22,8 +24,11 @@ function insertDownloadLinks(files) {
     $("#downloadShiftlistButton").click(function () {
         download('shiftlist', files['shiftlist']);
     });
-    $("#downloadPlotButton").click(function () {
-        download('plot', files['plot']);
+    $("#downloadHsqcPlotButton").click(function () {
+        download('hsqcPlot', files['hsqc_plot']);
+    });
+    $("#downloadStripPlotButton").click(function () {
+        download('stripPlot.htm', files['strip_plot_file']);
     });
     $("#downloadLogButton").click(function () {
         download('log', files['log']);
