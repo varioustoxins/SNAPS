@@ -1268,9 +1268,18 @@ class NAPS_assigner:
             
             output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
             
+            # Prepare the sequence info
+            tmp = pd.DataFrame({"Res_N":np.arange(df["Res_N"].min(), 
+                                                  df["Res_N"].max()+1)})
+            tmp = tmp.merge(df_wide[["Res_N","Res_type"]], how="left", on="Res_N")
+            tmp["Res_type"] = tmp["Res_type"].fillna("X")
+            seq = tmp["Res_type"].sum()
+            
             if filepath is not None:
                 f = open(filepath, 'w+')
                 f.write("REMARK Chemical shifts (automatically assigned using SNAPS)\n\n")
+                f.write("DATA FIRST_RESID %d\n\n" % tmp["Res_N"].min())
+                f.write("DATA SEQUENCE %s\n\n" % seq)
                 f.write("VARS   RESID RESNAME ATOMNAME SHIFT\n")
                 f.write("FORMAT %4d   %1s     %4s      %8.3f\n\n")
                 
