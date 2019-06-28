@@ -145,6 +145,11 @@ d = a.neighbour_df
 tmp = a.check_matching_consistency(matching)
 tmp2 = tmp[(tmp["Num_good_links_m1"]==3) & (tmp["Num_good_links_p1"]==3)]
 
+tmp = a.find_consistent_assignments2()
+
+#%% Test sequential assignment
+
+seq_match = a.find_seq_assignment()
 
 #%% Test stuff
 

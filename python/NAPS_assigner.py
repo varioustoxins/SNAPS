@@ -1122,7 +1122,95 @@ class NAPS_assigner:
 #        else:
 #            break
 #        new_matching = ranked[tmp.index(max(tmp))].matching
+    
+    def find_consistent_assignments2(self, threshold=0.2):
+        """Try to find a consistent set of assignments by optimising both match 
+        to predictions and mismatches between adjacent residues"""
+        matching0 = self.find_best_assignments()
+        assign_df0 = self.make_assign_df(matching0)
+        assign_df0 = self.add_consistency_info(assign_df0, threshold)
+        N_HM_conf0 = assign_df0["Confidence"].isin(["High","Medium"]).sum()
+        print(N_HM_conf0)
         
+        while True:
+            # Find non-confident residues adjacent to confident ones
+            # Note to self: maybe simpler to just limit all residues adjacent to confident ones?
+            HM_conf_res = assign_df0.loc[assign_df0["Confidence"].isin(["High","Medium"]),
+                                         "Res_name"]
+            tmp = self.neighbour_df[self.neighbour_df.index.isin(HM_conf_res)]
+            HM_conf_adjacent = ((set(tmp["Res_name_m1"])|set(tmp["Res_name_p1"]))
+                                - set(HM_conf_res)) - {np.NaN}
+            
+            # Limit their assignment options to consistent spin systems
+            a = deepcopy(self)
+            
+            for res in HM_conf_adjacent:
+                res_m1 = self.neighbour_df.loc[res,"Res_name_m1"]
+                res_p1 = self.neighbour_df.loc[res,"Res_name_p1"]
+                
+                tmp = matching0
+                tmp.index = tmp["Res_name"]
+                
+                ss = tmp.loc[res,"SS_name"]
+                
+                # Need to be careful with NaN values at this point
+                if pd.isna(res_m1):
+                    ss_m1 = ""
+                else:
+                    ss_m1 = tmp.loc[res_m1,"SS_name"]
+                
+                if pd.isna(res_p1):
+                    ss_p1 = ""
+                else:
+                    ss_p1 = tmp.loc[res_p1,"SS_name"]
+                
+                print(res, ss, res_m1, ss_m1, res_p1, ss_p1)
+                
+                
+                if res_m1 in set(HM_conf_res):
+                    #Get list of inconsistent m1 spin systems
+                    disallowed_ss = self.mismatch_matrix.columns[
+                            self.mismatch_matrix.loc[ss_m1,:]>threshold]
+                    
+                    #Set the inconsistent spins systems to have a high log_prob
+                    a.log_prob_matrix.loc[disallowed_ss, res] = a.log_prob_matrix.min().min()
+                    #print(disallowed_ss.shape, a.log_prob_matrix.shape)
+                    
+                if res_p1 in set(HM_conf_res):
+                    #Get list of inconsistent p1 spin systems
+                    disallowed_ss = self.mismatch_matrix.index[
+                            self.mismatch_matrix.loc[:,ss_p1]>threshold]
+
+                    #Set the inconsistent spins systems to have a high log_prob
+                    a.log_prob_matrix.loc[disallowed_ss, res] = a.log_prob_matrix.min().min()
+                    #print(disallowed_ss.shape, a.log_prob_matrix.shape)
+                    
+            # Rerun assignment and see how many are consistent now
+            #return(a.log_prob_matrix)
+            matching1 = a.find_best_assignments()
+            assign_df1 = a.make_assign_df(matching1)
+            assign_df1 = a.add_consistency_info(assign_df1, threshold)
+            N_HM_conf1 = assign_df1["Confidence"].isin(["High","Medium"]).sum()
+            print(N_HM_conf1)
+            
+            if N_HM_conf1 > N_HM_conf0:
+                assign_df0 = assign_df1
+                N_HM_conf0 = N_HM_conf1
+            else:
+                break
+
+        return(assign_df0)
+    
+    def find_seq_assignment(self):
+        """Find the ordering that maximises the number of good sequential links"""
+        
+        row_ind, col_ind = linear_sum_assignment(self.mismatch_matrix-1*self.consistent_links_matrix)
+        matching = pd.DataFrame({"i_m1":self.consistent_links_matrix.index[row_ind],
+                                 "i":self.consistent_links_matrix.columns[col_ind]})
+
+        
+        return(matching)
+    
     def output_shiftlist(self, filepath, format="sparky", 
                          confidence_list=["High","Medium","Low","Unreliable","Undefined"]):
         """Export a chemical shift list for use with other programs
