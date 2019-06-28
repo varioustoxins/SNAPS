@@ -60,14 +60,14 @@ a.add_dummy_rows()
 a.calc_log_prob_matrix2(sf=1, verbose=False)
 matching = a.find_best_assignments()
 assign_df = a.make_assign_df(matching, set_assign_df=True)
-assign_df = a.check_assignment_consistency(threshold=0.1)
+assign_df = a.add_consistency_info(threshold=0.2)
 #alt_assign_df = a.find_alt_assignments(N=2, verbose=True)
 
 b.add_dummy_rows()
 tmp = b.calc_log_prob_matrix2(sf=1, verbose=False)
 matching2 = b.find_best_assignments()
 assign_df2 = b.make_assign_df(matching2, set_assign_df=True)
-assign_df2 = b.check_assignment_consistency(threshold=0.1)
+assign_df2 = b.add_consistency_info(threshold=0.1)
 #alt_assign_df2 = b.find_alt_assignments(N=2, by_ss=True, verbose=True)
 
 obs = a.obs

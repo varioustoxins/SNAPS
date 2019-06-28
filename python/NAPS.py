@@ -153,14 +153,14 @@ def runNAPS(args):
     matching = a.find_best_assignments()
     a.make_assign_df(matching, set_assign_df=True)
     logger.info("Calculated best assignment.")
-    a.check_assignment_consistency(threshold=a.pars["seq_link_threshold"])
+    a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
     logger.info("Checked assignment consistency.")
     
     #### Output the results
     if args.iterated:
         matching2 = a.find_consistent_assignments(10)
         a.make_assign_df(matching2, set_assign_df=True)
-        a.check_assignment_consistency(threshold=a.pars["seq_link_threshold"])
+        a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
     elif a.pars["alt_assignments"]>0:

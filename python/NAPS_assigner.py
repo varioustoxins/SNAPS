@@ -32,6 +32,8 @@ class NAPS_assigner:
         self.obs = None
         self.preds = None
         self.log_prob_matrix = None
+        self.mismatch_matrix = None
+        self.consistent_links_matrix = None
         self.assign_df = None
         self.alt_assign_df = None
         self.best_match_indexes = None
@@ -786,109 +788,14 @@ class NAPS_assigner:
             self.mismatch_matrix = mismatch_matrix
             self.consistent_links_matrix = consistent_links_matrix
             return(self.mismatch_matrix)
-            
-    def check_assignment_consistency(self, assign_df=None, threshold=0.2):
-        """ Find maximum mismatch and number of 'significant' mismatches for 
-        each residue
-        
-        threshold: Minimum carbon shift difference for sequential residues to
-            count as mismatched
-        """
-        
-        # If the user hasn't specified an assign_df, use one already calculated 
-        # for this NAPS_assigner instance
-        if assign_df is None:
-            set_assign_df = True
-            assign_df = self.assign_df
-        else:
-            set_assign_df = False
-        
-        # First check if there are any sequential atoms
-        carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "_m1"
-        seq_atoms = carbons[carbons.isin(assign_df.columns) & 
-                            carbons_m1.isin(assign_df.columns)]
-        seq_atoms_m1 = seq_atoms+"_m1"
-        #seq_atoms = list(seq_atoms)
-    
-        if seq_atoms.size==0:
-            # You can't do a comparison
-            assign_df["Max_mismatch_prev"] = np.NaN
-            assign_df["Max_mismatch_next"] = np.NaN
-            assign_df["Num_good_links_prev"] = 0
-            assign_df["Num_good_links_next"] = 0
-            assign_df["Confidence"] = "NA"
-            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Undefined"
-            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Undefined"
-
-        else:
-            # First, get the i and i-1 shifts for the preceeding and 
-            # succeeding residues
-            tmp = assign_df.copy()
-            tmp.index = tmp["Res_N"]
-            tmp = tmp.loc[~tmp["Dummy_res"], list(seq_atoms)+list(seq_atoms_m1)]
-            
-            tmp_next = tmp.copy()
-            tmp_next.index -= 1
-            tmp_prev = tmp.copy()
-            tmp_prev.index += 1
-            tmp = tmp.join(tmp_next, rsuffix="_next")
-            tmp = tmp.join(tmp_prev, rsuffix="_prev")
-            # Calculate absolute mismatch for each atom type
-            for atom in seq_atoms:
-                tmp["d"+atom+"_prev"] = abs(tmp[atom+"_m1"] - tmp[atom+"_prev"])
-                tmp["d"+atom+"_next"] = abs(tmp[atom] - tmp[atom+"_m1_next"])
-            # Calculate maximum mismatch
-            tmp["Max_mismatch_prev"] = tmp["d"+seq_atoms+"_prev"].max(axis=1, 
-                                                                   skipna=True)
-            tmp["Max_mismatch_next"] = tmp["d"+seq_atoms+"_next"].max(axis=1,
-                                                                   skipna=True)
-            
-            # Calculate number of consistent matches
-            tmp["Num_good_links_prev"] = (tmp["d"+seq_atoms+"_prev"]<threshold).sum(axis=1)
-            tmp["Num_good_links_next"] = (tmp["d"+seq_atoms+"_next"]<threshold).sum(axis=1)
-            
-            # Add an assignment confidence column
-            tmp["Conf_prev"] = "N"
-            tmp.loc[tmp["Num_good_links_prev"]>0,"Conf_prev"] = "W"
-            tmp.loc[tmp["Num_good_links_prev"]>1,"Conf_prev"] = "S"
-            tmp.loc[tmp["Max_mismatch_prev"]>threshold,"Conf_prev"] = "X"
-            
-            tmp["Conf_next"] = "N"
-            tmp.loc[tmp["Num_good_links_next"]>0,"Conf_next"] = "W"
-            tmp.loc[tmp["Num_good_links_next"]>1,"Conf_next"] = "S"
-            tmp.loc[tmp["Max_mismatch_next"]>threshold,"Conf_next"] = "X"
-            
-            tmp["Conf2"] = tmp["Conf_prev"]+tmp["Conf_next"]
-            # Reorder letters eg WS -> SW
-            tmp["Conf2"] = tmp["Conf2"].replace(["WS","NS","XS","NW","XW","XN"], 
-                                               ["SW","SN","SX","WN","WX","NX"])
-
-            tmp["Confidence"] = tmp["Conf2"]
-            tmp["Confidence"] = tmp["Confidence"].replace(["SS","SW","SN","WW"],"High")
-            tmp["Confidence"] = tmp["Confidence"].replace(["SX","WN"],"Medium")
-            tmp["Confidence"] = tmp["Confidence"].replace("WX","Low")
-            tmp["Confidence"] = tmp["Confidence"].replace(["NN","NX","XX"],"Unreliable")
-            
-            # Join relevant columns back onto assign_df
-            tmp["Res_N"] = tmp.index
-            tmp.index.name = None
-            assign_df = assign_df.join(tmp.loc[:,["Max_mismatch_prev", 
-                                                  "Max_mismatch_next", 
-                                                  "Num_good_links_prev", 
-                                                  "Num_good_links_next",
-                                                  "Confidence"]], 
-                                       on="Res_N")
-            assign_df.loc[assign_df["Dummy_res"],"Confidence"] = "Undefined"
-            assign_df.loc[assign_df["Dummy_SS"],"Confidence"] = "Undefined"
-            
-            
-        if set_assign_df:
-            self.assign_df = assign_df
-        return(assign_df)
     
     def check_matching_consistency(self, matching, threshold=0.2):
-        """Calculate mismatch scores for a given matching"""
+        """Calculate mismatch scores and assignment confidence for a given matching"""
+        # Create mismatch matrix if it doesn't already exist
+        if self.mismatch_matrix is None:
+            self.calc_mismatch_matrix()
+        
+        
         # Add a Res_name_m1 column to matching DataFrame
         matching.index = matching["Res_name"]
         matching.index.name = None
@@ -949,6 +856,44 @@ class NAPS_assigner:
         
         return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1","Max_mismatch",
                     "Num_good_links_m1","Num_good_links_p1","Num_good_links","Confidence"]])
+            
+    def add_consistency_info(self, assign_df=None, threshold=0.2):
+        """ Find maximum mismatch and number of 'significant' mismatches for 
+        each residue
+        
+        threshold: Minimum carbon shift difference for sequential residues to
+            count as mismatched
+        """
+        
+        # If the user hasn't specified an assign_df, use one already calculated 
+        # for this NAPS_assigner instance
+        if assign_df is None:
+            set_assign_df = True
+            assign_df = self.assign_df
+        else:
+            set_assign_df = False
+        
+        # First check if there are any sequential atoms
+        carbons = pd.Series(["C","CA","CB"])
+        carbons_m1 = carbons + "_m1"
+        seq_atoms = carbons[carbons.isin(assign_df.columns) & 
+                            carbons_m1.isin(assign_df.columns)]
+    
+        if seq_atoms.size==0:
+            # You can't do a comparison
+            assign_df["Max_mismatch_m1"] = np.NaN
+            assign_df["Max_mismatch_p1"] = np.NaN
+            assign_df["Num_good_links_m1"] = 0
+            assign_df["Num_good_links_p1"] = 0
+            assign_df["Confidence"] = "Undefined"
+        else:
+            tmp = self.check_matching_consistency(assign_df, threshold)
+            assign_df = assign_df.merge(tmp, how="left")
+            
+            
+        if set_assign_df:
+            self.assign_df = assign_df
+        return(assign_df)
     
     def find_alt_assignments(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
@@ -1417,7 +1362,7 @@ class NAPS_assigner:
             #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
             
             plt.vbar(x=df["Res_name"], 
-                     top=df[["Max_mismatch_prev","Max_mismatch_next"]].max(axis=1), 
+                     top=df[["Max_mismatch_m1","Max_mismatch_p1"]].max(axis=1), 
                      width=1)
             
             # Draw a line showing the threshold for mismatches
@@ -1426,7 +1371,7 @@ class NAPS_assigner:
                                   line_color="red")
             plt.add_layout(threshold_line)
             
-            #plt.vbar(x=df["Res_name"], top=-df["Max_mismatch_prev"], width=1)
+            #plt.vbar(x=df["Res_name"], top=-df["Max_mismatch_m1"], width=1)
             # Change axis label orientation
             plt.xaxis.major_label_orientation = 3.14159/2
             plotlist = [plt] + plotlist
@@ -1531,7 +1476,7 @@ class NAPS_assigner:
         assign_df = self.assign_df
         
         # Check that the assignment data frame has the right columns
-        if not all(pd.Series(['Max_mismatch_prev', 'Max_mismatch_next']).
+        if not all(pd.Series(['Max_mismatch_m1', 'Max_mismatch_p1']).
                    isin(assign_df.columns)):
             return(None)
         else:
@@ -1542,7 +1487,7 @@ class NAPS_assigner:
             
             # Make the plot
             plt = ggplot(aes(x="x_name"), data=assign_df) 
-            plt = plt + geom_col(aes(y="abs(Max_mismatch_prev)"))
+            plt = plt + geom_col(aes(y="abs(Max_mismatch_m1)"))
             plt = plt + xlab("Residue name")
             plt = plt + ylab("Mismatch to previous residue (ppm)")
             plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
