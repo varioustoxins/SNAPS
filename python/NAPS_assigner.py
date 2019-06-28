@@ -887,7 +887,7 @@ class NAPS_assigner:
             self.assign_df = assign_df
         return(assign_df)
     
-    def check_matching_consistency(self, matching):
+    def check_matching_consistency(self, matching, threshold=0.2):
         """Calculate mismatch scores for a given matching"""
         # Add a Res_name_m1 column to matching DataFrame
         matching.index = matching["Res_name"]
@@ -923,8 +923,32 @@ class NAPS_assigner:
         tmp["Num_good_links_m1"].fillna(0, inplace=True)
         tmp["Num_good_links_p1"].fillna(0, inplace=True)
         tmp["Num_good_links"] = tmp["Num_good_links_m1"] + tmp["Num_good_links_p1"]
+        
+        # Add an assignment confidence column
+        tmp["Conf_m1"] = "N"
+        tmp.loc[tmp["Num_good_links_m1"]>0,"Conf_m1"] = "W"
+        tmp.loc[tmp["Num_good_links_m1"]>1,"Conf_m1"] = "S"
+        tmp.loc[tmp["Max_mismatch_m1"]>threshold,"Conf_m1"] = "X"
+        
+        tmp["Conf_p1"] = "N"
+        tmp.loc[tmp["Num_good_links_p1"]>0,"Conf_p1"] = "W"
+        tmp.loc[tmp["Num_good_links_p1"]>1,"Conf_p1"] = "S"
+        tmp.loc[tmp["Max_mismatch_p1"]>threshold,"Conf_p1"] = "X"
+        
+        tmp["Conf2"] = tmp["Conf_m1"]+tmp["Conf_p1"]
+        # Reorder letters eg WS -> SW
+        tmp["Conf2"] = tmp["Conf2"].replace(["WS","NS","XS","NW","XW","XN"], 
+                                           ["SW","SN","SX","WN","WX","NX"])
+
+        tmp["Confidence"] = tmp["Conf2"]
+        tmp["Confidence"] = tmp["Confidence"].replace(["SS","SW","SN","WW"],"High")
+        tmp["Confidence"] = tmp["Confidence"].replace(["SX","WN"],"Medium")
+        tmp["Confidence"] = tmp["Confidence"].replace("WX","Low")
+        tmp["Confidence"] = tmp["Confidence"].replace(["NX","XX"],"Unreliable")
+        tmp["Confidence"] = tmp["Confidence"].replace("NN","Undefined")
+        
         return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1","Max_mismatch",
-                    "Num_good_links_m1","Num_good_links_p1","Num_good_links"]])
+                    "Num_good_links_m1","Num_good_links_p1","Num_good_links","Confidence"]])
     
     def find_alt_assignments(self, N=1, by_ss=True, verbose=False):
         """ Find the next-best assignment(s) for each residue or spin system
@@ -1116,7 +1140,7 @@ class NAPS_assigner:
             print(i, consistency_sum0)
             i += 1
             
-            mask = (consistency0["Max_mismatch"]<0.1) & (consistency0["Num_good_links"]>=4)
+            mask = (consistency0["Max_mismatch"]<0.2) & (consistency0["Num_good_links"]>=4)
             inc0 = consistency0.loc[mask,["SS_name","Res_name"]]
         
             ranked, unranked = self.find_kbest_assignments(search_depth, init_inc=inc0, verbose=True)
@@ -1124,7 +1148,7 @@ class NAPS_assigner:
             tmp = []
             for x in ranked:
                 tmp2 = self.check_matching_consistency(x.matching)
-                tmp += [sum((tmp2["Max_mismatch"]<0.1) * 2**tmp2["Num_good_links"])]
+                tmp += [sum((tmp2["Max_mismatch"]<0.2) * 2**tmp2["Num_good_links"])]
             
             if max(tmp) > consistency_sum0:
                 # Prepare to loop back
