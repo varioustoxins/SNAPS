@@ -1133,58 +1133,39 @@ class NAPS_assigner:
         print(N_HM_conf0)
         
         while True:
-            # Find non-confident residues adjacent to confident ones
-            # Note to self: maybe simpler to just limit all residues adjacent to confident ones?
+            # Find all residues with an adjacent confident residue
             HM_conf_res = assign_df0.loc[assign_df0["Confidence"].isin(["High","Medium"]),
                                          "Res_name"]
-            tmp = self.neighbour_df[self.neighbour_df.index.isin(HM_conf_res)]
-            HM_conf_adjacent = ((set(tmp["Res_name_m1"])|set(tmp["Res_name_p1"]))
-                                - set(HM_conf_res)) - {np.NaN}
+            
+            #Make a dataframe for looking up which spin system is assigned to each residue
+            tmp = matching0
+            tmp.index = tmp["Res_name"]
             
             # Limit their assignment options to consistent spin systems
             a = deepcopy(self)
             
-            for res in HM_conf_adjacent:
+            for res in HM_conf_res:
+                # Get the neighbouring residues
                 res_m1 = self.neighbour_df.loc[res,"Res_name_m1"]
                 res_p1 = self.neighbour_df.loc[res,"Res_name_p1"]
                 
-                tmp = matching0
-                tmp.index = tmp["Res_name"]
+                ss = tmp.SS_name[res]
                 
-                ss = tmp.loc[res,"SS_name"]
-                
-                # Need to be careful with NaN values at this point
-                if pd.isna(res_m1):
-                    ss_m1 = ""
-                else:
-                    ss_m1 = tmp.loc[res_m1,"SS_name"]
-                
-                if pd.isna(res_p1):
-                    ss_p1 = ""
-                else:
-                    ss_p1 = tmp.loc[res_p1,"SS_name"]
-                
-                print(res, ss, res_m1, ss_m1, res_p1, ss_p1)
-                
-                
-                if res_m1 in set(HM_conf_res):
-                    #Get list of inconsistent m1 spin systems
-                    disallowed_ss = self.mismatch_matrix.columns[
-                            self.mismatch_matrix.loc[ss_m1,:]>threshold]
-                    
-                    #Set the inconsistent spins systems to have a high log_prob
-                    a.log_prob_matrix.loc[disallowed_ss, res] = a.log_prob_matrix.min().min()
-                    #print(disallowed_ss.shape, a.log_prob_matrix.shape)
-                    
-                if res_p1 in set(HM_conf_res):
-                    #Get list of inconsistent p1 spin systems
+                # (Need to be careful with NaN values at this point)
+                if not pd.isna(res_m1):
+                    #Get list of inconsistent i-1 spin systems
                     disallowed_ss = self.mismatch_matrix.index[
-                            self.mismatch_matrix.loc[:,ss_p1]>threshold]
-
+                            self.mismatch_matrix.loc[:,ss]>threshold]
+                    # Set the inconsistent spins systems to have a high log_prob
+                    a.log_prob_matrix.loc[disallowed_ss, res_m1] = a.log_prob_matrix.min().min()
+                if not pd.isna(res_p1):
+                    #Get list of inconsistent i+1 spin systems
+                    disallowed_ss = self.mismatch_matrix.columns[
+                            self.mismatch_matrix.loc[ss,:]>threshold]
                     #Set the inconsistent spins systems to have a high log_prob
-                    a.log_prob_matrix.loc[disallowed_ss, res] = a.log_prob_matrix.min().min()
-                    #print(disallowed_ss.shape, a.log_prob_matrix.shape)
-                    
+                    a.log_prob_matrix.loc[disallowed_ss, res_p1] = a.log_prob_matrix.min().min()
+
+
             # Rerun assignment and see how many are consistent now
             #return(a.log_prob_matrix)
             matching1 = a.find_best_assignments()
@@ -1263,12 +1244,13 @@ class NAPS_assigner:
                 output_df.to_csv(filepath, sep="\t", float_format="%.3f",
                                  index=True, header=False)
         elif format=="nmrpipe":
-            # TODO: Add in FIRST_RESID and SEQUENCE lines
             df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
             
             output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
             
             # Prepare the sequence info
+            #TODO: This doesn't work properly if some residues are missing 
+            # (eg. if only high confidence assignments are being exported). 
             tmp = pd.DataFrame({"Res_N":np.arange(df["Res_N"].min(), 
                                                   df["Res_N"].max()+1)})
             tmp = tmp.merge(df_wide[["Res_N","Res_type"]], how="left", on="Res_N")

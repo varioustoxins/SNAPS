@@ -146,6 +146,9 @@ tmp = a.check_matching_consistency(matching)
 tmp2 = tmp[(tmp["Num_good_links_m1"]==3) & (tmp["Num_good_links_p1"]==3)]
 
 tmp = a.find_consistent_assignments2()
+tmp.loc[tmp.Res_name!=tmp.SS_name,["Res_name","SS_name"]]
+
+assign_df.loc[assign_df.Res_name!=assign_df.SS_name,["Res_name","SS_name"]]
 
 #%% Test sequential assignment
 
