@@ -125,6 +125,8 @@ df = pd.merge(obs_all, preds_all, on=["ID","Res_N","Res_type", "Atom_type"],
               how="outer", suffixes=["_obs","_pred"])
 
 # Get rid of any residues with mismatching types, or where the type is NaN
+df_raw = df.copy()
+
 df = df.loc[~(df["ID"]+df["Res_N"].astype(str)).isin(bad_res["ID"]+bad_res["Res_N"].astype(str)),:]
 df = df.dropna(axis=0, subset=["Res_type","Res_type_m1","SS_name", "Res_name"])
 df["ID_Res"] = df["ID"]+ " " + df["Res_name"].astype(str)
@@ -139,6 +141,43 @@ df = df.dropna(axis=0, subset=["Delta"])
 
 # Save the data
 df.to_csv(path/"output/prediction_accuracy.txt", sep="\t", float_format="%.3f")
+
+#%% Summarise information about the testset proteins
+# This could include length, assignment completeness, average error
+summary_df = testset_df[["ID", "Resolution","Length"]]
+# Work out difference between min and max residue numbers to assess total length
+# (Residue numbering is discontinuous for A062, which is why the Seq_length is so high
+summary_df["Seq_length"] = (df_raw.groupby("ID")["Res_N"].max() - 
+                            df_raw.groupby("ID")["Res_N"].min() + 1)
+summary_df["N_res"] = df_raw.groupby("ID").nunique()["Res_name"]
+summary_df["N_SS"] = df_raw.groupby("ID").nunique()["SS_name"]
+
+# Work out how many residues actually have both obs and pred data
+tmp = df_raw[df_raw["Res_N"].astype(str)==df_raw["SS_N"]]
+summary_df["N_both"] = tmp.groupby("ID")["Res_N"].nunique()
+
+# Count the number of prolines and glycines
+tmp = df_raw
+tmp["ID_Res"] = tmp["ID"]+" "+tmp["Res_N"].astype(str)
+tmp = tmp.drop_duplicates(subset="ID_Res")
+summary_df["N_Gly"] = tmp[tmp["Res_type"]=="G"].groupby("ID")["Res_N"].count()
+summary_df["N_Pro"] = tmp[tmp["Res_type"]=="P"].groupby("ID")["Res_N"].count()
+summary_df["N_Pro"] = summary_df["N_Pro"].fillna(0).astype(int)
+#df_raw["SS_N"] = df_raw["SS_name"].str[0:-1].str.lstrip()
+#tmp = df_raw["SS_N"] == df_raw["Res_N"].astype(str)
+
+# Find out what percentage of data is present for each atom type
+tmp = df_raw[["ID","Atom_type","Shift_obs"]].groupby(["ID","Atom_type"])["Shift_obs"].count().unstack()
+#summary_df = summary_df.merge(tmp, left_index=True, right_index=True)
+
+atom_names = set(df_raw["Atom_type"])
+for a in atom_names:
+    tmp[a+"_pc"] = tmp.loc[:,a] / summary_df["N_SS"]
+
+summary_df["Obs_per_SS"] = tmp.loc[:,list(atom_names)].transpose().sum()/summary_df["N_SS"]
+summary_df = summary_df.merge(tmp[[a+"_pc" for a in atom_names]], left_index=True, right_index=True)
+
+summary_df.to_csv(path/"output/testset_summary.txt", sep="\t", float_format="%.3f")
 
 #%% Work out obs vs pred distance matrix.
 # Then calculate how many observations are closer to the prediction than the correct one
