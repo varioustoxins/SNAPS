@@ -54,11 +54,11 @@ def check_assignment_accuracy(data_dir, testset_df, ID_list,
         
         tmp = tmp_all.loc[tmp_all["Rank"].isin(ranks),:].copy()
         tmp["Rank"] = tmp["Rank"].astype(str)
-        if "Max_mismatch_prev" in tmp.columns:
+        if "Max_mismatch_m1" in tmp.columns:
             tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res",
-                       "Max_mismatch_prev","Max_mismatch_next",
-                       "Num_good_links_prev","Num_good_links_next"]]
+                       "Max_mismatch_m1","Max_mismatch_p1",
+                       "Num_good_links_m1","Num_good_links_p1"]]
         else:
             tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res"]]
@@ -182,11 +182,11 @@ def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_
             tmp["Rel_prob"] = 0
         tmp["Rank"] = tmp["Rank"].astype(str)
         
-        if "Max_mismatch_prev" in tmp.columns:
+        if "Max_mismatch_m1" in tmp.columns:
             tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res",
-                       "Max_mismatch_prev","Max_mismatch_next",
-                       "Num_good_links_prev","Num_good_links_next", "Confidence"]]
+                       "Max_mismatch_m1","Max_mismatch_p1",
+                       "Num_good_links_m1","Num_good_links_p1", "Confidence"]]
         else:
             tmp = tmp[["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res"]]
@@ -260,8 +260,7 @@ def summarise_results(assigns, output_file=None):
     ID_list2 = list(ID_unique.repeat(len(Rank_unique)))
     status_list = ["Correctly assigned","Correctly unassigned","Dummy SS",
                    "Misassigned","Wrongly assigned","Wrongly unassigned"]
-    confidence_list = ["High","Medium","Low","Unreliable","Undefined",
-                       "Dummy_res","Dummy_SS"]
+    confidence_list = ["High","Medium","Low","Unreliable","Undefined"]
     
     summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list}, 
                            columns=["ID", "Rank"]+status_list)

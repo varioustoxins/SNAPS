@@ -69,6 +69,8 @@ def runNAPS(args):
                         a sequential HADAMAC """)
     parser.add_argument("--iterated", action="store_true", 
                         help="If set, use iterated procedure to resolve bad sequential links")
+    parser.add_argument("--consistent", action="store_true", 
+                        help="If set, enforce consistent links for high confidence assignments and iterate.")
     
     
     if True:
@@ -161,6 +163,10 @@ def runNAPS(args):
         matching2 = a.find_consistent_assignments(10)
         a.make_assign_df(matching2, set_assign_df=True)
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
+        a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
+                           index=False)
+    elif args.consistent:
+        a.assign_df = a.find_consistent_assignments2()
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
     elif a.pars["alt_assignments"]>0:

@@ -69,7 +69,7 @@ def save_summary_plot(assigns, summary, out_dir):
     plt = plt + geom_bar(aes(x="ID", fill="Status"), 
                          position=position_fill(reverse=True))
     plt = plt + geom_text(aes(x="summary.index", label="Pc_correct"), y=0.1, 
-                          format_string="{:.0%}", data=summary, angle=90)
+                          format_string="{:.1f}", data=summary, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     #plt = plt + scale_x_discrete(breaks=summary["ID"].tolist())
     
@@ -649,6 +649,25 @@ if "iterated" in args.test or "all" in args.test:
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
         plt.save(path/"plots/Poster confidence accuracy iterated.pdf", height=100, width=100, units="mm")
         
+#%% Test consistent assignment
+if "consistent" in args.test or "all" in args.test:
+    out_dir = "consistent"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "config.txt", ["--consistent"])
+            run(cmd)
+    
+    if args.analyse:        
+        assigns_consistent = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_consistent = summarise_results(assigns_consistent)
+        summary_consistent.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+
+        save_summary_plot(assigns_consistent, summary_consistent, out_dir)
+        
+
 
 #%% Test stuff
 
