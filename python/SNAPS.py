@@ -5,23 +5,21 @@ Main SNAPS script for assigning an observed shift list based on predicted shifts
 
 @author: aph516
 """
-def runSNAPS(args):
-    #import pandas as pd
-    from SNAPS_importer import SNAPS_importer
-    from SNAPS_assigner import SNAPS_assigner
-    import argparse
-    #from pathlib import Path
-    import logging
 
-    #### Command line arguments
+def get_arguments(system_args):
+    import argparse
+    
     parser = argparse.ArgumentParser(description="SNAPS (Simple NMR Assignments from Predicted Shifts)")
+    
+    # Mandatory arguments
     parser.add_argument("shift_file", 
                         help="A table of observed chemical shifts.")
     parser.add_argument("pred_file",
                         help="A table of predicted chemical shifts.")
     parser.add_argument("output_file",
                         help="The file results will be written to.")
-
+    
+    # Information on input files and configuration options
     parser.add_argument("--shift_type", 
                         choices=["snaps", "ccpn", "sparky", 
                                  "xeasy", "nmrpipe", "test"], 
@@ -34,6 +32,17 @@ def runSNAPS(args):
     parser.add_argument("-c", "--config_file", 
                         default="/Users/aph516/GitHub/SNAPS/python/config.txt",
                         help="A file containing parameters for the analysis.")
+    parser.add_argument("--consistent", action="store_true", 
+                        help="If set, enforce consistent links for high confidence assignments and iterate.")
+    parser.add_argument("--test_aa_classes", default=None, 
+                        help="""For test data only. 
+                        A string containing a comma-separated list of the amino acid 
+                        classes for the i residue, a semicolon, then a list of AA 
+                        classes for the i-1 residue. No spaces. 
+                        eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
+                        a sequential HADAMAC """)
+    
+    # Options controlling output files
     parser.add_argument("-l", "--log_file", default=None,
                         help="A file logging information will be written to.")
     
@@ -55,34 +64,26 @@ def runSNAPS(args):
                         default=None,
                         help="A filename for an output HSQC plot.")
     
-    #parser.add_argument("--delta_correlation", action="store_true", 
-    #                    help="If set, account for correlations between prediction errors of different atom types")
-    parser.add_argument("-a", "--alt_assignments", default=-1, type=int,
-                        help="The number of alternative assignments to generate, "+
-                        "in addition to the highest ranked.")
-    parser.add_argument("--test_aa_classes", default=None, 
-                        help="""For test data only. 
-                        A string containing a comma-separated list of the amino acid 
-                        classes for the i residue, a semicolon, then a list of AA 
-                        classes for the i-1 residue. No spaces. 
-                        eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
-                        a sequential HADAMAC """)
-    parser.add_argument("--iterated", action="store_true", 
-                        help="If set, use iterated procedure to resolve bad sequential links")
-    parser.add_argument("--consistent", action="store_true", 
-                        help="If set, enforce consistent links for high confidence assignments and iterate.")
     
-    
-    if True:
-        args = parser.parse_args(args)
-    else:   # For testing
+ 
+    args = parser.parse_args(system_args)
+    if False:   # For convenience when testing
         args = parser.parse_args(("../data/P3a_L273R/naps_shifts.txt",
                                   "../data/P3a_L273R/shiftx2.cs",
                                   "../output/test.txt",
                                   "--shift_type","snaps",
                                   "--pred_type","shiftx2",
                                   "-c","../config/config.txt",
-                                  "-l","../output/test.log"))    
+                                  "-l","../output/test.log"))  
+    return(args)
+
+def runSNAPS(system_args):
+    from SNAPS_importer import SNAPS_importer
+    from SNAPS_assigner import SNAPS_assigner
+    import logging
+
+    # Command line arguments
+    args = get_arguments(system_args)  
 
     # Set up logging
     if args.log_file is not None:
@@ -101,17 +102,12 @@ def runSNAPS(args):
     else:
         logging.basicConfig(level=logging.ERROR)
 
-    #%%
     #### Set up the SNAPS_assigner object
     a = SNAPS_assigner()
 
     # Import config file
-    a.read_config_file(args.config_file)
+    a.read_YAML_config(args.config_file)
     logger.info("Read in configuration from %s.", args.config_file)
-
-    # Account for any command line arguments that overide config file
-    if args.alt_assignments>=0:
-        a.pars["alt_assignments"] = args.alt_assignments
 
     # Import observed and predicted shifts
     importer = SNAPS_importer()
@@ -137,16 +133,6 @@ def runSNAPS(args):
                  len(a.preds["Res_name"]), args.pred_file)
 
     #### Do the analysis
-#    if args.shift_type=="test":
-#        # Limit observations and predictions to their common range
-##        a.obs = a.obs[a.obs["Res_N"]>=a.preds["Res_N"].min()]
-##        a.obs = a.obs[a.obs["Res_N"]<=a.preds["Res_N"].max()]
-##        a.preds = a.preds[a.preds["Res_N"]>=a.obs["Res_N"].min()]
-##        a.preds = a.preds[a.preds["Res_N"]<=a.obs["Res_N"].max()]
-#        # Delete any unmatchable observations or predictions
-#        a.obs = a.obs[a.obs["SS_name"].isin(a.preds["Res_name"])]
-#        a.preds = a.preds[a.preds["Res_name"].isin(a.obs["SS_name"])]
-        
     a.add_dummy_rows()
     a.calc_log_prob_matrix2(sf=1, verbose=False)
     logger.info("Calculated log probability matrix (%dx%d).", 
@@ -159,23 +145,10 @@ def runSNAPS(args):
     logger.info("Checked assignment consistency.")
     
     #### Output the results
-    if args.iterated:
-        matching2 = a.find_consistent_assignments(10)
-        a.make_assign_df(matching2, set_assign_df=True)
-        a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
-        a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
-                           index=False)
-    elif args.consistent:
+    if args.consistent:
         a.assign_df = a.find_consistent_assignments2()
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
-    elif a.pars["alt_assignments"]>0:
-        a.find_alt_assignments(N=a.pars["alt_assignments"], verbose=False, 
-                                by_ss=True)
-        logger.info("Calculated the %d next best assignments for each spin system", 
-                     a.pars["alt_assignments"])
-        a.alt_assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
-                               index=False)
     else:
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)

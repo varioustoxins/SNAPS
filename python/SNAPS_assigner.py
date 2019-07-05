@@ -81,6 +81,10 @@ class SNAPS_assigner:
         f = open(filename, 'r')
         
         self.pars = yaml.safe_load(f)
+        self.pars["atom_set"] = set(self.pars["atom_set"])
+        
+        # TODO: Add a check that all necessary parameters are present
+        
         return(self.pars)
     
     def import_pred_shifts(self, input_file, filetype, offset=None):
