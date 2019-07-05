@@ -106,7 +106,7 @@ def runSNAPS(system_args):
     a = SNAPS_assigner()
 
     # Import config file
-    a.read_YAML_config(args.config_file)
+    a.read_config_file(args.config_file)
     logger.info("Read in configuration from %s.", args.config_file)
 
     # Import observed and predicted shifts
@@ -134,7 +134,7 @@ def runSNAPS(system_args):
 
     #### Do the analysis
     a.add_dummy_rows()
-    a.calc_log_prob_matrix2(sf=1, verbose=False)
+    a.calc_log_prob_matrix(sf=1, verbose=False)
     logger.info("Calculated log probability matrix (%dx%d).", 
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
     a.calc_mismatch_matrix()

@@ -51,32 +51,6 @@ class SNAPS_assigner:
                 "seq_link_threshold": 0.1}
             
     def read_config_file(self, filename):
-        config = pd.read_table(filename, sep="\s+", comment="#", header=None,
-                               index_col=0, names=["Value"]).to_dict()["Value"]
-        
-        self.pars["pred_offset"] = int(config["pred_offset"])
-        
-        self.pars["prob_method"] = config["prob_method"]
-        
-        self.pars["pred_correction"] = bool(strtobool(config["pred_correction"]))
-        self.pars["pred_correction_file"] = config["pred_correction_file"]
-        
-        self.pars["delta_correlation"] = bool(strtobool(config["delta_correlation"]))
-        self.pars["delta_correlation_mean_file"] = config["delta_correlation_mean_file"]
-        self.pars["delta_correlation_cov_file"] = config["delta_correlation_cov_file"]
-        self.pars["delta_correlation_mean_corrected_file"] = config["delta_correlation_mean_corrected_file"]
-        self.pars["delta_correlation_cov_corrected_file"] = config["delta_correlation_cov_corrected_file"]
-        
-        self.pars["use_ss_class_info"] = bool(strtobool(config["use_ss_class_info"]))
-        self.pars["alt_assignments"] = int(config["alt_assignments"])
-        self.pars["atom_set"] = {s.strip() for s in config["atom_set"].split(",")}
-        tmp = [s.strip() for s in config["atom_sd"].split(",")]
-        self.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
-        #self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
-        self.pars["seq_link_threshold"] = float(config["seq_link_threshold"])
-        return(self.pars)
-    
-    def read_YAML_config(self, filename):
         "Read a configuration file written in YAML format"       
         f = open(filename, 'r')
         
@@ -289,136 +263,8 @@ class SNAPS_assigner:
         
         return(self.obs, self.preds)
     
+        
     def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01, 
-                             use_hadamac=False, cdf=False, rescale_delta=False, 
-                             delta_correlation=False, shift_correlation=False,
-                             verbose=False):
-        """Calculate a matrix of -log10(match probabilities)
-        
-        use_hadamac: if True, amino acid type information will contribute to 
-            the log probability
-        cdf: if True, use cdf in probability matrix. Otherwise use pdf (cdf 
-            uses chance of seeing a delta 'at least this great')
-        rescale_delta: if True, the shift differences between obs and pred are 
-            scaled so they are closer to the normal distribution
-        delta_correlation: if True, correlated errors between different atom 
-            types are accounted for in the probability 
-        shift_correlation: if True, the correlation between observed shift and
-            prediction error is accounted for.
-        """
-        
-        # Use default atom_sd values if not defined
-        if atom_sd==None:
-            atom_sd = self.pars["atom_sd"]
-#            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
-#                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-#                     'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163}
-        
-        def calc_match_probability(obs, pred1):
-            """ Calculate match scores between all observed spin systems and a 
-            single predicted residue
-            
-            default_prob: probability assigned when an observation or 
-                prediction is missing
-            atom_sd: expected standard deviation for each atom type
-            sf: scaling factor for the entire atom_sd dictionary
-            use_hadamac: determines whether residue type information is used
-            """
-            
-            # Throw away any non-atom columns
-            obs_reduced = obs.loc[:, self.pars["atom_set"].
-                                  intersection(obs.columns)]
-            pred1_reduced = pred1.loc[self.pars["atom_set"].
-                                      intersection(pred1.index)]
-            
-            # Calculate shift differences for each observed spin system
-            delta = obs_reduced - pred1_reduced
-            
-            # Make a note of NA positions in delta, and set them to zero 
-            # (this avoids warnings when using norm.cdf later)
-            na_mask = delta.isna()
-            delta[na_mask] = 0
-            
-            if self.pars["prob_method"] == "delta_correlation":
-                overall_prob = pd.Series(index=delta.index)
-                overall_prob[:] = 1
-                
-                d_mean = pd.read_csv("../data/d_mean.csv", header=None, 
-                                     index_col=0).loc[delta.columns,1]
-                d_cov = (pd.read_csv("../data/d_cov.csv", index_col=0).
-                         loc[delta.columns,delta.columns])
-                
-                mvn = multivariate_normal(d_mean, d_cov)
-                
-                overall_prob = mvn.logpdf(delta)
-                
-                # Penalise missing shifts, unless also missing in predictions
-                overall_prob = (overall_prob + log10(default_prob) * 
-                            (na_mask.sum(axis=1) - pred1_reduced.isna().sum()))
-                    
-            else:
-                prob = delta.copy()
-                prob.iloc[:,:] = 1
-                
-                for c in delta.columns:
-                    if self.pars["prob_method"] == "cdf":
-                        # Use the cdf to calculate the probability of a 
-                        # delta *at least* as great as the actual one
-                        prob[c] = log10(2) + norm.logcdf(-1*abs(
-                                pd.to_numeric(delta[c])), scale=atom_sd[c]*sf)
-                    elif self.pars["prob_method"] == "pdf":
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
-                            scale=atom_sd[c]*sf)       
-                    elif shift_correlation:
-                        print("shift_correlation not yet implemented. Defaulting to pdf.")
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
-                            scale=atom_sd[c]*sf)
-                    else:
-                        print("Method for calculating probability not recognised. Defaulting to pdf.")
-                        prob[c] = norm.logpdf(pd.to_numeric(delta[c]), 
-                            scale=atom_sd[c]*sf)
-                
-                # In positions where data was missing, use default probability
-                prob[na_mask] = log10(default_prob)
-                
-                # Calculate penalty for a HADAMAC mismatch
-                if use_hadamac:
-                    # If the i-1 aa type of the predicted residue matches the 
-                    # HADAMAC group of the observation, probability is 1.
-                    # Otherwise, probability defaults to 0.01
-                    prob["SS_class_m1"] = 0.01
-                    if type(pred1["Res_type_m1"])==str:    # dummies have NaN
-                        prob.loc[obs["SS_class_m1"].str.find(
-                                pred1["Res_type_m1"])>=0, "SS_class_m1"] = 1
-            
-                # Calculate overall probability of each row
-                overall_prob = prob.sum(skipna=False, axis=1)
-                
-            return(overall_prob)
-        
-        obs = self.obs
-        preds = self.preds
-        
-        # Initialise matrix as NaN
-        log_prob_matrix = pd.DataFrame(np.NaN, index=obs.index, 
-                                       columns=preds.index)    
-        
-        for i in preds.index:
-            if verbose: print(i)
-            log_prob_matrix.loc[:, i] = calc_match_probability(obs, 
-                                                               preds.loc[i,:])
-        
-        
-        # Calculate log of matrix
-        log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
-                                                        log_prob_matrix.values)
-        log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
-        log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
-        
-        self.log_prob_matrix = log_prob_matrix
-        return(self.log_prob_matrix)
-        
-    def calc_log_prob_matrix2(self, atom_sd=None, sf=1, default_prob=0.01, 
                              verbose=False):
         """Calculate a matrix of -log10(match probabilities)
         
@@ -429,9 +275,6 @@ class SNAPS_assigner:
         # Use default atom_sd values if not defined
         if atom_sd==None:
             atom_sd = self.pars["atom_sd"]
-#            atom_sd={'H':0.1711, 'N':1.1169, 'HA':0.1231,
-#                     'C':0.5330, 'CA':0.4412, 'CB':0.5163,
-#                     'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163}
         
         obs = self.obs
         preds = self.preds
@@ -440,7 +283,6 @@ class SNAPS_assigner:
         if self.pars["pred_correction"]:
             # Import parameters for correcting the shifts
             lm_pars = pd.read_csv(self.pars["pred_correction_file"], index_col=0)
-            #self.preds_corr = {}
         
         if self.pars["delta_correlation"]:
             # Import parameters describing the delta correlations
@@ -497,7 +339,6 @@ class SNAPS_assigner:
                                     - offset)
                                 
                 delta_atom = preds_corr_atom - obs_atom
-                #self.preds_corr[atom] = preds_corr_atom
             else:
                 delta_atom = preds_atom - obs_atom
             
@@ -578,52 +419,6 @@ class SNAPS_assigner:
         self.log_prob_matrix = log_prob_matrix
         return(self.log_prob_matrix)
     
-    def calc_dist_matrix(self, use_atoms=None, atom_scale=None, na_dist=0, rank=False):
-        """Calculate the Euclidian distance between each observation and 
-        prediction.
-        
-        use_atoms: limit the set of atoms considered. If None, uses 
-            pars["atom_set"]
-        atom_scale: how much the shift difference is scaled by
-        na_dist: shift differences which can't be calculated (eg due to 
-            missing data) are replaced with this value
-        rank: if True, returns the rank of the distance per observation
-        """
-        obs = self.obs
-        preds = self.preds
-        
-        # Use default atom_sd values if not defined
-        if atom_scale==None:
-            atom_scale = self.pars["atom_sd"]
-        
-        if use_atoms==None:
-            atoms = self.pars["atom_set"].intersection(obs.columns)
-        else:
-            atoms = set(use_atoms).intersection(obs.columns)
-        
-        delta2 = pd.DataFrame(0, index=obs.index, columns=preds.index)
-        
-        for atom in atoms:
-            obs_atom = (obs[atom].repeat(len(obs.index)).values.
-                        reshape([len(obs.index),-1]))
-            preds_atom = (preds[atom].repeat(len(preds.index)).values.
-                          reshape([len(preds.index),-1]).transpose())
-            
-            delta2_atom = ((preds_atom - obs_atom)/atom_scale[atom])**2
-            
-            # Make a note of NA positions in delta, and set them to default value 
-            na_mask = np.isnan(delta2_atom)
-            delta2_atom[na_mask] = na_dist
-            
-            delta2 = delta2 + delta2_atom
-            
-        dist_matrix = delta2.applymap(sqrt)
-        
-        if rank:
-            return (dist_matrix.rank(axis=1))
-        else:
-            return(dist_matrix)
-        
     def find_best_assignments(self, inc=None, exc=None, return_none_if_all_dummy=False, verbose=True):
         """ Use the Hungarian algorithm to find the highest probability matching 
         (ie. the one with the lowest log probability sum), with constraints.
@@ -1296,53 +1091,8 @@ class SNAPS_assigner:
         """
         return(0)
     
-    def plot_strips(self, atom_list=["C","C_m1","CA","CA_m1","CB","CB_m1"]):
-        """ Make a strip plot of the assignment
-        
-        atom_list: only plot data for these atom types
-        """
-        assign_df = self.assign_df
-        
-        # Narrow down atom list to those actually present
-        atom_list = list(set(atom_list).intersection(assign_df.columns))
-        
-        # First, convert assign_df from wide to long
-        plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", 
-                                   "Dummy_res", "Dummy_SS"]+atom_list]
-        plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", 
-                                        "SS_name", "Dummy_res", "Dummy_SS"],
-                                   value_vars=atom_list, var_name="Atom_type",
-                                   value_name="Shift")
-        
-        # Add columns with information to be plotted
-        plot_df["i"] = "0"     # Track if shift is from the i or i-1 residue
-        plot_df.loc[plot_df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"i"] = "-1"
-        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"C_m1":"C", 
-                                                   "CA_m1":"CA", "CB_m1":"CB"}) 
-                                                    # Simplify atom type
-        
-        plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
-        
-        # Pad Res_name column with spaces so that sorting works correctly
-        plot_df["Res_name"] = plot_df["Res_name"].str.pad(6)
-        plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
-        
-        # Make the plot
-        plt = ggplot(aes(x="x_name"), data=plot_df) 
-        plt = plt + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
-        plt = plt + scale_y_reverse() + scale_shape_manual(values=["o","x"])
-        # Add lines connecting i to i-1 points
-        plt = plt + geom_line(aes(y="Shift", group="seq_group"), 
-                              data=plot_df.loc[~plot_df["Dummy_res"],])        
-        plt = plt + geom_line(aes(y="Shift", group="x_name"), linetype="dashed")
-        plt = plt + facet_grid("Atom_type~.", scales="free") 
-        plt = plt + scale_colour_brewer(type="Qualitative", palette="Set1") 
-        plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
-        plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
-        
-        return(plt)
     
-    def plot_strips_bokeh(self, outfile=None, format="html", return_json=True, plot_width=1000):
+    def plot_strips(self, outfile=None, format="html", return_json=True, plot_width=1000):
         """Make a strip plot of the assignment.
         
         Uses bokeh module for plotting. Returns the bokeh plot object.
@@ -1512,7 +1262,7 @@ class SNAPS_assigner:
             else:
                 return(p)
                 
-    def plot_hsqc_bokeh(self, outfile=None, format="html", return_json=True):
+    def plot_hsqc(self, outfile=None, format="html", return_json=True):
         """Plot an HSQC coloured by prediction confidence"""
         
         assign_df = self.assign_df.copy()
@@ -1559,6 +1309,53 @@ class SNAPS_assigner:
             return(json_item(plt))
         else:
             return(plt)
+    
+    def plot_strips_plotnine(self, atom_list=["C","C_m1","CA","CA_m1","CB","CB_m1"]):
+        """ Make a strip plot of the assignment
+        
+        atom_list: only plot data for these atom types
+        """
+        assign_df = self.assign_df
+        
+        # Narrow down atom list to those actually present
+        atom_list = list(set(atom_list).intersection(assign_df.columns))
+        
+        # First, convert assign_df from wide to long
+        plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", 
+                                   "Dummy_res", "Dummy_SS"]+atom_list]
+        plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", 
+                                        "SS_name", "Dummy_res", "Dummy_SS"],
+                                   value_vars=atom_list, var_name="Atom_type",
+                                   value_name="Shift")
+        
+        # Add columns with information to be plotted
+        plot_df["i"] = "0"     # Track if shift is from the i or i-1 residue
+        plot_df.loc[plot_df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"i"] = "-1"
+        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"C_m1":"C", 
+                                                   "CA_m1":"CA", "CB_m1":"CB"}) 
+                                                    # Simplify atom type
+        
+        plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
+        
+        # Pad Res_name column with spaces so that sorting works correctly
+        plot_df["Res_name"] = plot_df["Res_name"].str.pad(6)
+        plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
+        
+        # Make the plot
+        plt = ggplot(aes(x="x_name"), data=plot_df) 
+        plt = plt + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
+        plt = plt + scale_y_reverse() + scale_shape_manual(values=["o","x"])
+        # Add lines connecting i to i-1 points
+        plt = plt + geom_line(aes(y="Shift", group="seq_group"), 
+                              data=plot_df.loc[~plot_df["Dummy_res"],])        
+        plt = plt + geom_line(aes(y="Shift", group="x_name"), linetype="dashed")
+        plt = plt + facet_grid("Atom_type~.", scales="free") 
+        plt = plt + scale_colour_brewer(type="Qualitative", palette="Set1") 
+        plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
+        plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
+        
+        return(plt)
+    
     
     def plot_seq_mismatch(self):
         """ Make a plot of the maximum sequential mismatch between i-1, i and 
