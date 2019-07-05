@@ -25,6 +25,7 @@ from distutils.util import strtobool
 from collections import namedtuple
 from sortedcontainers import SortedListWithKey
 import logging
+import yaml
 
 class NAPS_assigner:
     # Functions
@@ -73,6 +74,13 @@ class NAPS_assigner:
         self.pars["atom_sd"] = dict([(x.split(":")[0], float(x.split(":")[1])) for x in tmp])
         #self.pars["plot_strips"] = bool(strtobool(config["plot_strips"]))
         self.pars["seq_link_threshold"] = float(config["seq_link_threshold"])
+        return(self.pars)
+    
+    def read_YAML_config(self, filename):
+        "Read a configuration file written in YAML format"       
+        f = open(filename, 'r')
+        
+        self.pars = yaml.safe_load(f)
         return(self.pars)
     
     def import_pred_shifts(self, input_file, filetype, offset=None):
