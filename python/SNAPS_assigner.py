@@ -128,7 +128,8 @@ class SNAPS_assigner:
                         
             preds_long = pd.read_table(filename, sep="\s+", names=colnames,
                                        skiprows=colnames_line+1)
-            preds_long = preds_long.reindex(columns=["RESID","RESNAME","ATOMNAME","SHIFT"])
+            preds_long = preds_long.reindex(columns=["RESID","RESNAME",
+                                                     "ATOMNAME","SHIFT"])
             preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
             
             # Sparta+ uses HN for backbone amide proton - convert to H
@@ -174,9 +175,14 @@ class SNAPS_assigner:
         preds = pd.merge(preds, preds_p1, how="left", 
                          left_index=True, right_index=True)
         
+        # Set index to Res_name
+        preds.index = preds["Res_name"]
+        preds.index.name = None
+        
         # Restrict to only certain atom types
         atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
-        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1","Res_name_p1","Res_type_m1"]+
+        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1",
+                       "Res_name_p1","Res_type_m1"]+
                       list(atom_set.intersection(preds.columns))]
         
         self.logger.info("Finished reading in %d predicted residues from %s"
@@ -236,34 +242,39 @@ class SNAPS_assigner:
         preds = pd.merge(preds, preds_p1, how="left", 
                          left_index=True, right_index=True)
         
+        # Set index to Res_name
+        preds.index = preds["Res_name"]
+        preds.index.name = None
+        
         # Restrict to only certain atom types
         atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
-        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1","Res_name_p1","Res_type_m1"]+
+        preds = preds[["Res_name","Res_N","Res_type","Res_name_m1",
+                       "Res_name_p1","Res_type_m1"]+
                       list(atom_set.intersection(preds.columns))]
         
         self.preds = preds
         return(self.preds)
     
-    def add_dummy_rows(self):
-        """Add dummy rows to obs and preds to bring them to the same length.
+    def prepare_obs_preds(self):
+        """Perform preprocessing on the observed and predicted shifts to prepare 
+        them for calculation of the log probability matrix.
         
-        Also discard any atom types that aren't present in both obs and preds.
+        1) Remove proline residues from predictions
+        2) Discard atom types that are not used or aren't present in both
+        3) Add dummy rows to obs or preds to bring them to the same length
+        4) Create neighbour_df, a DataFrame for looking up adjacent residue names
+        
+        Returns the modified obs and preds DataFrames.
         """
         
         obs = self.obs.copy()
         preds = self.preds.copy()
         
-        # Delete any prolines in preds
+        #### Delete any prolines in preds
         self.all_preds = preds.copy()   # Keep a copy of all predictions
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
         
-        # Create a data frame to quickly look up the i-1 and i+1 Res_name
-        preds.index = preds["Res_name"]
-        preds.index.name = None
-        self.neighbour_df = preds[["Res_name_m1","Res_name_p1"]]
-        #self.Res_name_m1.loc[preds["Res_type_m1"]=="P"] = np.NaN
-        
-        # Restrict atom types
+        #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
         obs_metadata = list(set(obs.columns).difference(self.pars["atom_set"]))     
         preds_metadata = list(set(preds.columns).
@@ -273,6 +284,7 @@ class SNAPS_assigner:
         obs = obs.loc[:,obs_metadata+shared_atoms]
         preds = preds.loc[:,preds_metadata+shared_atoms]
         
+        #### Create dummy rows
         # Create columns to keep track of dummy status
         preds["Dummy_res"] = False
         obs["Dummy_SS"] = False
@@ -285,15 +297,18 @@ class SNAPS_assigner:
                         index=["DR_"+str(i) for i in 1+np.arange(N-M)])
             dummies["Res_name"] = dummies.index
             dummies["Dummy_res"] = True
-            preds = preds.append(dummies)        
+            preds = preds.append(dummies)
+            self.logger.info("Added %d dummy predicted residues" % len(dummies.index))
         elif M>N:
             dummies = pd.DataFrame(np.NaN, columns = obs.columns, 
                         index=["DSS_"+str(i) for i in 1+np.arange(M-N)])
             dummies["SS_name"] = dummies.index
             dummies["Dummy_SS"] = True
             obs = obs.append(dummies)
-            #obs.loc[["dummy_"+str(i) for i in 1+np.arange(M-N)]] = np.NaN
-            #obs.loc[obs.index[N:M], "SS_name"] = ["dummy_"+str(i) for i in 1+np.arange(M-N)]
+            self.logger.info("Added %d dummy observed residues" % len(dummies.index))
+            
+        #### Create a data frame to quickly look up the i-1 and i+1 Res_name
+        self.neighbour_df = preds[["Res_name_m1","Res_name_p1"]].copy()
         
         # Set missing Res_name_m1 entries to NaN
         self.neighbour_df.loc[~self.neighbour_df["Res_name_m1"].isin(preds["Res_name"]), 
@@ -1158,6 +1173,7 @@ class SNAPS_assigner:
             return(None)
         else:
             #Add extra rows for missing residues (eg Prolines)
+            #TODO: Use self.all_preds to get the prolines correct
             tmp = list(range(int(df["Res_N"].min()), int(df["Res_N"].max()+1)))
             tmp2 = pd.DataFrame({"Res_N":tmp, 
                                  "Dummy_res":[False]*len(tmp)})

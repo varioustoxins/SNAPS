@@ -136,7 +136,7 @@ def runSNAPS(system_args):
     a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
     #### Do the analysis
-    a.add_dummy_rows()
+    a.prepare_obs_preds()
     a.calc_log_prob_matrix(sf=1, verbose=False)
     logger.info("Finished calculating log probability matrix (%dx%d)", 
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
