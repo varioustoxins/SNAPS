@@ -57,7 +57,6 @@ class SNAPS_assigner:
             self.logger.addHandler(log_handler)
             self.logger.propagate = False
         
-        self.logger.debug("Initialised SNAPS_assigner object.")
             
     def read_config_file(self, filename):
         "Read a configuration file written in YAML format"       
@@ -66,20 +65,32 @@ class SNAPS_assigner:
         self.pars = yaml.safe_load(f)
         self.pars["atom_set"] = set(self.pars["atom_set"])
         
-        # TODO: Add a check that all necessary parameters are present
+        # Check whether all necessary parameters have been imported
+        required_pars = {"atom_set", "atom_sd",
+                         "iterate_until_consistent","seq_link_threshold",
+                         "delta_correlation",
+                         "delta_correlation_mean_file",
+                         "delta_correlation_cov_file",
+                         "pred_correction",
+                         "pred_correction_file",
+                         "delta_correlation_mean_corrected_file",
+                         "delta_correlation_cov_corrected_file"}
+        #TODO: Need to add parameters relating to alt_assignments
+        if required_pars.issubset(set(self.pars.keys())):
+            self.logger.info("All required parameters imported.")
+        else:
+            missing_pars = required_pars.difference(set(self.pars.keys()))
+            self.logger.warning("Some required parameters were missing/not imported: %s",
+                                ", ".join(missing_pars))
         
         return(self.pars)
     
-    def import_pred_shifts(self, input_file, filetype, offset=None):
+    def import_pred_shifts(self, input_file, filetype, offset=0):
         """ Import predicted chemical shifts from a ShiftX2 results file.
         
         filetype: either "shiftx2" or "sparta+"
         offset: an optional integer to add to the ShiftX2 residue number.
         """
-        
-        # If no offset value is defined, use the default one
-        if offset==None:
-            offset = self.pars["pred_offset"]
         
         if filetype == "shiftx2":
             preds_long = pd.read_csv(input_file)
@@ -359,20 +370,20 @@ class SNAPS_assigner:
                 na_mask = np.isnan(delta_atom)
                 delta_atom[na_mask] = 0
                 
-                if self.pars["prob_method"] == "cdf":
-                    # Use the cdf to calculate the probability of a 
-                    # delta *at least* as great as the actual one
-                    prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), 
-                                                            scale=atom_sd[atom]),
-                                             index=obs.index, columns=preds.index)
-                elif self.pars["prob_method"] == "pdf":
-                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, 
-                                                         scale=atom_sd[atom]),
-                                             index=obs.index, columns=preds.index)
-                else:
-                    print("Method for calculating probability not recognised. Defaulting to pdf.")
-                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
+#                if self.pars["prob_method"] == "cdf":
+#                    # Use the cdf to calculate the probability of a 
+#                    # delta *at least* as great as the actual one
+#                    prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), 
+#                                                            scale=atom_sd[atom]),
+#                                             index=obs.index, columns=preds.index)
+#                elif self.pars["prob_method"] == "pdf":
+                prob_atom = pd.DataFrame(norm.logpdf(delta_atom, 
+                                                     scale=atom_sd[atom]),
                                          index=obs.index, columns=preds.index)
+#                else:
+#                    print("Method for calculating probability not recognised. Defaulting to pdf.")
+#                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
+#                                         index=obs.index, columns=preds.index)
                 
                 
                 prob_atom[na_mask] = log10(default_prob)
@@ -395,28 +406,28 @@ class SNAPS_assigner:
             
             # TODO: Need to apply correction for missing data?
         
-        if self.pars["use_ss_class_info"]:
-            # For each type of residue type information that's available, make a 
-            # matrix showing the probability modifications due to type mismatch, 
-            # then add it to log_prob_matrix
-            # Maybe make SS_class mismatch a parameter in config file?
-            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
-                #print(ss_class)
-                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
-                                           columns=log_prob_matrix.columns)
-                
-                # For each amino acid type in turn:
-                for res in preds["Res_type"].dropna().unique():                
-                    # Work out which observations could be that aa type
-                    allowed = obs[ss_class].str.contains(res).fillna(True)
-                    # Select the predictions which are that aa type
-                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
-                    # For the selected predictions, penalise any observations 
-                    # where the current aa type is not allowed
-                    for p in pred_list:
-                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
-            
-                log_prob_matrix = log_prob_matrix + SS_class_matrix
+#        if self.pars["use_ss_class_info"]:
+#            # For each type of residue type information that's available, make a 
+#            # matrix showing the probability modifications due to type mismatch, 
+#            # then add it to log_prob_matrix
+#            # Maybe make SS_class mismatch a parameter in config file?
+#            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
+#                #print(ss_class)
+#                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index, 
+#                                           columns=log_prob_matrix.columns)
+#                
+#                # For each amino acid type in turn:
+#                for res in preds["Res_type"].dropna().unique():                
+#                    # Work out which observations could be that aa type
+#                    allowed = obs[ss_class].str.contains(res).fillna(True)
+#                    # Select the predictions which are that aa type
+#                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
+#                    # For the selected predictions, penalise any observations 
+#                    # where the current aa type is not allowed
+#                    for p in pred_list:
+#                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
+#            
+#                log_prob_matrix = log_prob_matrix + SS_class_matrix
                 
             
         

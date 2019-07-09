@@ -9,7 +9,8 @@ Main SNAPS script for assigning an observed shift list based on predicted shifts
 def get_arguments(system_args):
     import argparse
     
-    parser = argparse.ArgumentParser(description="SNAPS (Simple NMR Assignments from Predicted Shifts)")
+    parser = argparse.ArgumentParser(
+            description="SNAPS (Simple NMR Assignments from Predicted Shifts)")
     
     # Mandatory arguments
     parser.add_argument("shift_file", 
@@ -29,11 +30,12 @@ def get_arguments(system_args):
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2", 
                         help="The format of the predicted shifts")
+    parser.add_argument("--pred_seq_offset", type=int, default=0,
+                        help="""An offset to apply to the residue numbering in 
+                        the predicted shifts.""")
     parser.add_argument("-c", "--config_file", 
                         default="/Users/aph516/GitHub/SNAPS/python/config.txt",
                         help="A file containing parameters for the analysis.")
-    parser.add_argument("--consistent", action="store_true", 
-                        help="If set, enforce consistent links for high confidence assignments and iterate.")
     parser.add_argument("--test_aa_classes", default=None, 
                         help="""For test data only. 
                         A string containing a comma-separated list of the amino acid 
@@ -41,6 +43,7 @@ def get_arguments(system_args):
                         classes for the i-1 residue. No spaces. 
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for 
                         a sequential HADAMAC """)
+    #TODO: Need to rethink how SS_class info is imported.
     
     # Options controlling output files
     parser.add_argument("-l", "--log_file", default=None,
@@ -128,7 +131,7 @@ def runSNAPS(system_args):
                  len(a.obs["SS_name"]), args.shift_file)
 
 
-    a.import_pred_shifts(args.pred_file, args.pred_type)
+    a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
     logger.info("Read in %d predicted residues from %s.", 
                  len(a.preds["Res_name"]), args.pred_file)
 
@@ -145,7 +148,7 @@ def runSNAPS(system_args):
     logger.info("Checked assignment consistency.")
     
     #### Output the results
-    if args.consistent:
+    if a.pars["iterate_until_consistent"]:
         a.assign_df = a.find_consistent_assignments2()
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
