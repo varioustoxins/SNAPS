@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Defines a class with functions related to the actual assignment process, and 
-outputting the results.
+outputting the results. The class also stores intermediate variables (such as 
+the imported chemical shifts and the log probability matrix).
 
 @author: aph516
 """
@@ -59,7 +60,13 @@ class SNAPS_assigner:
         
             
     def read_config_file(self, filename):
-        "Read a configuration file written in YAML format"       
+        """Read a configuration file written in YAML format
+        
+        Returns
+        A dictionary containing the imported parameters.
+        
+        Parameters
+        filename: A path to the configuration file"""       
         f = open(filename, 'r')
         
         self.pars = yaml.safe_load(f)
@@ -77,55 +84,68 @@ class SNAPS_assigner:
                          "delta_correlation_cov_corrected_file"}
         #TODO: Need to add parameters relating to alt_assignments
         if required_pars.issubset(set(self.pars.keys())):
-            self.logger.info("All required parameters imported.")
+            self.logger.info("All required parameters imported")
         else:
             missing_pars = required_pars.difference(set(self.pars.keys()))
-            self.logger.warning("Some required parameters were missing/not imported: %s",
+            self.logger.error("Some required parameters were missing/not imported: %s",
                                 ", ".join(missing_pars))
         
+        self.logger.info("Finished reading in config parameters from %s" 
+                         % filename)
         return(self.pars)
     
-    def import_pred_shifts(self, input_file, filetype, offset=0):
+    def import_pred_shifts(self, filename, filetype, offset=0):
         """ Import predicted chemical shifts from a ShiftX2 results file.
         
+        Returns
+        A DataFrame containing the predicted shifts, or None if the import failed.
+        
+        Parameters
+        filename: path to file containing predicted shifts
         filetype: either "shiftx2" or "sparta+"
-        offset: an optional integer to add to the ShiftX2 residue number.
+        offset: an optional integer to add to the residue number.
         """
         
         if filetype == "shiftx2":
-            preds_long = pd.read_csv(input_file)
+            preds_long = pd.read_csv(filename)
             if any(preds_long.columns == "CHAIN"):
                 if len(preds_long["CHAIN"].unique())>1:
-                    print("Chain identifier dropped - if multiple chains are "+
-                          "present in the predictions, they will be merged.")
+                    self.logger.warning(
+                            """Chain identifier dropped - if multiple chains are 
+                            present in the predictions, they will be merged.""")
                 preds_long = preds_long.drop("CHAIN", axis=1)     
             preds_long = preds_long.reindex(columns=["NUM","RES","ATOMNAME",
                                                      "SHIFT"])  
             preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
         elif filetype == "sparta+":
             # Work out where the column names and data are
-            with open(input_file, 'r') as f:
+            with open(filename, 'r') as f:
                 for num, line in enumerate(f, 1):
                     if line.find("VARS")>-1:
                         colnames_line = num
                         colnames = line.split()[1:]
                         break
                         
-            preds_long = pd.read_table(input_file, sep="\s+", names=colnames,
+            preds_long = pd.read_table(filename, sep="\s+", names=colnames,
                                        skiprows=colnames_line+1)
-            preds_long = preds_long[["RESID","RESNAME","ATOMNAME","SHIFT"]]
+            preds_long = preds_long.reindex(columns=["RESID","RESNAME","ATOMNAME","SHIFT"])
             preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
             
             # Sparta+ uses HN for backbone amide proton - convert to H
             preds_long.loc[preds_long["Atom_type"]=="HN", "Atom_type"] = "H"
         else:
-            print("import_pred_shifts: invalid filetype '%s'." % (filetype))
+            self.logger.error("""Invalid predicted shift type: '%s'. Allowed 
+                              options are 'shiftx2' or 'sparta+'""" % (filetype))
             return(None)
+        
+        self.logger.info("Imported %d predicted chemical shifts from %s" 
+                         % (len(preds_long.index), filename))
         
         # Add sequence number offset and create residue names
         preds_long["Res_N"] = preds_long["Res_N"] + offset
         preds_long.insert(1, "Res_name", (preds_long["Res_N"].astype(str) + 
                   preds_long["Res_type"]))
+        # Left pad with spaces to a constant length (helps with sorting)
         preds_long["Res_name"] = [s.rjust(5) for s in preds_long["Res_name"]]
             
         # Convert from long to wide format
@@ -158,6 +178,9 @@ class SNAPS_assigner:
         atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
         preds = preds[["Res_name","Res_N","Res_type","Res_name_m1","Res_name_p1","Res_type_m1"]+
                       list(atom_set.intersection(preds.columns))]
+        
+        self.logger.info("Finished reading in %d predicted residues from %s"
+                         % (len(preds.index), filename))
         
         self.preds = preds
         return(self.preds)

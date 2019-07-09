@@ -99,7 +99,9 @@ def runSNAPS(system_args):
         # once the analysis is complete.
         log_handler = logging.FileHandler(args.log_file, mode='w')
         log_handler.setLevel(logging.DEBUG)
-        log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
+        #log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
+        log_handler.setFormatter(logging.Formatter(
+                "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
         logger.addHandler(log_handler)
 
     else:
@@ -110,7 +112,7 @@ def runSNAPS(system_args):
 
     # Import config file
     a.read_config_file(args.config_file)
-    logger.info("Read in configuration from %s.", args.config_file)
+    
 
     # Import observed and predicted shifts
     importer = SNAPS_importer()
@@ -127,25 +129,23 @@ def runSNAPS(system_args):
         importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
         
     a.obs = importer.obs
-    logger.info("Read in %d spin systems from %s.", 
+    logger.info("Finished reading in %d spin systems from %s", 
                  len(a.obs["SS_name"]), args.shift_file)
 
 
     a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
-    logger.info("Read in %d predicted residues from %s.", 
-                 len(a.preds["Res_name"]), args.pred_file)
 
     #### Do the analysis
     a.add_dummy_rows()
     a.calc_log_prob_matrix(sf=1, verbose=False)
-    logger.info("Calculated log probability matrix (%dx%d).", 
+    logger.info("Finished calculating log probability matrix (%dx%d)", 
                  a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
     a.calc_mismatch_matrix()
     matching = a.find_best_assignments()
     a.make_assign_df(matching, set_assign_df=True)
-    logger.info("Calculated best assignment.")
+    logger.info("Finished calculating best assignment")
     a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
-    logger.info("Checked assignment consistency.")
+    logger.info("Finished checking assignment consistency")
     
     #### Output the results
     if a.pars["iterate_until_consistent"]:
@@ -156,7 +156,7 @@ def runSNAPS(system_args):
         a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
     
-    logger.info("Wrote results to %s", args.output_file)
+    logger.info("Finished writing results to %s", args.output_file)
     
     #### Write chemical shift lists
     if args.shift_output_file is not None:
@@ -167,12 +167,12 @@ def runSNAPS(system_args):
     plots = []
     if args.hsqc_plot_file is not None:
         hsqc_plot = a.plot_hsqc(args.hsqc_plot_file, "html")
-        logger.info("Wrote HSQC plot to %s", args.hsqc_plot_file)
+        logger.info("Finished writing HSQC plot to %s", args.hsqc_plot_file)
         plots += [hsqc_plot]
         
     if args.strip_plot_file is not None:
         strip_plot = a.plot_strips(args.strip_plot_file, "html")
-        logger.info("Wrote strip plot to %s", args.strip_plot_file)
+        logger.info("Finished writing strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
     
     # Close the log file
