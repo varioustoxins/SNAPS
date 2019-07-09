@@ -39,21 +39,17 @@ class SNAPS_assigner:
         self.assign_df = None
         self.alt_assign_df = None
         self.best_match_indexes = None
-        self.pars = {"pred_offset": 0,
-                "prob_method": "pdf",
-                "pred_correction": False,
+        self.pars = {"pred_correction": False,
                 "delta_correlation": False,
-                "alt_assignments": 1,
                 "atom_set": {"H","N","HA","C","CA","CB","C_m1","CA_m1","CB_m1"},
                 "atom_sd": {'H':0.1711, 'N':1.1169, 'HA':0.1231,
                             'C':0.5330, 'CA':0.4412, 'CB':0.5163,
                             'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163},
-                "plot_strips": False,
-                "seq_link_threshold": 0.1}
+                "seq_link_threshold": 0.2}
         self.logger = logging.getLogger("SNAPS.assigner")
         
         if False:
-            # To suppress logging messages from within the functions, set this block to True
+            # To suppress logging messages from within this class, set this block to True
             log_handler = logging.NullHandler()
             self.logger.addHandler(log_handler)
             self.logger.propagate = False
@@ -322,11 +318,24 @@ class SNAPS_assigner:
         return(self.obs, self.preds)
     
         
-    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01, 
-                             verbose=False):
-        """Calculate a matrix of -log10(match probabilities)
+    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01):
+        """Calculate a matrix of -log10(match probabilities).
         
-        sf: Multiply the provided atom_sd's by this number
+        By probability, we mean the value of the probability density function, 
+        assuming the prediction errors follow a Gaussian distribution. 
+        If self.pars["delta_correlation"]==True, correlations in errors between 
+        different atom types will be accounted for. 
+        If         self.pars["pred_correction"]==True, a linear correction will 
+        be applied to the predicted shifts to compensate for prediction bias 
+        towards random coil values.
+        
+        Returns
+        A DataFrame containing the log probabilities
+        
+        Parameters
+        atom_sd: A dictionary containing the expected standard error in the 
+            predictions for each atom type
+        sf: A scale factor that multiplies the atom_sd
         default_prob: penalty for missing data
         """
         
@@ -341,6 +350,8 @@ class SNAPS_assigner:
         if self.pars["pred_correction"]:
             # Import parameters for correcting the shifts
             lm_pars = pd.read_csv(self.pars["pred_correction_file"], index_col=0)
+            self.logger.info("Imported pred_correction info from %s" 
+                             % self.pars["pred_correction_file"])
         
         if self.pars["delta_correlation"]:
             # Import parameters describing the delta correlations
@@ -349,11 +360,17 @@ class SNAPS_assigner:
                                      header=None, index_col=0).loc[atoms,1]
                 d_cov = (pd.read_csv(self.pars["delta_correlation_cov_corrected_file"], 
                                      index_col=0).loc[atoms,atoms])
+                self.logger.info("Imported delta_correlation info from %s and %s" 
+                             % (self.pars["delta_correlation_mean_corrected_file"],
+                                self.pars["delta_correlation_cov_corrected_file"]))
             else:
                 d_mean = pd.read_csv(self.pars["delta_correlation_mean_file"], 
                                      header=None, index_col=0).loc[atoms,1]
                 d_cov = (pd.read_csv(self.pars["delta_correlation_cov_file"], 
                                      index_col=0).loc[atoms,atoms])
+                self.logger.info("Imported delta_correlation info from %s and %s" 
+                             % (self.pars["delta_correlation_mean_file"],
+                                self.pars["delta_correlation_cov_file"]))
             delta_list = []
         
                    
@@ -404,25 +421,13 @@ class SNAPS_assigner:
                 delta_list = delta_list + [delta_atom.values]
             else:
                 # Make a note of NA positions in delta, and set them to zero 
-                # (this avoids warnings when using norm.cdf later)
+                # (this avoids warnings when using norm.pdf later)
                 na_mask = np.isnan(delta_atom)
                 delta_atom[na_mask] = 0
                 
-#                if self.pars["prob_method"] == "cdf":
-#                    # Use the cdf to calculate the probability of a 
-#                    # delta *at least* as great as the actual one
-#                    prob_atom = pd.DataFrame(-2*norm.logcdf(abs(delta_atom), 
-#                                                            scale=atom_sd[atom]),
-#                                             index=obs.index, columns=preds.index)
-#                elif self.pars["prob_method"] == "pdf":
                 prob_atom = pd.DataFrame(norm.logpdf(delta_atom, 
                                                      scale=atom_sd[atom]),
                                          index=obs.index, columns=preds.index)
-#                else:
-#                    print("Method for calculating probability not recognised. Defaulting to pdf.")
-#                    prob_atom = pd.DataFrame(norm.logpdf(delta_atom, scale=atom_sd[atom]),
-#                                         index=obs.index, columns=preds.index)
-                
                 
                 prob_atom[na_mask] = log10(default_prob)
                 
@@ -466,8 +471,6 @@ class SNAPS_assigner:
 #                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
 #            
 #                log_prob_matrix = log_prob_matrix + SS_class_matrix
-                
-            
         
         log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
                                                         log_prob_matrix.values)
