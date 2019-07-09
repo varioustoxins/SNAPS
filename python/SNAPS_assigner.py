@@ -49,6 +49,15 @@ class SNAPS_assigner:
                             'C_m1':0.5530, 'CA_m1':0.4412, 'CB_m1':0.5163},
                 "plot_strips": False,
                 "seq_link_threshold": 0.1}
+        self.logger = logging.getLogger("SNAPS.assigner")
+        
+        if False:
+            # To suppress logging messages from within the functions, set this block to True
+            log_handler = logging.NullHandler()
+            self.logger.addHandler(log_handler)
+            self.logger.propagate = False
+        
+        self.logger.debug("Initialised SNAPS_assigner object.")
             
     def read_config_file(self, filename):
         "Read a configuration file written in YAML format"       

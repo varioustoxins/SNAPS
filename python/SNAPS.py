@@ -68,12 +68,12 @@ def get_arguments(system_args):
  
     args = parser.parse_args(system_args)
     if False:   # For convenience when testing
-        args = parser.parse_args(("../data/P3a_L273R/naps_shifts.txt",
+        args = parser.parse_args(("../data/P3a_L273R/naps_shifts_backbone.txt",
                                   "../data/P3a_L273R/shiftx2.cs",
                                   "../output/test.txt",
                                   "--shift_type","snaps",
                                   "--pred_type","shiftx2",
-                                  "-c","../config/config.txt",
+                                  "-c","../config/config_yaml.txt",
                                   "-l","../output/test.log"))  
     return(args)
 
@@ -82,10 +82,10 @@ def runSNAPS(system_args):
     from SNAPS_assigner import SNAPS_assigner
     import logging
 
-    # Command line arguments
+    #### Command line arguments
     args = get_arguments(system_args)  
 
-    # Set up logging
+    #### Set up logging
     if args.log_file is not None:
         # Create a logger
         logger = logging.getLogger("SNAPS")
@@ -163,12 +163,12 @@ def runSNAPS(system_args):
     #### Make some plots
     plots = []
     if args.hsqc_plot_file is not None:
-        hsqc_plot = a.plot_hsqc_bokeh(args.hsqc_plot_file, "html")
+        hsqc_plot = a.plot_hsqc(args.hsqc_plot_file, "html")
         logger.info("Wrote HSQC plot to %s", args.hsqc_plot_file)
         plots += [hsqc_plot]
         
     if args.strip_plot_file is not None:
-        strip_plot = a.plot_strips_bokeh(args.strip_plot_file, "html")
+        strip_plot = a.plot_strips(args.strip_plot_file, "html")
         logger.info("Wrote strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
     
