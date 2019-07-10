@@ -325,8 +325,8 @@ class SNAPS_assigner:
         assuming the prediction errors follow a Gaussian distribution. 
         If self.pars["delta_correlation"]==True, correlations in errors between 
         different atom types will be accounted for. 
-        If         self.pars["pred_correction"]==True, a linear correction will 
-        be applied to the predicted shifts to compensate for prediction bias 
+        If self.pars["pred_correction"]==True, a linear correction will be 
+        applied to the predicted shifts to compensate for prediction bias 
         towards random coil values.
         
         Returns
@@ -355,6 +355,8 @@ class SNAPS_assigner:
         
         if self.pars["delta_correlation"]:
             # Import parameters describing the delta correlations
+            # Note: this also sorts the atom types in d_mean and c_cov into the
+            # same order as the 'atoms' list defined above.
             if self.pars["pred_correction"]:
                 d_mean = pd.read_csv(self.pars["delta_correlation_mean_corrected_file"], 
                                      header=None, index_col=0).loc[atoms,1]
@@ -371,6 +373,9 @@ class SNAPS_assigner:
                 self.logger.info("Imported delta_correlation info from %s and %s" 
                              % (self.pars["delta_correlation_mean_file"],
                                 self.pars["delta_correlation_cov_file"]))
+            
+            # For the delta_correlation method, we need to store the prediction 
+            # errors for each atom type for analysis at the end.
             delta_list = []
         
                    
@@ -390,27 +395,32 @@ class SNAPS_assigner:
                                 index=obs.index, columns=preds.index)
             
             
-            # If predicting corrections, apply a linear transformation of delta
+            # If correcting the predictions, subtract a linear function of the 
+            # observed shift from each predicted shift
             if self.pars["pred_correction"]:
                 preds_corr_atom = preds_atom
                 for res in preds["Res_type"].dropna().unique():
                     if (atom+"_"+res) in lm_pars.index:
-                         
-                        grad = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                           (lm_pars["Res_type"]==res),
-                                           "Grad"].tolist()[0]
-                        offset = lm_pars.loc[(lm_pars["Atom_type"]==atom) & 
-                                             (lm_pars["Res_type"]==res),
-                                             "Offset"].tolist()[0]
+                        # Find shifts of the current atom/residue combination
+                        mask = ((lm_pars["Atom_type"]==atom) & 
+                                (lm_pars["Res_type"]==res))
+                        
+                        # Look up model parameters
+                        grad = lm_pars.loc[mask,"Grad"].tolist()[0]
+                        offset = lm_pars.loc[mask,"Offset"].tolist()[0]
+                        
+                        # Make the correction
                         if atom in ("C_m1","CA_m1","CB_m1"):
-                            preds_corr_atom.loc[:,preds["Res_type_m1"]==res] = (
-                                    preds_atom.loc[:, preds["Res_type_m1"]==res]
-                                    - grad * obs_atom.loc[:, preds["Res_type_m1"]==res]
+                            mask = (preds["Res_type_m1"]==res)
+                            preds_corr_atom.loc[:, mask] = (
+                                    preds_atom.loc[:, mask]
+                                    - grad * obs_atom.loc[:, mask]
                                     - offset) 
                         else:
-                            preds_corr_atom.loc[:, preds["Res_type"]==res] = (
-                                    preds_atom.loc[:, preds["Res_type"]==res]
-                                    - grad * obs_atom.loc[:, preds["Res_type"]==res]
+                            mask = (preds["Res_type"]==res)
+                            preds_corr_atom.loc[:, mask] = (
+                                    preds_atom.loc[:, mask]
+                                    - grad * obs_atom.loc[:, mask]
                                     - offset)
                                 
                 delta_atom = preds_corr_atom - obs_atom
@@ -418,36 +428,45 @@ class SNAPS_assigner:
                 delta_atom = preds_atom - obs_atom
             
             if self.pars["delta_correlation"]:
+                # Store delta matrix for this atom type for later analysis
                 delta_list = delta_list + [delta_atom.values]
             else:
                 # Make a note of NA positions in delta, and set them to zero 
-                # (this avoids warnings when using norm.pdf later)
+                # (this avoids warnings when using norm.logpdf)
                 na_mask = np.isnan(delta_atom)
                 delta_atom[na_mask] = 0
                 
+                # Calculate the log probability density
                 prob_atom = pd.DataFrame(norm.logpdf(delta_atom, 
                                                      scale=atom_sd[atom]),
                                          index=obs.index, columns=preds.index)
                 
+                # Replace former NA values with a default value
                 prob_atom[na_mask] = log10(default_prob)
                 
+                # Add to the log prob matrix
                 log_prob_matrix = log_prob_matrix + prob_atom
         
         if self.pars["delta_correlation"]:
+            # Combine the delta matrixes from each atom type into a single 3D matrix
             delta_mat = np.array(delta_list)
+            # Move the axis containing the atom category to the end
+            # (necessary for multivariate_normal function)
             delta_mat = np.moveaxis(delta_mat, 0, -1)
-            #self.delta_mat = delta_mat
             
             # Make a note of NA positions in delta, and set them to zero
             na_mask = np.isnan(delta_mat)
             delta_mat[na_mask] = 0
             
-            # TODO: Check that atom order in list is the same as in d_mean, d_cov
+            # Initialise multivariate model and calculate log_pdf
             mvn = multivariate_normal(d_mean, d_cov)
             log_prob_matrix = pd.DataFrame(mvn.logpdf(delta_mat), 
                                            index=obs.index, columns=preds.index)
             
-            # TODO: Need to apply correction for missing data?
+            # Apply a penalty for missing data
+            na_matrix = na_mask.sum(axis=-1)    # Count how many NA values for 
+                                                # each Res/SS pair
+            log_prob_matrix = log_prob_matrix + log10(default_prob) * na_matrix
         
 #        if self.pars["use_ss_class_info"]:
 #            # For each type of residue type information that's available, make a 
@@ -472,6 +491,7 @@ class SNAPS_assigner:
 #            
 #                log_prob_matrix = log_prob_matrix + SS_class_matrix
         
+        # Sort out NAs and dummy residues/spin systems
         log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
                                                         log_prob_matrix.values)
         log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
