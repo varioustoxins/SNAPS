@@ -268,17 +268,25 @@ class SNAPS_assigner:
         
         #### Delete any prolines in preds
         self.all_preds = preds.copy()   # Keep a copy of all predictions
+        self.logger.info("Removing %d prolines from predictions" 
+                         % sum(preds["Res_type"]=="P"))
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
         
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
-        obs_metadata = list(set(obs.columns).difference(self.pars["atom_set"]))     
+        
+        # Get all non-atom columns
+        all_atoms = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+        obs_metadata = list(set(obs.columns).difference(all_atoms))     
         preds_metadata = list(set(preds.columns).
-                              difference(self.pars["atom_set"]))
+                              difference(all_atoms))
+        # Get atoms that are in atom_set *and* present in both obs and preds
         shared_atoms = list(self.pars["atom_set"].intersection(obs.columns).
                             intersection(preds.columns))
         obs = obs.loc[:,obs_metadata+shared_atoms]
         preds = preds.loc[:,preds_metadata+shared_atoms]
+        
+        self.logger.info("Restricted atom types to %s" % ",".join(shared_atoms))
         
         #### Create dummy rows
         # Create columns to keep track of dummy status
@@ -378,8 +386,6 @@ class SNAPS_assigner:
             # errors for each atom type for analysis at the end.
             delta_list = []
         
-                   
-        
         log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
         for atom in atoms:
             # The most efficient way I've found to do the calculation is to 
@@ -398,6 +404,7 @@ class SNAPS_assigner:
             # If correcting the predictions, subtract a linear function of the 
             # observed shift from each predicted shift
             if self.pars["pred_correction"]:
+                self.logger.info("Calculating corrections to predicted shifts")
                 preds_corr_atom = preds_atom
                 for res in preds["Res_type"].dropna().unique():
                     if (atom+"_"+res) in lm_pars.index:
@@ -448,6 +455,8 @@ class SNAPS_assigner:
                 log_prob_matrix = log_prob_matrix + prob_atom
         
         if self.pars["delta_correlation"]:
+            self.logger.info("Accounting for correlated prediction errors")
+            
             # Combine the delta matrixes from each atom type into a single 3D matrix
             delta_mat = np.array(delta_list)
             # Move the axis containing the atom category to the end
@@ -497,8 +506,75 @@ class SNAPS_assigner:
         log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
+        self.logger.info("Calculated log probability matrix (%dx%d)",
+                         log_prob_matrix.shape[0], log_prob_matrix.shape[1])
+        
         self.log_prob_matrix = log_prob_matrix
         return(self.log_prob_matrix)
+    
+    def calc_mismatch_matrix(self, threshold=0.2):
+        """Calculate matrix of the mismatch between i and i-1 observed carbon 
+        shifts for all spin system pairs. Also, make matrix of number of 
+        consistent sequential links for all spin system pairs.
+        
+        Parameters
+        threshold: The cutoff value beyond which a seq link is considered bad
+        """
+        obs = self.obs
+        
+        # First check if there are any sequential atoms
+        carbons = pd.Series(["C","CA","CB"])
+        carbons_m1 = carbons + "_m1"
+        seq_atoms = carbons[carbons.isin(obs.columns) & 
+                            carbons_m1.isin(obs.columns)]
+    
+        if seq_atoms.size==0:
+            # You can't make a mismatch matrix
+            self.logger.warning("No sequential links in data - mismatch matrix not calculated.")
+            return(None)
+        else:
+            # Start with empty mismatch and consistent_links matrixes
+            mismatch_matrix = pd.DataFrame(0, 
+                                           index=obs["SS_name"], 
+                                           columns=obs["SS_name"])
+            mismatch_matrix.columns.name = "i"
+            mismatch_matrix.index.name = "i_m1"
+            
+            consistent_links_matrix = mismatch_matrix.copy()
+            
+            for atom in seq_atoms:
+                # Repeat the i and i-1 observed shifts into matrixes, and 
+                # transpose one of them.
+                # This is the fastest way I've found to calculate this.
+                i_atom = (obs[atom].repeat(len(obs.index)).values.
+                          reshape([len(obs.index),-1]))
+                i_m1_atom = (obs[atom+"_m1"].repeat(len(obs.index)).values.
+                          reshape([len(obs.index),-1]).transpose())
+                
+                mismatch_atom = pd.DataFrame(i_atom - i_m1_atom)
+                
+                mismatch_atom.columns = obs["SS_name"]
+                mismatch_atom.columns.name = "i"
+                mismatch_atom.index = obs["SS_name"]
+                mismatch_atom.index.name = "i_m1"
+                
+                consistent_links_atom = (abs(mismatch_atom) < threshold)
+                
+                # Make a note of NA positions, and set them to default value 
+                na_mask = np.isnan(mismatch_atom)
+                mismatch_atom[na_mask] = 0
+                consistent_links_atom[na_mask] = 0
+                
+                # Update mismatch and consistent links matrixes
+                mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
+                consistent_links_matrix = consistent_links_matrix + consistent_links_atom
+            
+            self.logger.info("Calculated mismatch and consistent_links matrixes (%dx%d)",
+                         mismatch_matrix.shape[0], mismatch_matrix.shape[1])
+            
+            self.mismatch_matrix = mismatch_matrix
+            self.consistent_links_matrix = consistent_links_matrix
+            return(self.mismatch_matrix, consistent_links_matrix)
     
     def find_best_assignments(self, inc=None, exc=None, return_none_if_all_dummy=False, verbose=True):
         """ Use the Hungarian algorithm to find the highest probability matching 
@@ -626,56 +702,6 @@ class SNAPS_assigner:
         return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
                                                    matching["Res_name"])))    
     
-    def calc_mismatch_matrix(self, threshold=0.2):
-        """Calculate matrix of the mismatch between i and i-1 observed shifts 
-        for all spin system pairs. Also, make matrix of number of consistent 
-        links for all spin system pairs.
-        """
-        obs = self.obs
-        
-        # First check if there are any sequential atoms
-        carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "_m1"
-        seq_atoms = carbons[carbons.isin(obs.columns) & 
-                            carbons_m1.isin(obs.columns)]
-        #seq_atoms_m1 = seq_atoms+"_m1"
-        #seq_atoms = list(seq_atoms)
-    
-        if seq_atoms.size==0:
-            # You can't make a mismatch matrix
-            return(None)
-        else:
-            mismatch_matrix = pd.DataFrame(0, index=obs["SS_name"], columns=obs["SS_name"])
-            mismatch_matrix.columns.name = "i"
-            mismatch_matrix.index.name = "i_m1"
-            
-            consistent_links_matrix = mismatch_matrix.copy()
-            
-            for atom in seq_atoms:
-                i_atom = (obs[atom].repeat(len(obs.index)).values.
-                          reshape([len(obs.index),-1]))
-                i_m1_atom = (obs[atom+"_m1"].repeat(len(obs.index)).values.
-                          reshape([len(obs.index),-1]).transpose())
-                mismatch_atom = pd.DataFrame(i_atom - i_m1_atom)
-                mismatch_atom.columns = obs["SS_name"]
-                mismatch_atom.columns.name = "i"
-                mismatch_atom.index = obs["SS_name"]
-                mismatch_atom.index.name = "i_m1"
-                
-                consistent_links_atom = (abs(mismatch_atom) < threshold)
-                
-                # Make a note of NA positions in delta, and set them to default value 
-                na_mask = np.isnan(mismatch_atom)
-                mismatch_atom[na_mask] = 0
-                consistent_links_atom[na_mask] = 0
-                
-                # Update mismatch matrix
-                mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
-                consistent_links_matrix = consistent_links_matrix + consistent_links_atom
-            
-            self.mismatch_matrix = mismatch_matrix
-            self.consistent_links_matrix = consistent_links_matrix
-            return(self.mismatch_matrix)
     
     def check_matching_consistency(self, matching, threshold=0.2):
         """Calculate mismatch scores and assignment confidence for a given matching"""

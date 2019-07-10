@@ -138,8 +138,6 @@ def runSNAPS(system_args):
     #### Do the analysis
     a.prepare_obs_preds()
     a.calc_log_prob_matrix()
-    logger.info("Finished calculating log probability matrix (%dx%d)", 
-                 a.log_prob_matrix.shape[0], a.log_prob_matrix.shape[1])
     a.calc_mismatch_matrix()
     matching = a.find_best_assignments()
     a.make_assign_df(matching, set_assign_df=True)
