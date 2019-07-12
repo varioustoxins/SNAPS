@@ -688,6 +688,10 @@ class SNAPS_assigner:
         
         obs.index.name = None
         
+        if not {"SS_name","Res_name"}.issubset(matching.columns):
+            self.logger.warning("Cannot make assignment dataframe, as matching"+
+                                "dataframe does not have the correct columns")
+        
         assign_df = pd.merge(matching, 
                              preds.loc[:,["Res_N","Res_type", "Res_name", 
                                     "Dummy_res"]], 
@@ -717,6 +721,9 @@ class SNAPS_assigner:
     
     def assign_from_preds(self):
         """Assign the observed spin systems using predicted shifts only
+        
+        This function essentially wraps around find_best_assignment() and 
+        make_assign_df()
         """
         matching = self.find_best_assignment(self.log_prob_matrix, maximise=True)
         assign_df = self.make_assign_df(matching, set_assign_df=True)
