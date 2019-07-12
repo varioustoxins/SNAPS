@@ -736,13 +736,34 @@ class SNAPS_assigner:
         return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
                                                    matching["Res_name"])))    
     
+    def sequential_atoms_present(self, atom_list):
+        """Returns true if a pair of atoms in atom_list are sequential, otherwise False
+        
+        Acceptable pairs are (C, Cm1), (CA, CAm1), (CB,CBm1)"""
+        
+        i_atoms = pd.Series(["C","CA","CB"])
+        i_m1_atoms = pd.Series(["Cm1","CAm1","CBm1"])
+        seq_atoms = i_atoms.isin(atom_list) & i_m1_atoms.isin(atom_list)
+        
+        return (seq_atoms.any())
+
+    
     def check_matching_consistency(self, matching, threshold=0.2):
-        """Calculate mismatch scores and assignment confidence for a given matching"""
+        """Calculate mismatch scores and assignment confidence for a given matching
+        
+        Returns a DataFrame with Res_name, SS_name and columns containing the 
+        mismatch with adjacent residues, the number of good links, and the 
+        assignment confidence based on these factors
+        
+        Parameters
+        matching: a DataFrame with Res_name and SS_name columns
+        threshold: the maximum allowed mismatch for a good sequential link
+        """
         # Create mismatch matrix if it doesn't already exist
         if self.mismatch_matrix is None:
             self.calc_mismatch_matrix()
         
-        # Add a Res_name_m1 column to matching DataFrame
+        # Add Res_name_m1 and Res_name_p1 columns to matching DataFrame
         matching.index = matching["Res_name"]
         matching.index.name = None
         
@@ -800,6 +821,12 @@ class SNAPS_assigner:
         tmp["Confidence"] = tmp["Confidence"].replace(["NX","XX"],"Unreliable")
         tmp["Confidence"] = tmp["Confidence"].replace("NN","Undefined")
         
+        # Summarise confidence of results
+        summary_str = ", ".join(
+            [str(count) + " "+conf for conf, count in 
+             tmp["Confidence"].value_counts().sort_values(ascending=False).iteritems()])
+        self.logger.info("Calculated assignment confidence: "+summary_str)
+        
         return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1","Max_mismatch",
                     "Num_good_links_m1","Num_good_links_p1","Num_good_links","Confidence"]])
             
@@ -824,19 +851,21 @@ class SNAPS_assigner:
         carbons_m1 = carbons + "_m1"
         seq_atoms = carbons[carbons.isin(assign_df.columns) & 
                             carbons_m1.isin(assign_df.columns)]
-    
-        if seq_atoms.size==0:
-            # You can't do a comparison
+        
+        if self.sequential_atoms_present(assign_df.columns):
+            tmp = self.check_matching_consistency(assign_df, threshold)
+            assign_df = assign_df.merge(tmp, how="left")
+        else:
+            # You can't do a comparison without sequential atoms
             assign_df["Max_mismatch_m1"] = np.NaN
             assign_df["Max_mismatch_p1"] = np.NaN
             assign_df["Num_good_links_m1"] = 0
             assign_df["Num_good_links_p1"] = 0
             assign_df["Confidence"] = "Undefined"
-        else:
-            tmp = self.check_matching_consistency(assign_df, threshold)
-            assign_df = assign_df.merge(tmp, how="left")
             
-            
+            self.logger.warning("Couldn't calculate assignment confidence: "+
+                                "need sequential atom information")
+ 
         if set_assign_df:
             self.assign_df = assign_df
         return(assign_df)
