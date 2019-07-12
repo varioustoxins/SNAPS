@@ -28,6 +28,7 @@ from sortedcontainers import SortedListWithKey
 import logging
 import yaml
 
+
 class SNAPS_assigner:
     # Functions
     def __init__(self):
@@ -387,6 +388,9 @@ class SNAPS_assigner:
             delta_list = []
         
         log_prob_matrix = pd.DataFrame(0, index=obs.index, columns=preds.index)
+        log_prob_matrix.index.name = "SS_name"
+        log_prob_matrix.columns.name = "Res_name"
+        
         for atom in atoms:
             # The most efficient way I've found to do the calculation is to 
             # take the obs and preds shift columns for an atom, repeat each 
@@ -576,86 +580,100 @@ class SNAPS_assigner:
             self.consistent_links_matrix = consistent_links_matrix
             return(self.mismatch_matrix, consistent_links_matrix)
     
-    def find_best_assignments(self, inc=None, exc=None, return_none_if_all_dummy=False, verbose=True):
-        """ Use the Hungarian algorithm to find the highest probability matching 
-        (ie. the one with the lowest log probability sum), with constraints.
+    def find_best_assignment(self, score_matrix, maximise=True, inc=None, exc=None, 
+                             dummy_rows=None, dummy_cols=None, return_none_all_dummy=False):
+        """ Use the Hungarian algorithm to find the highest scoring assignment, 
+        with constraints. Generalised so it can be used for assigning either 
+        sequentially or based on predictions.
         
-        Returns a data frame with the SS_names and Res_names of the matching. 
-        (Doesn't change the internal state of the SNAPS_assigner instance.)
+        Returns a data frame with the index and column names of the matching. 
         
-        inc: a DataFrame of (SS,Res) pairs which must be part of the assignment. 
-            First column has the SS_names, second has the Res_names .
-        exc: a DataFrame of (SS,Res) pairs which may not be part of the assignment.
-        return_none_if_all_dummy: Sometimes after setting aside the pairs that 
-            must be included in the final assignment, only dummy residues or 
-            spin systems will remain. If this argument is True, the function 
-            will return None in these cases.
-        verbose: if True, prints messages if inc and exc contain reduntant info
+        Parameters
+        score_matrix: a pandas dataframe containing the scores, and with row and 
+            column labels    
+        inc: a DataFrame of (row, col) pairs which must be part of the assignment. 
+            First column has the index names, second has the column names.
+        exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
         """
-        obs = self.obs
-        preds = self.preds
-        log_prob_matrix = deepcopy(self.log_prob_matrix)
+        score_matrix = deepcopy(score_matrix)
+        
+        row_name = score_matrix.index.name
+        col_name = score_matrix.columns.name
+        
+        self.logger.info("Started linear assignment")
         
         if inc is not None:
             # Check for conflicting entries in inc
-            conflicts = inc["SS_name"].duplicated(keep=False) | inc["Res_name"].duplicated(keep=False)
+            conflicts = inc[row_name].duplicated(keep=False) | inc[col_name].duplicated(keep=False)
             if any(conflicts):
-                print("Error: entries in inc conflict with one another - dropping conflicts")
-                print(inc[conflicts])
+                self.logger.warning("Warning: entries in inc conflict with one another - dropping conflicts")
+                #print(inc[conflicts])
                 inc = inc[~conflicts]
             
             if exc is not None:
                 # Check constraints are consistent
                 # Get rid of any entries in exc which share a Res or SS with inc
-                exc_in_inc = exc["SS_name"].isin(inc["SS_name"]) | exc["Res_name"].isin(inc["Res_name"])
+                exc_in_inc = exc[row_name].isin(inc[row_name]) | exc[col_name].isin(inc[col_name])
                 if any(exc_in_inc):
-                    if verbose:
-                        print("Some values in exc are also found in inc, so are redundant.")
-                        print(exc[exc_in_inc])
+                    self.logger.warning("Some values in exc are also found in inc, so are redundant.")
+                    #print(exc[exc_in_inc])
                     exc = exc.loc[~exc_in_inc, :]
                     
             # Removed fixed assignments from probability matrix and obs, preds 
             # dataframes. Latter is needed if inc includes any dummy SS/res, 
             # and to detect if the reduced data is entirely dummies
-            log_prob_matrix_reduced = log_prob_matrix.drop(index=inc["SS_name"]).drop(columns=inc["Res_name"])
-            obs_reduced = obs.drop(index=inc["SS_name"])
-            preds_reduced = preds.drop(index=inc["Res_name"])
+            score_matrix_reduced = score_matrix.drop(index=inc[row_name]).drop(columns=inc[col_name])
+            self.logger.info("%d assignments were fixed, %d remain to be assigned"
+                             % (len(inc), len(score_matrix_reduced.index)))
         else:
-            log_prob_matrix_reduced = log_prob_matrix
-            obs_reduced = obs
-            preds_reduced = preds
+            score_matrix_reduced = score_matrix
         
-        if return_none_if_all_dummy:
-            if obs_reduced["Dummy_SS"].all() or preds_reduced["Dummy_res"].all():
+        # If the matrix consists entirely of dummy rows or columns, the 
+        # assignment will not be meaningful. In this case, may want to return None
+        if return_none_all_dummy:
+            if (set(score_matrix_reduced.index).issubset(dummy_rows) or 
+                set(score_matrix_reduced.columns).issubset(dummy_cols)):
+                self.logger.debug("Score matrix includes only dummy rows/columns")
                 return(None)
         
         if exc is not None:
-            # Penalise excluded SS,Res pairs
-            penalty = 2*log_prob_matrix.min().min()
-            for index, row in exc.iterrows():
-                # Need to account for dummy residues or spin systems
-                if preds.loc[row["Res_name"], "Dummy_res"]:
-                    log_prob_matrix_reduced.loc[row["SS_name"], 
-                                                preds_reduced["Dummy_res"]] = penalty
-                elif obs.loc[row["SS_name"], "Dummy_SS"]:
-                    log_prob_matrix_reduced.loc[obs_reduced["Dummy_SS"], 
-                                                row["Res_name"]] = penalty
+            # Penalise excluded (row, col) pairs
+            if maximise:
+                penalty = -2*score_matrix.abs().max().max()
+            else:
+                penalty = 2*score_matrix.abs().max().max()
+            
+            for i, r in exc.iterrows():     # iterates over (index, row as pd.Series) tuples
+                # If one side of an exclude pair is a dummy row or column, 
+                # exclude *all* dummy rows and columns
+                if r[row_name] in dummy_rows:
+                    score_matrix_reduced.loc[r[row_name], 
+                                             dummy_cols] = penalty
+                elif r[col_name] in dummy_cols:
+                    score_matrix_reduced.loc[dummy_rows, 
+                                             r[col_name]] = penalty
                 else:
-                    log_prob_matrix_reduced.loc[row["SS_name"], row["Res_name"]] = penalty
-        
-        row_ind, col_ind = linear_sum_assignment(-1*log_prob_matrix_reduced)
-        # -1 because the algorithm minimises sum, but we want to maximise it.
+                    score_matrix_reduced.loc[r["SS_name"], r["Res_name"]] = penalty
+            
+            self.logger.info("Penalised %d excluded row,column pairs" % len(exc.index))
+            
+        if maximise:
+            row_ind, col_ind = linear_sum_assignment(-1*score_matrix_reduced)
+            # -1 because linear_sum_assignment() minimises sum, but we want to 
+            # maximise it.
+        else:
+            row_ind, col_ind = linear_sum_assignment(score_matrix_reduced)
         
         # Construct results dataframe
-        matching_reduced = pd.DataFrame({"SS_name":log_prob_matrix_reduced.index[row_ind],
-                                           "Res_name":log_prob_matrix_reduced.columns[col_ind]})
+        matching_reduced = pd.DataFrame({row_name:score_matrix_reduced.index[row_ind],
+                                         col_name:score_matrix_reduced.columns[col_ind]})
         
         if inc is not None:
             matching = pd.concat([inc, matching_reduced])             
             return(matching)
         else:
             return(matching_reduced)
-    
+   
     def make_assign_df(self, matching, set_assign_df=False):
         """Make a dataframe with full assignment information, given a dataframe 
         of SS_name and Res_name.
@@ -697,18 +715,25 @@ class SNAPS_assigner:
         
         return(assign_df)
     
+    def assign_from_preds(self):
+        """Assign the observed spin systems using predicted shifts only
+        """
+        matching = self.find_best_assignment(self.log_prob_matrix, maximise=True)
+        assign_df = self.make_assign_df(matching, set_assign_df=True)
+        
+        self.logger.info("Finished calculating best assignment based on predictions")
+        return(assign_df)
+    
     def calc_overall_matching_prob(self, matching):
         "Calculate the sum log probability of a particular matching"
         return(sum(self.log_prob_matrix.lookup(matching["SS_name"], 
                                                    matching["Res_name"])))    
-    
     
     def check_matching_consistency(self, matching, threshold=0.2):
         """Calculate mismatch scores and assignment confidence for a given matching"""
         # Create mismatch matrix if it doesn't already exist
         if self.mismatch_matrix is None:
             self.calc_mismatch_matrix()
-        
         
         # Add a Res_name_m1 column to matching DataFrame
         matching.index = matching["Res_name"]
@@ -1040,8 +1065,7 @@ class SNAPS_assigner:
     def find_consistent_assignments2(self, threshold=0.2):
         """Try to find a consistent set of assignments by optimising both match 
         to predictions and mismatches between adjacent residues"""
-        matching0 = self.find_best_assignments()
-        assign_df0 = self.make_assign_df(matching0)
+        assign_df0 = self.assign_from_preds()
         assign_df0 = self.add_consistency_info(assign_df0, threshold)
         N_HM_conf0 = assign_df0["Confidence"].isin(["High","Medium"]).sum()
         print(N_HM_conf0)
@@ -1082,8 +1106,7 @@ class SNAPS_assigner:
 
             # Rerun assignment and see how many are consistent now
             #return(a.log_prob_matrix)
-            matching1 = a.find_best_assignments()
-            assign_df1 = a.make_assign_df(matching1)
+            assign_df1 = a.assign_from_preds()
             assign_df1 = a.add_consistency_info(assign_df1, threshold)
             N_HM_conf1 = assign_df1["Confidence"].isin(["High","Medium"]).sum()
             print(N_HM_conf1)

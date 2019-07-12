@@ -139,9 +139,7 @@ def runSNAPS(system_args):
     a.prepare_obs_preds()
     a.calc_log_prob_matrix()
     a.calc_mismatch_matrix()
-    matching = a.find_best_assignments()
-    a.make_assign_df(matching, set_assign_df=True)
-    logger.info("Finished calculating best assignment")
+    a.assign_from_preds()
     a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
     logger.info("Finished checking assignment consistency")
     
