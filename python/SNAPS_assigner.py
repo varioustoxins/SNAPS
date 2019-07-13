@@ -739,10 +739,10 @@ class SNAPS_assigner:
     def sequential_atoms_present(self, atom_list):
         """Returns true if a pair of atoms in atom_list are sequential, otherwise False
         
-        Acceptable pairs are (C, Cm1), (CA, CAm1), (CB,CBm1)"""
+        Acceptable pairs are (C, C_m1), (CA, C_Am1), (CB,C_Bm1)"""
         
         i_atoms = pd.Series(["C","CA","CB"])
-        i_m1_atoms = pd.Series(["Cm1","CAm1","CBm1"])
+        i_m1_atoms = pd.Series(["C_m1","CA_m1","CB_m1"])
         seq_atoms = i_atoms.isin(atom_list) & i_m1_atoms.isin(atom_list)
         
         return (seq_atoms.any())
@@ -847,11 +847,6 @@ class SNAPS_assigner:
             set_assign_df = False
         
         # First check if there are any sequential atoms
-        carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "_m1"
-        seq_atoms = carbons[carbons.isin(assign_df.columns) & 
-                            carbons_m1.isin(assign_df.columns)]
-        
         if self.sequential_atoms_present(assign_df.columns):
             tmp = self.check_matching_consistency(assign_df, threshold)
             assign_df = assign_df.merge(tmp, how="left")
