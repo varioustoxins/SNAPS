@@ -1162,23 +1162,42 @@ class SNAPS_assigner:
     
     def output_shiftlist(self, filepath, format="sparky", 
                          confidence_list=["High","Medium","Low","Unreliable","Undefined"]):
-        """Export a chemical shift list for use with other programs
-        """
-        atoms = {"H","N","HA","C","CA","CB"}.intersection(self.assign_df.columns)
+        """Export a chemical shift list, in a variety of formats
         
-        df_wide = self.assign_df.loc[self.assign_df["Confidence"].isin(confidence_list),["Res_N","Res_type"]+list(atoms)]
+        Parameters
+        filepath: the file the shifts will be written to
+        format: the format of the chemical shift file (sparky, xeasy or nmrpipe)
+        confidence_list: Only residues with confidence in this list will be output
+        """
+        
+        # Limit confidence levels and discard unneeded columns and rows
+        atoms = {"H","N","HA","C","CA","CB"}.intersection(self.assign_df.columns)
+        df_wide = self.assign_df.loc[self.assign_df["Confidence"].isin(confidence_list),:]
+        self.logger.info("Chemical shift export: restricted confidence levels to %s" 
+                         % ", ".join(confidence_list))
+        df_wide.loc[~(df_wide["Dummy_res"] | df_wide["Dummy_SS"]),
+                    ["Res_N","Res_type"]+list(atoms)]
+        #TODO: This discards all i-1 information, even though that may be useful 
+        # in some cases (eg for getting proline shifts). Is it possible to make 
+        # better use of this?
+        
         # Check in case no shifts were selected
         if df_wide.empty:   
             print("No chemical shifts selected for export.")
+            self.logger.warning("Cannot export chemical shifts: No atom types selected")
             # Create an empty file
             df_wide.to_csv(filepath, sep="\t", float_format="%.3f",
                            index=True, header=False)
             return(None)
         
+        # Reshape dataframe from wide to long format, sort and remove NAs
         df = df_wide.melt(id_vars=["Res_N","Res_type"], value_vars=atoms, 
                           var_name="Atom_type", value_name="Shift")
         df = df.sort_values(["Res_N","Atom_type"])
+        df = df.dropna(subset=["Res_N"])
+        df["Res_N"] = df["Res_N"].astype(int)
         
+        # Make format-specific modifications and export
         if format=="sparky":
             df["Group"] = df["Res_type"] + df["Res_N"].astype(str)
             
@@ -1216,14 +1235,18 @@ class SNAPS_assigner:
             
             output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
             
-            # Prepare the sequence info
-            #TODO: This doesn't work properly if some residues are missing 
-            # (eg. if only high confidence assignments are being exported). 
-            tmp = pd.DataFrame({"Res_N":np.arange(df["Res_N"].min(), 
-                                                  df["Res_N"].max()+1)})
-            tmp = tmp.merge(df_wide[["Res_N","Res_type"]], how="left", on="Res_N")
+            output_df["Shift"] = output_df["Shift"].fillna(9999.0)
+            output_df = output_df.dropna()
+            
+            # NmrPipe requres a sequence, but we don't necessarily have a complete one
+            # Piece togther what we can from all_preds, and put X at other positions
+            tmp = pd.DataFrame({"Res_N":np.arange(self.all_preds["Res_N"].min(), 
+                                                  self.all_preds["Res_N"].max()+1)})
+            tmp = tmp.merge(self.all_preds[["Res_N","Res_type"]], how="left", on="Res_N")
             tmp["Res_type"] = tmp["Res_type"].fillna("X")
-            seq = tmp["Res_type"].sum()
+            seq = tmp["Res_type"].sum()     # Convert to a string
+            self.logger.info("Sequence contains %d residues, of which %d have unknown type"
+                             % (len(seq), sum(tmp["Res_type"]=="X")))
             
             if filepath is not None:
                 f = open(filepath, 'w+')
@@ -1241,9 +1264,14 @@ class SNAPS_assigner:
                 f.close()
                 
         else:
-            print("format string '%s' no recognised." % format)
+            self.logger.warning("Cannot export chemical shifts: "+
+                                "format string '%s' not recognised." % format)
             return(None)
             
+        self.logger.info("Wrote %d chemical shifts from %d residues to %s" %
+                         (len(df.index), 
+                          len(df["Res_N"].drop_duplicates()), 
+                          filepath))
         return(output_df)
     
     def output_peaklists(self, filepath, format="sparky", 
