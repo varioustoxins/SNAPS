@@ -154,7 +154,7 @@ class SNAPS_assigner:
         tmp = preds_long[["Res_N","Res_type","Res_name"]]
         tmp = tmp.drop_duplicates(subset="Res_name")
         tmp.index = tmp["Res_N"]
-        tmp.index.name = None
+        #tmp.index.name = None
         preds = pd.concat([tmp, preds], axis=1)
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
@@ -222,7 +222,7 @@ class SNAPS_assigner:
         preds.loc[:,"Res_name"] = [s.rjust(5) for s in preds["Res_name"]]
         
         preds.index = preds["Res_N"]
-        preds.index.name=None
+        #preds.index.name=None
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
         preds_m1 = preds[list({"C","CA","CB","Res_type","Res_name"}.
@@ -352,8 +352,8 @@ class SNAPS_assigner:
         if atom_sd==None:
             atom_sd = self.pars["atom_sd"]
         
-        obs = self.obs
-        preds = self.preds
+        obs = self.obs.copy()
+        preds = self.preds.copy()
         atoms = list(self.pars["atom_set"].intersection(obs.columns))
         
         if self.pars["pred_correction"]:
@@ -476,6 +476,7 @@ class SNAPS_assigner:
             log_prob_matrix = pd.DataFrame(mvn.logpdf(delta_mat), 
                                            index=obs.index, columns=preds.index)
             
+            
             # Apply a penalty for missing data
             na_matrix = na_mask.sum(axis=-1)    # Count how many NA values for 
                                                 # each Res/SS pair
@@ -510,6 +511,9 @@ class SNAPS_assigner:
         log_prob_matrix.loc[obs["Dummy_SS"], :] = 0
         log_prob_matrix.loc[:, preds["Dummy_res"]] = 0
         
+        log_prob_matrix.index.name = "SS_name"
+        log_prob_matrix.columns.name = "Res_name"
+        
         self.logger.info("Calculated log probability matrix (%dx%d)",
                          log_prob_matrix.shape[0], log_prob_matrix.shape[1])
         
@@ -524,7 +528,7 @@ class SNAPS_assigner:
         Parameters
         threshold: The cutoff value beyond which a seq link is considered bad
         """
-        obs = self.obs
+        obs = self.obs.copy()
         
         # First check if there are any sequential atoms
         carbons = pd.Series(["C","CA","CB"])
@@ -680,17 +684,15 @@ class SNAPS_assigner:
         
         Matching may have additional columns, which will also be kept.
         """
-        obs = self.obs
-        preds = self.preds
-        log_prob_matrix = self.log_prob_matrix
+        obs = self.obs.copy()
+        preds = self.preds.copy()
+        log_prob_matrix = self.log_prob_matrix.copy()
         valid_atoms = list(self.pars["atom_set"])
         extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
         
-        obs.index.name = None
-        
         if not {"SS_name","Res_name"}.issubset(matching.columns):
-            self.logger.warning("Cannot make assignment dataframe, as matching"+
-                                "dataframe does not have the correct columns")
+            self.logger.warning("Cannot make assignment dataframe, as matching"
+                                +" dataframe does not have the correct columns")
         
         assign_df = pd.merge(matching, 
                              preds.loc[:,["Res_N","Res_type", "Res_name", 
@@ -1035,65 +1037,8 @@ class SNAPS_assigner:
             ranked_nodes.add(current_node)
             
         return(ranked_nodes, unranked_nodes)                                                                                                                             
-        
-    def find_consistent_assignments(self, search_depth=10):
-        """Find a consistent set of assignments using kbest search
-        
-        Finds the best assignment, then holds constant any consistent residues. Then finds 
-        the k-best alternative assignments, and checks if a more consistent assignment 
-        is found. If so, the extra consistent residues are held constant, and the 
-        process is repeated.
-        
-        """
-        
-        matching0 = self.find_best_assignments()
-        i=1
-        
-        while True:
-            consistency0 = self.check_matching_consistency(matching0)
-            consistency_sum0 = sum((consistency0["Max_mismatch"]<0.1) * 2**consistency0["Num_good_links"])
-            print(i, consistency_sum0)
-            i += 1
-            
-            mask = (consistency0["Max_mismatch"]<0.2) & (consistency0["Num_good_links"]>=4)
-            inc0 = consistency0.loc[mask,["SS_name","Res_name"]]
-        
-            ranked, unranked = self.find_kbest_assignments(search_depth, init_inc=inc0, verbose=True)
-
-            tmp = []
-            for x in ranked:
-                tmp2 = self.check_matching_consistency(x.matching)
-                tmp += [sum((tmp2["Max_mismatch"]<0.2) * 2**tmp2["Num_good_links"])]
-            
-            if max(tmp) > consistency_sum0:
-                # Prepare to loop back
-                matching0 = ranked[tmp.index(max(tmp))].matching
-                pass
-            else:
-                break
-        
-        sum(matching0["SS_name"] == matching0["SS_name"])
-        
-        return(matching0)
-#        init_consistency = self.check_matching_consistency(new_matching)
-#        old_consistency_sum = sum((init_consistency["Max_mismatch"]<0.1) * 2**init_consistency["Num_good_links"])
-#        
-#        mask = (init_consistency["Max_mismatch"]<0.1) & (init_consistency["Num_good_links"]>=4)
-#        init_inc = init_consistency.loc[mask,["SS_name","Res_name"]]
-#        
-#        ranked, unranked = self.find_kbest_assignments(search_depth, init_inc=init_inc, verbose=True)
-#        tmp = []
-#        for x in ranked:
-#            tmp2 = self.check_matching_consistency(x.matching)
-#            tmp += [sum((tmp2["Max_mismatch"]<0.1) * 2**tmp2["Num_good_links"])]
-#        
-#        if max(tmp) > old_consistency_sum:
-#            pass
-#        else:
-#            break
-#        new_matching = ranked[tmp.index(max(tmp))].matching
     
-    def find_consistent_assignments2(self, threshold=0.2):
+    def find_consistent_assignments(self, threshold=0.2):
         """Try to find a consistent set of assignments by optimising both match 
         to predictions and mismatches between adjacent residues"""
         assign_df0 = self.assign_from_preds()
@@ -1107,7 +1052,7 @@ class SNAPS_assigner:
                                          "Res_name"]
             
             #Make a dataframe for looking up which spin system is assigned to each residue
-            tmp = matching0
+            tmp = assign_df0[["Res_name","SS_name"]]
             tmp.index = tmp["Res_name"]
             
             # Limit their assignment options to consistent spin systems
@@ -1499,53 +1444,6 @@ class SNAPS_assigner:
             return(json_item(plt))
         else:
             return(plt)
-    
-    def plot_strips_plotnine(self, atom_list=["C","C_m1","CA","CA_m1","CB","CB_m1"]):
-        """ Make a strip plot of the assignment
-        
-        atom_list: only plot data for these atom types
-        """
-        assign_df = self.assign_df
-        
-        # Narrow down atom list to those actually present
-        atom_list = list(set(atom_list).intersection(assign_df.columns))
-        
-        # First, convert assign_df from wide to long
-        plot_df = assign_df.loc[:,["Res_N", "Res_type", "Res_name", "SS_name", 
-                                   "Dummy_res", "Dummy_SS"]+atom_list]
-        plot_df = plot_df.melt(id_vars=["Res_N", "Res_type", "Res_name", 
-                                        "SS_name", "Dummy_res", "Dummy_SS"],
-                                   value_vars=atom_list, var_name="Atom_type",
-                                   value_name="Shift")
-        
-        # Add columns with information to be plotted
-        plot_df["i"] = "0"     # Track if shift is from the i or i-1 residue
-        plot_df.loc[plot_df["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"i"] = "-1"
-        plot_df["Atom_type"] = plot_df["Atom_type"].replace({"C_m1":"C", 
-                                                   "CA_m1":"CA", "CB_m1":"CB"}) 
-                                                    # Simplify atom type
-        
-        plot_df["seq_group"] = plot_df["Res_N"] + plot_df["i"].astype("int")
-        
-        # Pad Res_name column with spaces so that sorting works correctly
-        plot_df["Res_name"] = plot_df["Res_name"].str.pad(6)
-        plot_df["x_name"] = plot_df["Res_name"] + "_(" + plot_df["SS_name"] + ")"
-        
-        # Make the plot
-        plt = ggplot(aes(x="x_name"), data=plot_df) 
-        plt = plt + geom_point(aes(y="Shift", colour="i", shape="Dummy_res"))
-        plt = plt + scale_y_reverse() + scale_shape_manual(values=["o","x"])
-        # Add lines connecting i to i-1 points
-        plt = plt + geom_line(aes(y="Shift", group="seq_group"), 
-                              data=plot_df.loc[~plot_df["Dummy_res"],])        
-        plt = plt + geom_line(aes(y="Shift", group="x_name"), linetype="dashed")
-        plt = plt + facet_grid("Atom_type~.", scales="free") 
-        plt = plt + scale_colour_brewer(type="Qualitative", palette="Set1") 
-        plt = plt + xlab("Residue name") + ylab("Chemical shift (ppm)")
-        plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
-        
-        return(plt)
-    
     
     def plot_seq_mismatch(self):
         """ Make a plot of the maximum sequential mismatch between i-1, i and 
