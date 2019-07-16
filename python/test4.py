@@ -53,7 +53,10 @@ tmp = a.calc_mismatch_matrix()
 tmp = a.assign_from_preds()
 tmp = a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
 
+tmp = a.find_consistent_assignments()
+
 obs = a.obs
 preds = a.preds
 log_prob_matrix = a.log_prob_matrix
+mismatch_matrix = a.mismatch_matrix
 assign_df = a.assign_df

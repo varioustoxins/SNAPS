@@ -139,17 +139,15 @@ def runSNAPS(system_args):
     a.prepare_obs_preds()
     a.calc_log_prob_matrix()
     a.calc_mismatch_matrix()
-    a.assign_from_preds()
-    a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
-    logger.info("Finished checking assignment consistency")
+    
+    if a.pars["iterate_until_consistent"]:
+        a.assign_df = a.find_consistent_assignments(set_assign_df=True)
+    else:
+        a.assign_from_preds(set_assign_df=True)
+        a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
     
     #### Output the results
-    if a.pars["iterate_until_consistent"]:
-        a.assign_df = a.find_consistent_assignments2()
-        a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
-                           index=False)
-    else:
-        a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
+    a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f", 
                            index=False)
     
     logger.info("Finished writing results to %s", args.output_file)

@@ -34,6 +34,8 @@ class SNAPS_assigner:
     def __init__(self):
         self.obs = None
         self.preds = None
+        self.all_preds = None
+        self.neighbour_df = None
         self.log_prob_matrix = None
         self.mismatch_matrix = None
         self.consistent_links_matrix = None
@@ -55,7 +57,22 @@ class SNAPS_assigner:
             self.logger.addHandler(log_handler)
             self.logger.propagate = False
         
-            
+    def copy(self):
+        """Create a deep copy of the data frame, including new copies of each dataframe
+        
+        Needed because copy.deepcopy() can't seem to copy loggers that are in use.
+        """
+        
+        tmp = self.logger
+        
+        self.logger = None
+        a = deepcopy(self)
+        
+        self.logger = tmp
+        a.logger = tmp
+        
+        return(a)
+        
     def read_config_file(self, filename):
         """Read a configuration file written in YAML format
         
@@ -599,7 +616,7 @@ class SNAPS_assigner:
             First column has the index names, second has the column names.
         exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
         """
-        score_matrix = deepcopy(score_matrix)
+        score_matrix = score_matrix.copy()
         
         row_name = score_matrix.index.name
         col_name = score_matrix.columns.name
@@ -721,14 +738,14 @@ class SNAPS_assigner:
         
         return(assign_df)
     
-    def assign_from_preds(self):
+    def assign_from_preds(self, set_assign_df=False):
         """Assign the observed spin systems using predicted shifts only
         
         This function essentially wraps around find_best_assignment() and 
         make_assign_df()
         """
         matching = self.find_best_assignment(self.log_prob_matrix, maximise=True)
-        assign_df = self.make_assign_df(matching, set_assign_df=True)
+        assign_df = self.make_assign_df(matching, set_assign_df)
         
         self.logger.info("Finished calculating best assignment based on predictions")
         return(assign_df)
@@ -852,6 +869,7 @@ class SNAPS_assigner:
         if self.sequential_atoms_present(assign_df.columns):
             tmp = self.check_matching_consistency(assign_df, threshold)
             assign_df = assign_df.merge(tmp, how="left")
+            self.logger.info("Finished checking assignment consistency")
         else:
             # You can't do a comparison without sequential atoms
             assign_df["Max_mismatch_m1"] = np.NaN
@@ -862,7 +880,7 @@ class SNAPS_assigner:
             
             self.logger.warning("Couldn't calculate assignment confidence: "+
                                 "need sequential atom information")
- 
+        
         if set_assign_df:
             self.assign_df = assign_df
         return(assign_df)
@@ -1038,13 +1056,22 @@ class SNAPS_assigner:
             
         return(ranked_nodes, unranked_nodes)                                                                                                                             
     
-    def find_consistent_assignments(self, threshold=0.2):
+    def find_consistent_assignments(self, threshold=0.2, set_assign_df=False):
         """Try to find a consistent set of assignments by optimising both match 
-        to predictions and mismatches between adjacent residues"""
+        to predictions and mismatches between adjacent residues
+        
+        Returns an assign_df DataFrame, but does not modify the class
+        
+        Parameters
+        threshold: the maximum allowed mismatch for a good sequential link
+        """
+        
+        self.logger.info("Started assigning based on predictions and sequential links")
         assign_df0 = self.assign_from_preds()
         assign_df0 = self.add_consistency_info(assign_df0, threshold)
         N_HM_conf0 = assign_df0["Confidence"].isin(["High","Medium"]).sum()
-        print(N_HM_conf0)
+        self.logger.info("At the current stage, there are "+str(N_HM_conf0)+ 
+                         " high or medium confidence assignments")
         
         while True:
             # Find all residues with an adjacent confident residue
@@ -1056,7 +1083,7 @@ class SNAPS_assigner:
             tmp.index = tmp["Res_name"]
             
             # Limit their assignment options to consistent spin systems
-            a = deepcopy(self)
+            a = self.copy()
             
             for res in HM_conf_res:
                 # Get the neighbouring residues
@@ -1066,33 +1093,44 @@ class SNAPS_assigner:
                 ss = tmp.SS_name[res]
                 
                 # (Need to be careful with NaN values at this point)
+                penalty = a.log_prob_matrix.min().min()
                 if not pd.isna(res_m1):
                     #Get list of inconsistent i-1 spin systems
-                    disallowed_ss = self.mismatch_matrix.index[
-                            self.mismatch_matrix.loc[:,ss]>threshold]
+                    allowed_ss = self.mismatch_matrix.loc[:,ss]<=threshold
                     # Set the inconsistent spins systems to have a high log_prob
-                    a.log_prob_matrix.loc[disallowed_ss, res_m1] = a.log_prob_matrix.min().min()
+                    # penalty is added so in case no spin systems are allowed -
+                    # this way, the predictions do still have an influence.
+                    a.log_prob_matrix.loc[~allowed_ss, res_m1] += penalty
+                    #print(res, self.mismatch_matrix.index[self.mismatch_matrix.loc[:,ss]<=threshold])
                 if not pd.isna(res_p1):
                     #Get list of inconsistent i+1 spin systems
-                    disallowed_ss = self.mismatch_matrix.columns[
-                            self.mismatch_matrix.loc[ss,:]>threshold]
+                    allowed_ss = self.mismatch_matrix.loc[ss,:]<=threshold
                     #Set the inconsistent spins systems to have a high log_prob
-                    a.log_prob_matrix.loc[disallowed_ss, res_p1] = a.log_prob_matrix.min().min()
-
+                    a.log_prob_matrix.loc[~allowed_ss, res_p1] += penalty
+                    #print(res, self.mismatch_matrix.index[self.mismatch_matrix.loc[ss,:]<=threshold])
 
             # Rerun assignment and see how many are consistent now
-            #return(a.log_prob_matrix)
             assign_df1 = a.assign_from_preds()
             assign_df1 = a.add_consistency_info(assign_df1, threshold)
             N_HM_conf1 = assign_df1["Confidence"].isin(["High","Medium"]).sum()
-            print(N_HM_conf1)
+            self.logger.info("At the current stage, there are "+str(N_HM_conf1)+ 
+                         " high or medium confidence assignments")
             
+            # Check if the number of high/medium confidence assignments has increased
+            # If yes, try another round of consrtained assignment
+            # If no, stick with the previous best assignment.
             if N_HM_conf1 > N_HM_conf0:
                 assign_df0 = assign_df1
                 N_HM_conf0 = N_HM_conf1
             else:
                 break
-
+        
+        self.logger.info("At the current stage, there are "+str(N_HM_conf0)+ 
+                         " high or medium confidence assignments")
+        
+        if set_assign_df:
+            self.assign_df = assign_df0
+        
         return(assign_df0)
     
     def find_seq_assignment(self):
