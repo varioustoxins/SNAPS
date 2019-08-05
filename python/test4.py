@@ -17,9 +17,6 @@ from copy import deepcopy
 from math import isnan, log10
 
 path = Path("..")
-#path = Path("/Users/aph516/GitHub/NAPS/")
-#path = Path("C:/Users/Alex/GitHub/NAPS")
-#path = Path("C:/Users/kheyam/Documents/GitHub/NAPS/")
 
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, names=["ID","PDB","BMRB","Resolution","Length"])
 testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file for file in testset_df["BMRB"].astype(str)+".txt"]
@@ -33,7 +30,7 @@ testset_df.index = testset_df["ID"]
 id = "A003"
 
 importer = SNAPS_importer()
-importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
+tmp = importer.import_testset_shifts(testset_df.loc[id, "obs_file"])
 
 
 #%%
@@ -46,17 +43,23 @@ a.read_config_file(path/"config/config_yaml.txt")
 
 tmp = a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 
+tmp = a.import_sequence(path/"data/P3a_L273R/P3a_L273R.fasta")
+
 # Do the analysis
 tmp = a.prepare_obs_preds()
 tmp = a.calc_log_prob_matrix()
 tmp = a.calc_mismatch_matrix()
-tmp = a.assign_from_preds()
+tmp = a.assign_from_preds(set_assign_df=True)
 tmp = a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
 
 tmp = a.find_consistent_assignments()
 
 obs = a.obs
 preds = a.preds
+all_preds = a.all_preds
 log_prob_matrix = a.log_prob_matrix
 mismatch_matrix = a.mismatch_matrix
 assign_df = a.assign_df
+
+#%%
+plt = a.plot_strips("../plots/test.html")

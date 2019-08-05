@@ -22,6 +22,7 @@ from math import log10, sqrt
 from copy import deepcopy
 from pathlib import Path
 #from Bio.SeqUtils import seq1
+from Bio import SeqIO
 from distutils.util import strtobool
 from collections import namedtuple
 from sortedcontainers import SortedListWithKey
@@ -107,6 +108,53 @@ class SNAPS_assigner:
         self.logger.info("Finished reading in config parameters from %s" 
                          % filename)
         return(self.pars)
+    
+    def import_sequence(self, filename, filetype="snaps"):
+        """ Imports the protein sequence 
+        
+        The sequence information is used to fill in any gaps if prediction 
+        information is missing. It can also be used if the residue numbering is 
+        discontinuous. The sequence file should be in FASTA format, and the 
+        sequence id should be either:
+            1) the residue number of the first amino acid, or
+            2) a comma separate list of residue ranges eg 1-10,15-100 (this is 
+            for proteins with discontinuous sequence numbering)
+        
+        Parameters
+        filename: path to file containing sequence information
+        """
+        
+        fasta_records = SeqIO.parse(open(filename),"fasta")
+        record1 = next(fasta_records)
+        
+        # Parse the sequence
+        seq_list = list(str(record1.seq))
+        
+        # Parse the fasta id and make a list of residue numbers
+        tmp = record1.id.split(",")
+        if len(tmp)==1:     # If id was "123" or "123-456"
+            tmp2 = tmp.split("-")
+            if len(tmp2)==1:        # If id was "123"
+                res_N_start = int(tmp[0])
+                res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
+            else:                   # If id was "123-456"
+                start, end = tmp2.split("-")
+                res_N_list = list(range(int(start), int(end)+1))
+        else:               # If id was "123-200,300-456"
+            res_N_list = []
+            for x in tmp:
+                start, end = x.split("-")
+                res_N_list += list(range(int(start), int(end)+1))
+        
+        # Make a dataframe
+        seq_df = pd.DataFrame({"Res_N":res_N_list,"Res_type":seq_list})
+        seq_df["Res_name"] = seq_df["Res_N"].astype(str) + seq_df["Res_type"]
+        seq_df["Res_name"] = [s.rjust(5) for s in seq_df["Res_name"]]   
+                                            # Pad Res_name to constant length
+        
+        self.seq_df = seq_df
+        
+        return(self.seq_df)
     
     def import_pred_shifts(self, filename, filetype, offset=0):
         """ Import predicted chemical shifts from a ShiftX2 results file.
@@ -849,7 +897,7 @@ class SNAPS_assigner:
         return(tmp[["SS_name","Res_name","Max_mismatch_m1","Max_mismatch_p1","Max_mismatch",
                     "Num_good_links_m1","Num_good_links_p1","Num_good_links","Confidence"]])
             
-    def add_consistency_info(self, assign_df=None, threshold=0.2):
+    def add_consistency_info(self, input_assign_df=None, threshold=0.2):
         """ Find maximum mismatch and number of 'significant' mismatches for 
         each residue
         
@@ -859,11 +907,12 @@ class SNAPS_assigner:
         
         # If the user hasn't specified an assign_df, use one already calculated 
         # for this SNAPS_assigner instance
-        if assign_df is None:
+        if input_assign_df is None:
             set_assign_df = True
-            assign_df = self.assign_df
+            assign_df = self.assign_df.copy()
         else:
             set_assign_df = False
+            assign_df = input_assign_df.copy()
         
         # First check if there are any sequential atoms
         if self.sequential_atoms_present(assign_df.columns):
