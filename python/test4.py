@@ -41,9 +41,9 @@ a.obs = importer.obs
 # Import config file
 a.read_config_file(path/"config/config_yaml.txt")
 
+tmp = a.import_sequence(path/"data/testset/A003.fasta")
 tmp = a.import_pred_shifts(testset_df.loc[id, "preds_file"], "shiftx2")
 
-tmp = a.import_sequence(path/"data/P3a_L273R/P3a_L273R.fasta")
 
 # Do the analysis
 tmp = a.prepare_obs_preds()
@@ -54,6 +54,7 @@ tmp = a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
 
 tmp = a.find_consistent_assignments()
 
+seq_df = a.seq_df
 obs = a.obs
 preds = a.preds
 all_preds = a.all_preds

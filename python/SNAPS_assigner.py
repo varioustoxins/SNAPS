@@ -26,6 +26,7 @@ from Bio import SeqIO
 from distutils.util import strtobool
 from collections import namedtuple
 from sortedcontainers import SortedListWithKey
+#from textwrap import dedent
 import logging
 import yaml
 
@@ -35,6 +36,7 @@ class SNAPS_assigner:
     def __init__(self):
         self.obs = None
         self.preds = None
+        self.seq_df = None
         self.all_preds = None
         self.neighbour_df = None
         self.log_prob_matrix = None
@@ -134,12 +136,12 @@ class SNAPS_assigner:
         # Parse the fasta id and make a list of residue numbers
         tmp = record1.id.split(",")
         if len(tmp)==1:     # If id was "123" or "123-456"
-            tmp2 = tmp.split(":")
+            tmp2 = tmp[0].split(":")
             if len(tmp2)==1:        # If id was "123"
-                res_N_start = int(tmp[0])
+                res_N_start = int(tmp2[0])
                 res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
             else:                   # If id was "123-456"
-                start, end = tmp2.split(":")
+                start, end = tmp2
                 res_N_list = list(range(int(start), int(end)+1))
         else:               # If id was "123-200,300-456"
             res_N_list = []
@@ -162,8 +164,11 @@ class SNAPS_assigner:
         # Make a dataframe
         seq_df = pd.DataFrame({"Res_N":res_N_list,"Res_type":seq_list})
         seq_df["Res_name"] = seq_df["Res_N"].astype(str) + seq_df["Res_type"]
-        seq_df["Res_name"] = [s.rjust(5) for s in seq_df["Res_name"]]   
+        seq_df["Res_name"] = seq_df["Res_name"].str.rjust(5)
                                             # Pad Res_name to constant length
+        
+        seq_df.index = seq_df["Res_name"]
+        seq_df.index.name = None
         
         self.seq_df = seq_df
         self.logger.info("Finished importing a sequence of length %d" % 
@@ -183,6 +188,7 @@ class SNAPS_assigner:
         offset: an optional integer to add to the residue number.
         """
         
+        #### Import the raw data
         if filetype == "shiftx2":
             preds_long = pd.read_csv(filename)
             if any(preds_long.columns == "CHAIN"):
@@ -219,23 +225,93 @@ class SNAPS_assigner:
         self.logger.info("Imported %d predicted chemical shifts from %s" 
                          % (len(preds_long.index), filename))
         
+        #### Initial processing and conversion from long to wide
         # Add sequence number offset and create residue names
         preds_long["Res_N"] = preds_long["Res_N"] + offset
         preds_long.insert(1, "Res_name", (preds_long["Res_N"].astype(str) + 
                   preds_long["Res_type"]))
         # Left pad with spaces to a constant length (helps with sorting)
-        preds_long["Res_name"] = [s.rjust(5) for s in preds_long["Res_name"]]
+        preds_long["Res_name"] = preds_long["Res_name"].str.rjust(5)
             
         # Convert from long to wide format
         preds = preds_long.pivot(index="Res_N", columns="Atom_type", 
                                  values="Shift")
+        preds.index.name = None
         
-        # Add the other data back in
+        # Add the other residue name and type back in
         tmp = preds_long[["Res_N","Res_type","Res_name"]]
         tmp = tmp.drop_duplicates(subset="Res_name")
         tmp.index = tmp["Res_N"]
-        #tmp.index.name = None
+        tmp.index.name = None
         preds = pd.concat([tmp, preds], axis=1)
+        
+        #### Make consistent with seq_df (and create if it doesn't already exist)
+        # TODO: Maybe this should be split off into a separate function?
+        # If seq_df is missing, create it based on preds
+        seq_df = self.seq_df
+        
+        if seq_df is None:
+            seq_df = preds.copy()[["Res_N","Res_type","Res_name"]]
+            
+            # If there are any missing residue numbers, create them
+            min_N = seq_df["Res_N"].min()
+            max_N = seq_df["Res_N"].max()
+            missing_residue_numbers = (set(range(min_N, max_N+1)).
+                                       difference(seq_df["Res_N"]))
+            if len(missing_residue_numbers)>0:
+                tmp = pd.DataFrame({"Res_N":list(missing_residue_numbers),
+                                    "Res_type":"X","Res_name":np.NaN})
+                tmp["Res_name"] = tmp["Res_N"].astype(str) + tmp["Res_type"]
+                tmp["Res_name"] = tmp["Res_name"].str.rjust(5)
+                tmp.index = tmp["Res_N"]
+                tmp.index.name = None
+                seq_df = seq_df.append(tmp).sort_index()
+                
+        # Add/delete residues from preds so it matches seq_df
+        # Only keep predictions that are in seq_df
+        tmp = len(preds.index)
+        preds = preds[preds["Res_N"].isin(seq_df["Res_N"])]
+        tmp2 = tmp - len(preds.index)
+        if tmp2>0:
+            self.logger.info(("Predictions for %d residues were discarded "
+                                "because they were not present in the imported "
+                                "sequence file") % tmp2)
+            
+        # Add predictions for any residue number that is in seq_df but not preds
+        tmp = pd.DataFrame(data=seq_df[~seq_df["Res_N"].isin(preds["Res_N"])],columns=preds.columns)
+        preds = preds.append(tmp)
+        if len(tmp.index)>0:
+            self.logger.info(("%d residues from the sequence were missing "
+                                "from the predictions") % len(tmp.index))
+        
+        # If Res_name is inconsistent between seq_df and preds, make a compromise
+        preds.index = preds["Res_N"]
+        preds = preds.sort_index()
+        seq_df.index = seq_df["Res_N"]
+        seq_df = seq_df.sort_index()
+        mask = preds["Res_name"] != seq_df["Res_name"]
+        
+        if any(mask):
+            ambiguous_res_names = (seq_df.loc[mask, "Res_name"] + "(" +
+                                   preds.loc[mask, "Res_type"] + "?)")
+            preds.loc[mask, "Res_name"] = ambiguous_res_names
+            seq_df.loc[mask, "Res_name"] = ambiguous_res_names
+            # Note we don't update the Res_type in preds, because this is potentially 
+            # used for correcting the chemical shift
+            self.logger.warning(
+                    ("There were inconsistencies between the provided sequence "
+                    "file and the predicted shifts. The following residues had "
+                    "inconsistent amino acid types: %s") % 
+                    ", ".join(ambiguous_res_names))
+        
+#        preds.index = preds["Res_name"]
+#        preds.index.name = None
+        seq_df.index = seq_df["Res_name"]
+        seq_df.index.name = None
+        
+        self.seq_df = seq_df.copy()
+        
+        #### Add the chemical shift info back in
         
         # Make columns for the i-1 predicted shifts of C, CA and CB
         preds_m1 = preds[list({"C","CA","CB","Res_type","Res_name"}.
@@ -299,7 +375,7 @@ class SNAPS_assigner:
         # Add other columns back in
         preds.insert(1, "Res_name", (preds["Res_N"].astype(str) + 
                   preds["Res_type"]))
-        preds.loc[:,"Res_name"] = [s.rjust(5) for s in preds["Res_name"]]
+        preds.loc[:,"Res_name"] = preds["Res_name"].str.rjust(5)
         
         preds.index = preds["Res_N"]
         #preds.index.name=None
@@ -1362,7 +1438,7 @@ class SNAPS_assigner:
             df.loc[mask,"Dummy_SS"] = True
             df.loc[mask,"Dummy_res"] = False
             #df.loc[mask,"SS_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
-            df.loc[mask,"Res_name"] = [s.rjust(5) for s in df.loc[mask,"Res_name"]]
+            df.loc[mask,"Res_name"] = df.loc[mask,"Res_name"].str.rjust(5)
             
             df["Dummy_res"] = df["Dummy_res"].astype(bool)
             
