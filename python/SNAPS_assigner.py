@@ -38,7 +38,6 @@ class SNAPS_assigner:
         self.preds = None
         self.seq_df = None
         self.all_preds = None
-        self.neighbour_df = None
         self.log_prob_matrix = None
         self.mismatch_matrix = None
         self.consistent_links_matrix = None
@@ -415,7 +414,6 @@ class SNAPS_assigner:
         1) Remove proline residues from predictions
         2) Discard atom types that are not used or aren't present in both
         3) Add dummy rows to obs or preds to bring them to the same length
-        4) Create neighbour_df, a DataFrame for looking up adjacent residue names
         
         Returns the modified obs and preds DataFrames.
         """
@@ -428,6 +426,10 @@ class SNAPS_assigner:
         self.logger.info("Removing %d prolines from predictions" 
                          % sum(preds["Res_type"]=="P"))
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
+        
+        # Remove references to deleted residues from Res_name_m1/p1
+        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.NaN
+        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.NaN
         
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
@@ -467,15 +469,7 @@ class SNAPS_assigner:
             dummies["Dummy_SS"] = True
             obs = obs.append(dummies)
             self.logger.info("Added %d dummy observed residues" % len(dummies.index))
-            
-        #### Create a data frame to quickly look up the i-1 and i+1 Res_name
-        self.neighbour_df = preds[["Res_name_m1","Res_name_p1"]].copy()
         
-        # Set missing Res_name_m1 entries to NaN
-        self.neighbour_df.loc[~self.neighbour_df["Res_name_m1"].isin(preds["Res_name"]), 
-                          "Res_name_m1"] = np.NaN
-        self.neighbour_df.loc[~self.neighbour_df["Res_name_p1"].isin(preds["Res_name"]), 
-                          "Res_name_p1"] = np.NaN
         
         self.obs = obs.copy()
         self.preds = preds.copy()
@@ -925,7 +919,7 @@ class SNAPS_assigner:
         matching.index = matching["Res_name"]
         matching.index.name = None
         
-        tmp = pd.concat([matching, self.neighbour_df], axis=1)
+        tmp = pd.concat([matching, self.preds[["Res_name_m1","Res_name_p1"]]], axis=1)
         
         # Add a SS_name_m1 and SS_name_p1 columns
         tmp = tmp.merge(matching[["SS_name"]], how="left", left_on="Res_name_m1", 
@@ -1227,8 +1221,8 @@ class SNAPS_assigner:
             
             for res in HM_conf_res:
                 # Get the neighbouring residues
-                res_m1 = self.neighbour_df.loc[res,"Res_name_m1"]
-                res_p1 = self.neighbour_df.loc[res,"Res_name_p1"]
+                res_m1 = self.preds.loc[res,"Res_name_m1"]
+                res_p1 = self.preds.loc[res,"Res_name_p1"]
                 
                 ss = tmp.SS_name[res]
                 
