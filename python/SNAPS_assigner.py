@@ -117,8 +117,9 @@ class SNAPS_assigner:
         discontinuous. The sequence file should be in FASTA format, and the 
         sequence id should be either:
             1) the residue number of the first amino acid, or
-            2) a comma separate list of residue ranges eg 1-10,15-100 (this is 
+            2) a comma separated list of residue ranges eg -5:10,15:100 (this is 
             for proteins with discontinuous sequence numbering)
+        If the file contains multiple sequences, only the first will be used.
         
         Parameters
         filename: path to file containing sequence information
@@ -133,18 +134,30 @@ class SNAPS_assigner:
         # Parse the fasta id and make a list of residue numbers
         tmp = record1.id.split(",")
         if len(tmp)==1:     # If id was "123" or "123-456"
-            tmp2 = tmp.split("-")
+            tmp2 = tmp.split(":")
             if len(tmp2)==1:        # If id was "123"
                 res_N_start = int(tmp[0])
                 res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
             else:                   # If id was "123-456"
-                start, end = tmp2.split("-")
+                start, end = tmp2.split(":")
                 res_N_list = list(range(int(start), int(end)+1))
         else:               # If id was "123-200,300-456"
             res_N_list = []
             for x in tmp:
-                start, end = x.split("-")
+                start, end = x.split(":")
                 res_N_list += list(range(int(start), int(end)+1))
+        
+        # Check res_N_list and seq_list are the same length, and correct if not
+        if len(res_N_list) > len(seq_list):
+            res_N_list = res_N_list[0:len(seq_list)]
+            self.logger.warning("The residue range provided is longer than the"+
+                                " length of the sequence, so has been truncated")
+        elif len(res_N_list) < len(seq_list):
+            extra_needed = len(seq_list) - len(res_N_list)
+            last_N = res_N_list[-1]
+            res_N_list += list(range(last_N, last_N + extra_needed))
+            self.logger.warning("The residue range provided is shorter than the"+
+                                " length of the sequence, so has been extended")
         
         # Make a dataframe
         seq_df = pd.DataFrame({"Res_N":res_N_list,"Res_type":seq_list})
@@ -153,6 +166,8 @@ class SNAPS_assigner:
                                             # Pad Res_name to constant length
         
         self.seq_df = seq_df
+        self.logger.info("Finished importing a sequence of length %d" % 
+                         len(seq_df.index))
         
         return(self.seq_df)
     

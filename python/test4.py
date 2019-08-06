@@ -12,9 +12,9 @@ import pandas as pd
 from SNAPS_importer import SNAPS_importer
 from SNAPS_assigner import SNAPS_assigner
 from pathlib import Path
-from scipy.stats import norm
-from copy import deepcopy
-from math import isnan, log10
+#from scipy.stats import norm
+#from copy import deepcopy
+#from math import isnan, log10
 
 path = Path("..")
 
