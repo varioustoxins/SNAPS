@@ -309,8 +309,8 @@ class NAPS_importer:
         """ Import a chemical shift list
         
         filename: Path to text file containing chemical shifts.
-        filetype: Allowed values are "naps", "ccpn", "sparky", "xeasy" or 
-            "nmrpipe"
+        filetype: Allowed values are "naps", "ccpn", "sparky", "xeasy", "mars" 
+            or "nmrpipe"
             The "ccpn" option is for importing a Resonance table exported from 
             Analysis v2.x. The "naps" option is for importing an unassigned 
             shift table previously exported from NAPS
@@ -352,6 +352,16 @@ class NAPS_importer:
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
             obs["SS_name"] = obs["SS_name"].astype(str)
             obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
+        elif filetype=="mars":
+            obs_wide = pd.read_table(filename, sep="\s+", na_values="-")
+            obs_wide = obs_wide.rename(columns={"CO":"C","CO-1":"C_m1",
+                                                "CA-1":"CA_m1","CB-1":"CB_m1"})
+            obs_wide = obs_wide.drop(columns="HA-1")
+            obs_wide["SS_name"] = obs_wide.index.astype(str)
+            obs = obs_wide.melt(id_vars="SS_name", 
+                                value_vars=["H","HA","N","C","CA",
+                                            "CB","C_m1","CA_m1","CB_m1"], 
+                                var_name="Atom_type", value_name="Shift")
 #        elif filetype == "nmrstar":
 #            tmp = nmrstarlib.read_files(filename)
 #            return(tmp)
