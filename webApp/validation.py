@@ -12,6 +12,7 @@ class Validate:
         'sparky',
         'xeasy',
         'nmrpipe',
+        'mars',
         'test'
         ]
 
