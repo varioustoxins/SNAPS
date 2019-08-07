@@ -23,7 +23,7 @@ def runNAPS(args):
                         help="The file results will be written to.")
 
     parser.add_argument("--shift_type", 
-                        choices=["naps", "ccpn", "sparky", 
+                        choices=["naps", "ccpn", "sparky", "mars",
                                  "xeasy", "nmrpipe", "test"], 
                         default="naps", 
                         help="The format of the observed shift file.")
