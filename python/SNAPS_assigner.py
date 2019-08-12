@@ -1405,47 +1405,94 @@ class SNAPS_assigner:
         
         outfile: if defined, the plot will be saved to this location
         format: type of output. Either "html" or "png"
+        return_json: if tue, return the plot as a json object
+        plot_width: The width of the output plot in pixels
         """
         df = self.assign_df
         plotlist = []
         
-        # First check if there are any sequential atoms
-        carbons = pd.Series(["C","CA","CB"])
-        carbons_m1 = carbons + "_m1"
-        seq_atoms = carbons[carbons.isin(df.columns) & 
-                            carbons_m1.isin(df.columns)]
-        
-        if seq_atoms.size==0:
+        if not self.sequential_atoms_present(df.columns):
             # You can't draw a strip plot
             print("No sequential links in data - strip plot not drawn.")
             return(None)
         else:
-            #Add extra rows for missing residues (eg Prolines)
-            #TODO: Use self.all_preds to get the prolines correct
-            tmp = list(range(int(df["Res_N"].min()), int(df["Res_N"].max()+1)))
-            tmp2 = pd.DataFrame({"Res_N":tmp, 
-                                 "Dummy_res":[False]*len(tmp)})
-            df = pd.merge(tmp2,df, on=None, how="outer")
-            
-            mask = df["Res_name"].isna()
-            df.loc[mask,"Res_name"] = df.loc[mask,"Res_N"].astype(int).astype(str) + "_"
-            df.loc[mask,"Dummy_SS"] = True
+            #### Make a dataframe containing information needed for plotting
+            # Add residues from seq_df that aren't in assign_df (eg. prolines)
+            df = pd.merge(self.seq_df, df, how="left", on=["Res_name","Res_N","Res_type"])
+            # Replace NA values where necessary
+            mask = df["Dummy_res"].isna()
             df.loc[mask,"Dummy_res"] = False
-            #df.loc[mask,"SS_name"] = df.loc[mask,"Res_N"].astype(str) + "_"
-            df.loc[mask,"Res_name"] = df.loc[mask,"Res_name"].str.rjust(5)
+            df.loc[mask,"Dummy_SS"] = True
             
-            df["Dummy_res"] = df["Dummy_res"].astype(bool)
-            
+            # Create a temporary plot that defines the common x-axis
             tmp_plt = figure(x_range=df["Res_name"].tolist())
+            
+            #### Make the confidence plot
+            plt = figure(title=("Confidence plot"
+                                "(pan/zoom tools can be accessed at top right; "
+                                "mouse over the plot to see observed spin system name)"),
+                        x_range=tmp_plt.x_range,
+                        tools="xpan, xwheel_zoom,hover,save,reset",
+                        tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
+                        height=100, width=plot_width)
+            
+            # Create a colour map based on confidence
+            colourmap = {"High":"green",
+                         "Medium":"yellowgreen",
+                         "Low":"orange",
+                         "Unreliable":"red",
+                         "Undefined":"grey"}
+            
+            # Plot the peaks
+            for k in colourmap.keys():
+                tmp = ColumnDataSource(df[df["Confidence"]==k])
+                plt.vbar(x="Res_name", top=1, width=1, 
+                         color=colourmap[k], legend=k, source=tmp)
+            
+            plt.legend.orientation = "horizontal"
+            plt.legend.location = "top_center"
+            # Change axis label orientation
+            plt.xaxis.major_label_orientation = 3.14159/2
+            plt.axis.visible = False
+            
+            plotlist = plotlist + [plt]
+            
+            #### Make the mismatch plot
+            plt = figure(title="Mismatch plot",
+                            y_axis_label="Mismatch (ppm)",
+                            x_range=tmp_plt.x_range,
+                            tools="xpan, xwheel_zoom,save,reset",
+                            height=200, width=plot_width)
+            
+            plt.vbar(x=df["Res_name"], 
+                     top=df[["Max_mismatch_m1","Max_mismatch_p1"]].max(axis=1), 
+                     width=1)
+            
+            # Draw a line showing the threshold for mismatches
+            threshold_line = Span(location=self.pars["seq_link_threshold"], 
+                                  dimension="width", line_dash="dashed", 
+                                  line_color="red")
+            plt.add_layout(threshold_line)
+            
+            # Change axis label orientation
+            plt.xaxis.major_label_orientation = 3.14159/2
+            plotlist = plotlist + [plt]
+            
+            #### Make the strip plot
+            # Work out which sequential carbons are present
+            carbons = pd.Series(["C","CA","CB"])
+            carbons_m1 = carbons + "_m1"
+            seq_atoms = carbons[carbons.isin(df.columns) & 
+                            carbons_m1.isin(df.columns)]
+            
             for atom in seq_atoms:
                 # Setup plot
                 plt = figure(y_axis_label=atom+" (ppm)",
                              x_range=tmp_plt.x_range,
                              tools="xpan, xwheel_zoom,save,reset",
                              height=200, width=plot_width)
-                #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
                 
-                ## Plot the vertical lines
+                #### Plot the vertical lines
                 vlines = df.loc[~df["Dummy_res"], ["Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_z" in name is to ensure it sorts after the atom+"_m1" shifts
@@ -1461,20 +1508,13 @@ class SNAPS_assigner:
                 plt.line(vlines["Res_name"], vlines["Shift"], 
                          line_color="black", line_dash="dashed")
                 
-                ## Plot the horizontal lines
+                #### Plot the horizontal lines
                 hlines = df.loc[~df["Dummy_res"], ["Res_N","Res_name",atom,atom+"_m1"]]
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_a" in name ensures it sorts between the atom and atom+"_m1" shifts
                 # eg. CA, CA_a, CA_m1
                 hlines[atom+"_a"] = np.NaN  
-                # Add extra lines for missing residues
-#                tmp = list(range(hlines["Res_N"].min(), hlines["Res_N"].max()))
-#                tmp2 = pd.DataFrame({"Res_N":tmp})
-#                hlines = pd.merge(tmp2,hlines, on=None)
-#                mask = hlines["Res_name"].isna()
-#                hlines.loc[mask,"Res_name"] = hlines.loc[mask,"Res_N"].astype(str)
-#                hlines["Res_name"] = [s.rjust(5) for s in hlines["Res_name"]]
-#                # Convert from wide to long
+                # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"], 
                                      value_vars=[atom, atom+"_m1", atom+"_a"], 
                                      var_name="Atom_type", 
@@ -1495,65 +1535,14 @@ class SNAPS_assigner:
                 
                 # Change axis label orientation
                 plt.xaxis.major_label_orientation = 3.14159/2
-                plt.xaxis.visible = False
+                plt.xaxis.visible = False  # Make axis invisible by default
                 
                 plotlist = plotlist + [plt]
             
+            # Make x axis on the last strip plot visible
             plotlist[-1].xaxis.visible = True
             
-            #### Make mismatch plot ####
-            plt = figure(title="Mismatch plot",
-                                y_axis_label="Mismatch (ppm)",
-                                x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,save,reset",
-                                height=200, width=plot_width)
-            #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool) 
-            
-            plt.vbar(x=df["Res_name"], 
-                     top=df[["Max_mismatch_m1","Max_mismatch_p1"]].max(axis=1), 
-                     width=1)
-            
-            # Draw a line showing the threshold for mismatches
-            threshold_line = Span(location=self.pars["seq_link_threshold"], 
-                                  dimension="width", line_dash="dashed", 
-                                  line_color="red")
-            plt.add_layout(threshold_line)
-            
-            #plt.vbar(x=df["Res_name"], top=-df["Max_mismatch_m1"], width=1)
-            # Change axis label orientation
-            plt.xaxis.major_label_orientation = 3.14159/2
-            plotlist = [plt] + plotlist
-            
-            # Make confidence plot
-            plt = figure(title="Confidence plot (mouseover to see observed spin system name)",
-                                x_range=tmp_plt.x_range,
-                                tools="xpan, xwheel_zoom,hover,save,reset",
-                                tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
-                                height=100, width=plot_width)
-            #plt.toolbar.active_scroll = plt.select_one(WheelZoomTool)
-            
-            # Create a colour map based on confidence
-            colourmap = {"High":"green",
-                         "Medium":"yellowgreen",
-                         "Low":"orange",
-                         "Unreliable":"red",
-                         "Undefined":"grey"}
-            
-            # Plot the peaks
-            for k in colourmap.keys():
-                tmp = ColumnDataSource(df[df["Confidence"]==k])
-                plt.vbar(x="Res_name", top=1, width=1, 
-                         color=colourmap[k], legend=k, source=tmp)
-            
-            plt.legend.orientation = "horizontal"
-            plt.legend.location = "top_center"
-            # Change axis label orientation
-            #plt.xaxis.major_label_orientation = 3.14159/2
-            plt.axis.visible = False
-            
-            plotlist = [plt] + plotlist
-            
-            # Put them all together, and export
+            #### Put everything together
             p = gridplot(plotlist, ncols=1)
 
             if outfile is not None:
@@ -1568,7 +1557,7 @@ class SNAPS_assigner:
                 return(json_item(p, "strip_plot"))
             else:
                 return(p)
-                
+    
     def plot_hsqc(self, outfile=None, format="html", return_json=True):
         """Plot an HSQC coloured by prediction confidence"""
         
