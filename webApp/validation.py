@@ -7,7 +7,7 @@ class Validate:
     pred_type_error = 'Invalid predicted shift type.'
 
     validShiftTypes = [
-        'naps',
+        'snaps',
         'ccpn',
         'sparky',
         'xeasy',

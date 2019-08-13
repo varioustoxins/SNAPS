@@ -31,29 +31,38 @@ def makeConfigFile(request, args):
     
     # Write the constant parameters to the file
     s = """
-# Configuration file for NAPS
-prob_method     pdf     # Method for calculating probability (options are cdf or pdf)
-pred_correction False   # Apply a linear correction to the predicted shifts
-pred_correction_file      ../config/lin_model_shiftx2.csv    # File containing parameters for linear correction to predicted shift
-delta_correlation_mean_file     ../config/d_mean.csv       # File containing mean prediction errors
-delta_correlation_cov_file      ../config/d_cov.csv        # File containing covariances between the prediction errors
-delta_correlation_mean_corrected_file     ../config/dd_mean.csv       # File containing mean prediction errors, assuming the predictions have been corrected
-delta_correlation_cov_corrected_file      ../config/dd_cov.csv        # File containing covariances between the prediction errors, assuming the predictions have been corrected
-alt_assignments 0       # Number of alternative assignments to generate
-#atom_sd "H:0.1711, N:1.1169, HA:0.1231, C:0.5330, CA:0.4412, CB:0.5163, C_m1:0.5530, CA_m1:0.4412, CB_m1:0.5163"    # Atom standard deviations. Comma separated.
-atom_sd "H:0.454, N:2.429, HA:0.227, C:1.030, CA:0.932, CB:1.025, C_m1:1.030, CA_m1:0.932, CB_m1:1.025"    # Atom standard deviations. Comma separated.\n"""
+# SNAPS configuration file
+# Follows the YAML format
+# Use spaces for indentation, not tabs!     
+atom_sd: # Atom standard deviations. Don't change indentation.
+    H: 0.454 
+    N: 2.429 
+    HA: 0.227 
+    C: 1.030 
+    CA: 0.932 
+    CB: 1.025
+    C_m1: 1.030 
+    CA_m1: 0.932 
+    CB_m1: 1.025
+iterate_until_consistent:       False   # If True, iteratively enforce consistent links for High and Medium confidence assignments
+delta_correlation:       True   # Account for correlations in prediction errors
+delta_correlation_mean_file:     ../config/d_mean.csv       # File containing mean prediction errors
+delta_correlation_cov_file:      ../config/d_cov.csv        # File containing covariances between the prediction errors
+pred_correction:        False   # Apply a linear correction to the predicted shifts
+pred_correction_file:      ../config/lin_model_shiftx2.csv    # File containing parameters for linear correction to predicted shift
+delta_correlation_mean_corrected_file:     ../config/dd_mean.csv       # File containing mean prediction errors, assuming the predictions have been corrected
+delta_correlation_cov_corrected_file:      ../config/dd_cov.csv        # File containing covariances between the prediction errors, assuming the predictions have been corrected
+"""
 
     # Write the user-submitted parameters
-    s += "pred_offset %s\n" % str(request.form.get("predResOffset"))
     if request.form.get("deltaCorrelation")=="on":
-        s += "delta_correlation       True\n"
+        s += "delta_correlation:       True\n"
     else:
-        s += "delta_correlation       False\n"
-    s += "use_ss_class_info       False\n"
-    s += """atom_set      "%s"\n""" % ",".join(request.form.getlist("atomType"))
-    s += "seq_link_threshold    %s\n" % str(request.form.get("seqLinkThreshold"))
+        s += "delta_correlation:       False\n"
+    s += "atom_set: \n    - %s\n" % "\n    - ".join(request.form.getlist("atomType"))
+    s += "seq_link_threshold:    %s\n" % str(request.form.get("seqLinkThreshold"))
+    
     #print(s)
     f.write(s)
-
     f.close()
     

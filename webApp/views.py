@@ -12,11 +12,11 @@ from args import Args
 #from fileSender import emailFiles
 from fileHandler import saveFiles, deleteFiles
 
-mainNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
-sys.path.append(mainNAPSfilePath)
-os.chdir(mainNAPSfilePath)
+mainSNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
+sys.path.append(mainSNAPSfilePath)
+os.chdir(mainSNAPSfilePath)
 
-from NAPS import runNAPS
+from SNAPS import runSNAPS
 app = Flask(__name__)
 app.secret_key = 'napsnapsnapsnaps' #should be changed to an external config value in production
 
@@ -43,7 +43,7 @@ def run():
 
 def run(args):
     try:
-        args.hsqc_plot, args.strip_plot = runNAPS(args.argsToList())
+        args.hsqc_plot, args.strip_plot = runSNAPS(args.argsToList())
         return createJSONForTable(args)
     except Exception as e:
         #log errors

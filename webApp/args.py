@@ -19,6 +19,7 @@ class Args:
         self.strip_plot_file = os.path.join(self.directory, 'strip_plot.html')
         self.shift_type = form['shift_type'].strip().lower()
         self.pred_type = form['pred_type'].strip().lower()
+        self.pred_seq_offset = form['predResOffset']
         self.output_shiftlist = os.path.join(self.directory, 'output_shiftlist.txt')
         self.shift_output_type = form['outShiftType'].strip().lower()
         self.shift_output_confidence = form.getlist("confidence")
@@ -30,10 +31,11 @@ class Args:
             self.output_file,
             '--shift_type', self.shift_type,
             '--pred_type', self.pred_type,
+            '--pred_seq_offset', self.pred_seq_offset,
             '--hsqc_plot_file', self.hsqc_plot_file,
             '--strip_plot_file', self.strip_plot_file,
-            '--shift_output_type', self.shift_output_type,
             '--shift_output_file', self.output_shiftlist,
+            '--shift_output_type', self.shift_output_type,
             '--shift_output_confidence'] + self.shift_output_confidence + [
             '-c', self.config_file,
             '-l', self.log_file
