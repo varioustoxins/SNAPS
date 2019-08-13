@@ -64,6 +64,6 @@ function insertDownloadLinks(files) {
 }
 
 function download(fileName, file) {
-    var naps_download = new Blob([file], { type: "application / octet - stream" });
-    saveAs(naps_download, fileName);
+    var snaps_download = new Blob([file], { type: "application / octet - stream" });
+    saveAs(snaps_download, fileName);
 }
