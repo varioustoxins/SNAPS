@@ -1432,6 +1432,7 @@ class SNAPS_assigner:
                                 "(pan/zoom tools can be accessed at top right; "
                                 "mouse over the plot to see observed spin system name)"),
                         x_range=tmp_plt.x_range,
+                        y_range = Range1d(0, 1.5),
                         tools="xpan, xwheel_zoom,hover,save,reset",
                         tooltips=[("Pred", "@Res_name"),("Obs","@SS_name")],
                         height=100, width=plot_width)
@@ -1449,11 +1450,16 @@ class SNAPS_assigner:
                 plt.vbar(x="Res_name", top=1, width=1, 
                          color=colourmap[k], legend=k, source=tmp)
             
+            # Set legend properties
             plt.legend.orientation = "horizontal"
             plt.legend.location = "top_center"
+            plt.legend.padding = 0
+            plt.legend.margin = 0
+            
             # Change axis label orientation
             plt.xaxis.major_label_orientation = 3.14159/2
             plt.axis.visible = False
+            
             
             plotlist = plotlist + [plt]
             
@@ -1558,15 +1564,25 @@ class SNAPS_assigner:
             else:
                 return(p)
     
-    def plot_hsqc(self, outfile=None, format="html", return_json=True):
-        """Plot an HSQC coloured by prediction confidence"""
+    def plot_hsqc(self, outfile=None, format="html", 
+                  return_json=True, plot_width=750):
+        """Plot an HSQC coloured by prediction confidence
+        
+        
+        Uses bokeh module for plotting. Returns the bokeh plot object.
+        
+        outfile: if defined, the plot will be saved to this location
+        format: type of output. Either "html" or "png"
+        return_json: if tue, return the plot as a json object
+        plot_width: The width of the output plot in pixels
+        """
         
         assign_df = self.assign_df.copy()
         
         plt = figure(title="HSQC",
-                        x_axis_label="1H (ppm)",
-                        y_axis_label="15N (ppm)",
-                        height=750, width=750)
+                    x_axis_label="1H (ppm)", 
+                    y_axis_label="15N (ppm)",
+                    height=plot_width, width=plot_width)
         
         # Create a colour map based on confidence
         colourmap = {"High":"green",
@@ -1575,7 +1591,6 @@ class SNAPS_assigner:
                          "Unreliable":"red",
                          "Undefined":"grey"}
 
-        
         # Plot the peaks
         for k in colourmap.keys():
             tmp = assign_df[assign_df["Confidence"]==k]
@@ -1604,30 +1619,4 @@ class SNAPS_assigner:
         if return_json:
             return(json_item(plt))
         else:
-            return(plt)
-    
-    def plot_seq_mismatch(self):
-        """ Make a plot of the maximum sequential mismatch between i-1, i and 
-        i+1 residues
-        """
-        assign_df = self.assign_df
-        
-        # Check that the assignment data frame has the right columns
-        if not all(pd.Series(['Max_mismatch_m1', 'Max_mismatch_p1']).
-                   isin(assign_df.columns)):
-            return(None)
-        else:
-            # Pad Res_name column with spaces so that sorting works correctly
-            assign_df["Res_name"] = assign_df["Res_name"].str.pad(6)
-            assign_df["x_name"] = (assign_df["Res_name"] + "_(" + 
-                                     assign_df["SS_name"] + ")")
-            
-            # Make the plot
-            plt = ggplot(aes(x="x_name"), data=assign_df) 
-            plt = plt + geom_col(aes(y="abs(Max_mismatch_m1)"))
-            plt = plt + xlab("Residue name")
-            plt = plt + ylab("Mismatch to previous residue (ppm)")
-            plt = plt + theme_bw() + theme(axis_text_x = element_text(angle=90))
-                   
-            return(plt)
-        
+            return(plt)        
