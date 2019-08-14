@@ -5,11 +5,9 @@ import base64
 import json
 
 from flask import Flask, render_template, jsonify, request, session
-#from flask_mail import Mail
 from os import environ
 from validation import Validate
 from args import Args
-#from fileSender import emailFiles
 from fileHandler import saveFiles, deleteFiles
 
 mainSNAPSfilePath = os.path.dirname(os.path.realpath(__file__)) + '/../python'
@@ -19,18 +17,6 @@ os.chdir(mainSNAPSfilePath)
 from SNAPS import runSNAPS
 app = Flask(__name__)
 app.secret_key = 'napsnapsnapsnaps' #should be changed to an external config value in production
-
-#mail_settings = {
-#    "MAIL_SERVER": '',
-#    "MAIL_PORT": 0,
-#    "MAIL_USE_TLS": False,
-#    "MAIL_USE_SSL": True,
-#    "MAIL_USERNAME": '',
-#    "MAIL_PASSWORD": ''
-#}
-#
-#app.config.update(mail_settings)
-#mail = Mail(app)
 
 @app.route('/run', methods = ['POST'])
 def run():
@@ -78,11 +64,6 @@ def info():
 def howto():
     return render_template('howto.html')
 
-#@app.route('/email', methods = ['POST'])
-#def email():
-#    if not app.config.get("MAIL_SERVER"):
-#        return jsonify(status='no_email_server', message='The email server is not configured on the views.py page.')
-#    return emailFiles(request, mail, app)
 
 if __name__ == '__main__':
     HOST = environ.get('SERVER_HOST', 'localhost')
