@@ -494,6 +494,11 @@ plt = plt + geom_density(aes(x="Delta", colour="ID"))
 plt = plt + facet_wrap("Atom_type", scales="free")
 plt.save(path/"plots/Error distribution per ID.pdf", height=210, width=297, units="mm")
 
+plt = ggplot(data = df[df["Res_atom"]=="Q"]) 
+plt = plt + geom_point(aes(x="Shift_obs", y="Shift_pred", colour="Res_atom"))
+plt = plt + facet_wrap("Atom_type", scales="free")
+plt = plt + xlab("Observed shift") + ylab("Prediction error")
+
 
 def error_boxplots():
     for a in atom_set:
@@ -529,7 +534,7 @@ df2.loc[df2["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_atom"] = (
          df2.loc[df2["Atom_type"].isin(["C_m1","CA_m1","CB_m1"]),"Res_type_m1"])
 
 df2["Delta_cor"] = np.nan
-lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset"])
+lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
 
 for atom in atom_set:
     for res in df2["Res_atom"].unique():
@@ -537,7 +542,8 @@ for atom in atom_set:
         tmp = df2.loc[mask, ["Shift_obs", "Delta"]].dropna(how="any")
         try:
             lm = linregress(tmp["Shift_obs"], tmp["Delta"])
-            lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1]]
+            corr_coeff = tmp.corr().iloc[0,1]
+            lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
             df2.loc[mask,"Shift_pred_cor"] = (df2.loc[mask,"Shift_pred"] 
                                               - lm[0]*df2.loc[mask,"Shift_obs"]
                                               - lm[1])
@@ -549,6 +555,20 @@ for atom in atom_set:
 lm_results.to_csv("../config/lin_model_shiftx2.csv")
 
 df2["Delta2"] = abs(df2["Delta_cor"]) - abs(df2["Delta"])
+
+# Try fitting linear model to pred vs obs shifts
+lm_results2 = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
+
+for atom in atom_set:
+    for res in df2["Res_atom"].unique():
+        mask = (df2["Atom_type"]==atom) & (df2["Res_atom"]==res)
+        tmp = df2.loc[mask, ["Shift_obs", "Shift_pred"]].dropna(how="any")
+        try:
+            lm = linregress(tmp["Shift_obs"], tmp["Shift_pred"])
+            corr_coeff = tmp.corr().iloc[0,1]
+            lm_results2.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
+        except:
+            print("Error: ",res, atom)
 
 #%% Make some graphs showing that the corrected predictions are better
 
