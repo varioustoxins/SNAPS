@@ -34,7 +34,7 @@ def get_arguments(system_args):
                         help="""An offset to apply to the residue numbering in 
                         the predicted shifts.""")
     parser.add_argument("-c", "--config_file", 
-                        default="/Users/aph516/GitHub/SNAPS/python/config.txt",
+                        default="../config/config.txt",
                         help="A file containing parameters for the analysis.")
     parser.add_argument("--test_aa_classes", default=None, 
                         help="""For test data only. 
