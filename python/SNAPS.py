@@ -81,7 +81,6 @@ def get_arguments(system_args):
     return(args)
 
 def runSNAPS(system_args):
-    """This function is used to run SNAPS from the command line, and in the original version of the web app."""
     from SNAPS_importer import SNAPS_importer
     from SNAPS_assigner import SNAPS_assigner
     import logging
@@ -176,59 +175,6 @@ def runSNAPS(system_args):
 
     return(plots)
 
-def SNAPS_compute(shift_file, pred_file, run_pars, config):
-    """Run SNAPS from webApp2"""
-    from SNAPS_assigner import SNAPS_assigner
-    from SNAPS_importer import SNAPS_importer
-    #import logging
-    
-    # Set up logging
-    
-    #### Prepare the input data
-    a = SNAPS_assigner()
-    a.read_config_file("../config/config_yaml.txt")
-    
-    # Import observed shifts
-    importer = SNAPS_importer()
-
-    #if args.shift_type=="test":
-    importer.import_testset_shifts(shift_file)
-        
-#    else:
-#        importer.import_obs_shifts(shift_file, args.shift_type, SS_num=False)
-        
-    a.obs = importer.obs
-
-    # Import predicted shifts
-    a.import_pred_shifts(pred_file, "shiftx2", 0)
-
-    
-    #### Do the calculations
-    a.prepare_obs_preds()
-    a.calc_log_prob_matrix()
-    a.calc_mismatch_matrix()
-    
-    if a.pars["iterate_until_consistent"]:
-        a.find_consistent_assignments(set_assign_df=True)
-    else:
-        a.assign_from_preds(set_assign_df=True)
-        a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
-        
-    #### Return the results
-    # Get the main results table
-    results_table = a.assign_df.to_csv(None, sep="\t", float_format="%.3f", 
-                           index=False)
-    
-    # Get the assigned chemical shift list
-    shiftlist = a.output_shiftlist(None, "sparky", 
-                       confidence_list=["High","Medium","Low","Unreliable","Undefined"])
-    
-    # Make the plots
-    hsqc_plot = a.plot_hsqc()
-        
-    strip_plot = a.plot_strips()
-        
-    return {"tables":[results_table, shiftlist], "plots":[hsqc_plot, strip_plot]}
 
 #%% Run the actual script
 if __name__ == '__main__':
