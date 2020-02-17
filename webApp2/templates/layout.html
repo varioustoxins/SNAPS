@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta name="description" content="">
+	<meta name="author" content="">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}" type="text/css">
+
+	<title>SNAPS</title>
+
+</head>
+<body>
+    <header>
+        <img src="{{ url_for('static', filename='images/snaps logo.png') }}" height=80 title="SNAPS"/> SNAPS
+    </header>
+    <nav>
+        <div id="navbarNav">
+            <a href="../" class="nav-link nav-item active">Run SNAPS</a>
+            <span>|</span>
+            <a href="../info" class="nav-link nav-item active">About SNAPS</a>
+            <span>|</span>
+            <a href="../howto" class="nav-link nav-item active">How to use</a>
+        </div>
+    </nav>
+    <div >
+
+        <div id="content">
+            {% block content %}
+            {% endblock %}
+        </div>
+
+        <footer>
+            <div>
+                For testing and demonstration only. Code available at <a href="https://github.com/aheyam/SNAPS">https://github.com/aheyam/SNAPS</a>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
