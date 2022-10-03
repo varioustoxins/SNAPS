@@ -1,4 +1,4 @@
-#!/anaconda3/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Main SNAPS script for assigning an observed shift list based on predicted shifts
