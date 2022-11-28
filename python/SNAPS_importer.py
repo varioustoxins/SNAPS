@@ -393,9 +393,11 @@ class SNAPS_importer:
             # Set index back to SS_name
             obs.index = obs["SS_name"]
             obs.index.name = None
-              
+
+        # the index name shouldn't match a column name!
+        obs.index.name = None
         self.obs = obs
-        return(self.obs)
+        return self.obs
     
     def import_aa_type_info(self, filename, offset="i-1"):
         """ Add amino acid type information to previously-imported observed 
