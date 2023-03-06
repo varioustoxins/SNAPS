@@ -28,8 +28,8 @@ def get_arguments(system_args):
     # Information on input files and configuration options
     parser.add_argument("--shift_type",
                         choices=["snaps", "ccpn", "sparky", "mars",
-                                 "xeasy", "nmrpipe", "test"],
-                        default="snaps",
+                                 "xeasy", "nmrpipe", "nef", "test"],
+                        default="snaps", 
                         help="The format of the observed shift file.")
     parser.add_argument("--pred_type",
                         choices=["shiftx2", "sparta+"],

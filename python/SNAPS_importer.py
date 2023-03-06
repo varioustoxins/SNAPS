@@ -11,6 +11,10 @@ import itertools
 from pathlib import Path
 from Bio.SeqUtils import seq1
 from math import sqrt
+
+from NEF_reader import read_nef_shifts_from_file_to_pandas
+
+
 #import nmrstarlib
 
 class SNAPS_importer:
@@ -362,7 +366,9 @@ class SNAPS_importer:
                                 value_vars=["H","HA","N","C","CA",
                                             "CB","C_m1","CA_m1","CB_m1"], 
                                 var_name="Atom_type", value_name="Shift")
-            
+        elif filetype=='nef':
+            obs = read_nef_shifts_from_file_to_pandas(filename)
+
 #        elif filetype == "nmrstar":
 #            tmp = nmrstarlib.read_files(filename)
 #            return(tmp)
