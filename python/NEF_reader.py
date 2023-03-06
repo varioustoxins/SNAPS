@@ -2,15 +2,13 @@ from pathlib import Path
 from typing import List
 import sys
 import pynmrstar
-# from tabulate import tabulate
-# import numpy as np
 import pandas as pd
 
 _CHEMICAL_SHIFT_LIST_FRAME = 'nef_chemical_shift_list'  # tag for the NEF chemical shift list frame
 _CHEMICAL_SHIFT_LOOP = 'nef_chemical_shift'  # tag for the NEF chemical shift list loop
 _SEQUENCE_CODE = 'sequence_code'  # NEF loop heading for sequence
 _ATOM_NAME = 'atom_name'  # NEF loop heading for atom name
-_RESIDUE_NAME = 'residue_name'  #NEF loop heading for residue name
+_RESIDUE_NAME = 'residue_name'  # NEF loop heading for residue name
 _SHIFT_VALUE = 'value'  # NEF loop heading for  the chemical shift list value
 
 _OFFSET_SLICE = slice(-2, None)  # equivalent to value[-2:]
@@ -32,9 +30,9 @@ def read_nef_shifts_from_file(file_name: Path, shift_list_name: str = _DEFAULT_S
     :return: list of lists with each sub list being a row with headings sequence code, atom name and shift
     """
     with open(file_name, 'r') as file_handle:
-        result = read_nef_shifts(file_handle, shift_list_name)
+        result_shifts = read_nef_shifts(file_handle, shift_list_name)
 
-    return result
+    return result_shifts
 
 
 def read_nef_shifts(file_handle, shift_list_name=_DEFAULT_SHIFT_LIST):
@@ -56,8 +54,6 @@ def read_nef_shifts(file_handle, shift_list_name=_DEFAULT_SHIFT_LIST):
     atom_index = _read_heading_index_or_error(first_shift_frame, _ATOM_NAME, chem_shift_loop, file_name)
     chem_shift_index = _read_heading_index_or_error(first_shift_frame, _SHIFT_VALUE, chem_shift_loop, file_name)
     residue_name_index = _read_heading_index_or_error(first_shift_frame, _RESIDUE_NAME, chem_shift_loop, file_name)
-    #TODO: add index for residue_name
-
 
     output = []
     for row_index, row in enumerate(chem_shift_loop.data):
@@ -72,7 +68,6 @@ def read_nef_shifts(file_handle, shift_list_name=_DEFAULT_SHIFT_LIST):
             sequence_code = sequence_code[:-2]
             atom_name = atom_name + _PREVIOUS_RESIDUE_FLAG
 
-        #TODO:  read residue_name into column residue_name and add to output row
         output_row = [sequence_code, atom_name, chemical_shift, residue_name]
 
         output.append(output_row)
@@ -86,8 +81,6 @@ def read_nef_shifts_from_file_to_pandas(file_name, shift_list_name=_DEFAULT_SHIF
 
     output = output.rename(columns={'sequence_code': 'SS_name', 'atom_name': 'Atom_type', 'value': 'Shift'})
 
-    #TODO combine residue_name into SS_name and remove residue_name column make sure you check that residue != '.'
-    # output['SS_name'] = output['SS_name'] + output['residue_name']
     if 'residue_name' == '.':
         return output
     elif 'residue_name' != '.':
@@ -97,18 +90,11 @@ def read_nef_shifts_from_file_to_pandas(file_name, shift_list_name=_DEFAULT_SHIF
         return output
 
 
-
 def read_nef_shifts_to_pandas(file_handle, shift_list_name=_DEFAULT_SHIFT_LIST):
     snaps_shifts = read_nef_shifts(file_handle, shift_list_name)
 
-    #TODO: add residue name column here
     pandas_columns = [_SEQUENCE_CODE, _ATOM_NAME, _SHIFT_VALUE, _RESIDUE_NAME]
     return pd.DataFrame(snaps_shifts, columns=pandas_columns)
-
-
-# def tablulate_nef_shifts_from_file(file_handle, shift_list_name=_DEFAULT_SHIFT_LIST):
-    # shifts_rows = read_nef_shifts_from_file(file_handle, shift_list_name)
-    # print(tabulate(shifts_rows, table format='plain', headers=['residue', 'atom', 'shift']))
 
 
 def _read_shift_from_row_or_error(shift_string, row_index, row, loop_name, file_name):
@@ -137,24 +123,24 @@ def _read_named_shift_frame_or_error(entry, frame_name_selector, file_name):
     :param entry: pynmrstar.Entry.from_file(file_handle)
     :param frame_name_selector:first_shift_frame
     :param file_name:file name
-    :return:error if there is no saveframe that reads 'chemical shift list' in the file. Otherwise, return a list of the
+    :return error if there is no saveframe that reads 'chemical shift list' in the file. Otherwise, return a list of the
     chemical shifts from the file
     """
     chem_shift_saveframes = entry.get_saveframes_by_category(_CHEMICAL_SHIFT_LIST_FRAME)
     if len(chem_shift_saveframes) < 0:
         raise Exception(f'ERROR: there are no chemical shift list frames in {file_name}')
 
-    result = None
+    result_shifts = None
     for frame in chem_shift_saveframes:
         frame_name = frame.name[len(frame.category):].lstrip('_')
         if frame_name == frame_name_selector:
-            result = frame
+            result_shifts = frame
             break
 
     if result is None:
         raise Exception(f'ERROR: there are no chemical shift list frame called {frame_name_selector} in {file_name}')
 
-    return result
+    return result_shifts
 
 
 def _read_heading_index_or_error(save_frame, heading, loop, file_name):
