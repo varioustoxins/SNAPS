@@ -57,7 +57,7 @@ def get_arguments(system_args):
     parser.add_argument("--shift_output_file", default=None,
                         help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("--shift_output_type", default="sparky",
-                        choices=["sparky","xeasy","nmrpipe"],
+                        choices=["sparky", "xeasy", "nmrpipe"],
                         help="One or more output formats for chemical shift export")
     parser.add_argument("--shift_output_confidence", nargs="*",
                         choices=["High","Medium","Low","Unreliable","Undefined"],
