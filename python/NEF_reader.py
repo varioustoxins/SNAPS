@@ -137,7 +137,7 @@ def _read_named_shift_frame_or_error(entry, frame_name_selector, file_name):
             result_shifts = frame
             break
 
-    if result is None:
+    if result_shifts is None:
         raise Exception(f'ERROR: there are no chemical shift list frame called {frame_name_selector} in {file_name}')
 
     return result_shifts
