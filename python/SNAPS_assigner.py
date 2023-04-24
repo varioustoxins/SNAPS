@@ -29,6 +29,7 @@ from sortedcontainers import SortedListWithKey
 #from textwrap import dedent
 import logging
 import yaml
+from pathlib import Path
 
 def df_lookup(df, row_labels, col_labels, index="rows"):
     """Look up a series of locations in a data frame df, with the row and
@@ -128,7 +129,13 @@ class SNAPS_assigner:
             self.logger.error("Some required parameters were missing/not imported: %s",
                                 ", ".join(missing_pars))
 
-        self.logger.info("Finished reading in config parameters from %s"
+        par_dir = Path(filename).parent
+
+        for par_name, par in self.pars.items():
+            if par_name.endswith('_file'):
+                self.pars[par_name] = str(par_dir / par)
+
+        self.logger.info("Finished reading in config parameters from %s" 
                          % filename)
         return(self.pars)
 
