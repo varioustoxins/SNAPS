@@ -5,3 +5,6 @@ python python\SNAPS.py data\P3a_L273R\naps_shifts.txt data\P3a_L273R\shiftx2.cs 
 
 # To run and analyse the testset data (on Mac with Anaconda python)
 /anaconda3/bin/python3 NAPS_test.py /Users/aph516/GitHub/NAPS -p /anaconda3/bin/python3 --assign --analyse -t basic
+
+# New command for 2023
+python python\SNAPS.py data\P3a_L273R\naps_shifts.txt data\P3a_L273R\shiftx2.cs output\test.txt --shift_type snaps --pred_type shiftx2  -c config\config_yaml_2.txt -l output\test.log
