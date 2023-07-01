@@ -8,3 +8,6 @@ python python\SNAPS.py data\P3a_L273R\naps_shifts.txt data\P3a_L273R\shiftx2.cs 
 
 # New command for 2023
 python python\SNAPS.py data\P3a_L273R\naps_shifts.txt data\P3a_L273R\shiftx2.cs output\test.txt --shift_type snaps --pred_type shiftx2  -c config\config_yaml_2.txt -l output\test.log
+
+# To run testset:
+python test_scripts\SNAPS_test.py . --assign --analyse -N 3 -t basic

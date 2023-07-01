@@ -30,7 +30,7 @@ from sortedcontainers import SortedListWithKey
 import logging
 import yaml
 
-def df_lookup(df, row_labels, col_labels):
+def df_lookup(df, row_labels, col_labels, index="rows"):
     """Look up a series of locations in a data frame df, with the row and
     column indicies given by row_labels and col_labels. This replaces the
     DataFrame.lookup() that was part of previous versions of pandas.
@@ -47,7 +47,10 @@ def df_lookup(df, row_labels, col_labels):
 
     Taken from https://stackoverflow.com/questions/71156253/alternative-to-df-lookuprow-col?noredirect=1&lq=1
     """
-    return(pd.Series(df.to_numpy()[df.index.get_indexer(row_labels), df.columns.get_indexer(col_labels)]))
+    if index=="cols":
+        return(pd.Series(df.to_numpy()[df.index.get_indexer(row_labels), df.columns.get_indexer(col_labels)], index=col_labels))
+    else:
+        return(pd.Series(df.to_numpy()[df.index.get_indexer(row_labels), df.columns.get_indexer(col_labels)], index=row_labels))
 
 
 class SNAPS_assigner:
@@ -961,20 +964,16 @@ class SNAPS_assigner:
         tmp_p1 = tmp.dropna(subset=["SS_name_p1"])
 
         # Get the mismatches
-        tmp["Max_mismatch_m1"] = pd.Series(df_lookup(self.mismatch_matrix,
-                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"]),
-                                index=tmp_m1.index)
-        tmp["Max_mismatch_p1"] = pd.Series(df_lookup(self.mismatch_matrix,
-                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
-                                index=tmp_p1.index)
+        tmp["Max_mismatch_m1"] = pd.Series(list(df_lookup(self.mismatch_matrix,
+                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"])), index=tmp_m1.index)
+        tmp["Max_mismatch_p1"] = pd.Series(list(df_lookup(self.mismatch_matrix,
+                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"])), index=tmp_p1.index)
         tmp["Max_mismatch"] = tmp[["Max_mismatch_m1","Max_mismatch_p1"]].max(axis=1)
 
-        tmp["Num_good_links_m1"] = pd.Series(df_lookup(self.consistent_links_matrix,
-                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"]),
-                                index=tmp_m1.index)
-        tmp["Num_good_links_p1"] = pd.Series(df_lookup(self.consistent_links_matrix,
-                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"]),
-                                index=tmp_p1.index)
+        tmp["Num_good_links_m1"] = pd.Series(list(df_lookup(self.consistent_links_matrix,
+                                tmp_m1["SS_name_m1"], tmp_m1["SS_name"])), index=tmp_m1.index)
+        tmp["Num_good_links_p1"] = pd.Series(list(df_lookup(self.consistent_links_matrix,
+                                tmp_p1["SS_name"], tmp_p1["SS_name_p1"])), index=tmp_p1.index)
         tmp["Num_good_links_m1"].fillna(0, inplace=True)
         tmp["Num_good_links_p1"].fillna(0, inplace=True)
         tmp["Num_good_links"] = tmp["Num_good_links_m1"] + tmp["Num_good_links_p1"]
@@ -1481,7 +1480,7 @@ class SNAPS_assigner:
             for k in colourmap.keys():
                 tmp = ColumnDataSource(df[df["Confidence"]==k])
                 plt.vbar(x="Res_name", top=1, width=1,
-                         color=colourmap[k], legend=k, source=tmp)
+                         color=colourmap[k], legend_label=k, source=tmp)
 
             # Set legend properties
             plt.legend.orientation = "horizontal"

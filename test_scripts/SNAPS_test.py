@@ -118,7 +118,7 @@ if "basic" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_yaml.txt",
+            cmd = make_cmd(i, out_dir, "config_yaml_2.txt",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
 
@@ -210,8 +210,8 @@ if "basic" in args.test or "all" in args.test:
         tmp.loc[:,"Conf2"] = tmp.Conf2.replace(["WS","NS","XS","NW","XW","XN"],
                                              ["SW","SN","SX","WN","WX","NX"])
 
-        print(tmp)
-        
+        # print(tmp)
+
         plt = ggplot(tmp) + geom_bar(aes(x="Conf2",
                     fill="Correct"), position="fill")
         plt += xlab("Assignment confidence") + ylab("Accuracy")
@@ -241,7 +241,7 @@ if "basic" in args.test or "all" in args.test:
         tmp.sum()/tmp.count()
 
         tmp = assigns_basic[(assigns_basic["Dummy_SS"]==False) & (assigns_basic["Status"]=="Misassigned")]
-        tmp.loc[:,"Type_match"] = tmp["SS_type"]==tmp["Res_type"]
+        tmp.loc[:,"Type_match"] = (tmp["SS_type"]==tmp["Res_type"])
         tmp2 = tmp.groupby("SS_type")["Type_match"]
         tmp_basic=(tmp2.sum()/tmp2.count()).sort_values(ascending=False)
 

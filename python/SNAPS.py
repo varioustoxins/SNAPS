@@ -6,6 +6,8 @@ Main SNAPS script for assigning an observed shift list based on predicted shifts
 @author: aph516
 """
 
+import pdb
+
 def get_arguments(system_args):
     import argparse
 
@@ -71,13 +73,13 @@ def get_arguments(system_args):
 
     args = parser.parse_args(system_args)
     if False:   # For convenience when testing
-        args = parser.parse_args(("../data/P3a_L273R/naps_shifts_backbone.txt",
-                                  "../data/P3a_L273R/shiftx2.cs",
-                                  "../output/test.txt",
+        args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
+                                  "data/P3a_L273R/shiftx2.cs",
+                                  "output/test.txt",
                                   "--shift_type","snaps",
                                   "--pred_type","shiftx2",
-                                  "-c","../config/config_yaml.txt",
-                                  "-l","../output/test.log"))
+                                  "-c","config/config_yaml_2.txt",
+                                  "-l","output/test.log"))
     return(args)
 
 def runSNAPS(system_args):
@@ -146,7 +148,9 @@ def runSNAPS(system_args):
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
         a.assign_from_preds(set_assign_df=True)
+        # breakpoint()
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
+        # breakpoint()
 
     #### Output the results
     a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
