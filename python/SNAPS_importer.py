@@ -423,8 +423,7 @@ class SNAPS_importer:
         elif offset == "i-1":
             col = "SS_class_m1"
         else:
-            print("invalid value of offset: must be 'i' or 'i-1'.")
-            return(None)
+            raise Exception("in import_aa_type_info invalid value of offset: must be 'i' or 'i-1'.")
         
         # Import file
         df = pd.read_table(filename, sep="\s+", comment="#", 
