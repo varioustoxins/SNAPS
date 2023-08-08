@@ -427,8 +427,10 @@ class SNAPS_importer:
         
         # Import file
         df = pd.read_table(filename, sep="\s+", comment="#", 
-                                    header=None, names=["SS_name","AA","Type"])
-        
+                                    header=0)
+
+
+
         # For rows with Type=="in", the SS_class is the same as AA
         # For rows with Type=="ex", the SS_class is all aminos *except* AA
         df[col] = df["AA"]
