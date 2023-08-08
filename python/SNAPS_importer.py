@@ -418,9 +418,9 @@ class SNAPS_importer:
         """
         AA_str = "ACDEFGHIKLMNPQRSTVWY"
         
-        if offset=="i":
+        if offset == "i":
             col = "SS_class"
-        elif offset=="i-1":
+        elif offset == "i-1":
             col = "SS_class_m1"
         else:
             print("invalid value of offset: must be 'i' or 'i-1'.")
