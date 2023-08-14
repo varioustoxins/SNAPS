@@ -5,10 +5,10 @@ Defines a class with functions related to importing peak lists and shift lists.
 @author: Alex
 """
 
-import numpy as np
+# import numpy as np
 import pandas as pd
-import itertools
-from pathlib import Path
+# import itertools
+# from pathlib import Path
 from Bio.SeqUtils import seq1
 from math import sqrt
 
@@ -20,11 +20,11 @@ class SnapsImportException(Exception):
 
 class SNAPS_importer:
     # Attributes
-#    peaklists = {}
-#    assignments = {}
-#    roots = None
-#    peaks = None
-#    obs = None
+    #    peak lists = {}
+    #    assignments = {}
+    #    roots = None
+    #    peaks = None
+    #    obs = None
     
     def __init__(self):
         self.peaklists = {}
@@ -356,8 +356,8 @@ class SNAPS_importer:
                                 names=["SS_name","Res_type","Atom_type","Shift"])
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
             obs["SS_name"] = obs["SS_name"].astype(str)
-            obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
-        elif filetype=="mars":
+            obs.loc[obs["Atom_type"] == "HN", "Atom_type"] = "H"
+        elif filetype == "mars":
             obs_wide = pd.read_table(filename, sep="\s+", na_values="-")
             obs_wide = obs_wide.rename(columns={"CO":"C","CO-1":"C_m1",
                                                 "CA-1":"CA_m1","CB-1":"CB_m1"})
@@ -390,7 +390,7 @@ class SNAPS_importer:
             obs["Res_N"] = obs["SS_name"].str.extract(r"(\d+)").astype(int)
             
             obs.index = obs["Res_N"]
-            obs_m1 = obs[list({"C","CA","CB"}.intersection(obs.columns))]
+            obs_m1 = obs[list({"C", "CA", "CB"}.intersection(obs.columns))]
             obs_m1.index = obs_m1.index+1
             obs_m1.columns = obs_m1.columns + "_m1"
             obs = pd.merge(obs, obs_m1, how="left", 
@@ -415,7 +415,7 @@ class SNAPS_importer:
             SS_name_1   AVI   in   # to set AVI as the only allowed aa types
             SS_name_2   T     ex   # to exclude T from the allowed aa types
         offset: either "i" or "i_minus_1". Whether the aa type restriction 
-            applies to the i spin system or to the preceeding i-1 spin system.
+            applies to the i spin system or to the preceding i-1 spin system.
         """
         POSSIBLE_1LET_AAS_STR = "ACDEFGHIKLMNPQRSTVWY"
         
@@ -486,8 +486,7 @@ class SNAPS_importer:
         
         filename: The simplified BMRB file containing observed shift info.
         remove_Pro: If True, remove proline residues from output
-        short_aa_names: If True, single letter aa codes are used, otherwise 3 
-            letter codes are used
+        short_aa_names: If True, single letter aa codes are used, otherwise 3-letter codes are used
         SS_class: Either None or a list of strings, each of which is a list of 
             amino acids (eg. ["VIA","G","S","T","DN","FHYWC","REKPQML"] would 
             give the HADAMAC classes). If not None, a column SS_class will be 
@@ -495,11 +494,11 @@ class SNAPS_importer:
         SS_class_m1: as above, but for the i-1 residue.
         
         """
-        #### Import the observed chemical shifts
+        # Import the observed chemical shifts
         obs_long = pd.read_table(filename)
-        obs_long = obs_long[["Residue_PDB_seq_code","Residue_label",
-                             "Atom_name","Chem_shift_value"]]
-        obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+        obs_long = obs_long[["Residue_PDB_seq_code", "Residue_label",
+                             "Atom_name", "Chem_shift_value"]]
+        obs_long.columns = ["Res_N", "Res_type", "Atom_type", "Shift"]
         # Convert residue type to single-letter code
         if short_aa_names: 
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
@@ -512,8 +511,8 @@ class SNAPS_importer:
             obs_long["SS_name"] = obs_long["SS_name"].str.rjust(7)
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
         obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name",
-                                             "Atom_type","Shift"])
-        
+                                             "Atom_type", "Shift"])
+
         # Convert from long to wide
         obs = obs_long.pivot(index="Res_N", columns="Atom_type", 
                              values="Shift")
@@ -525,15 +524,15 @@ class SNAPS_importer:
         obs = pd.concat([tmp, obs], axis=1)
         
         # Make columns for the i-1 observed shifts of C, CA and CB
-        obs_m1 = obs[list({"C","CA","CB","Res_type"}.intersection(obs.columns))]
+        obs_m1 = obs[list({"C", "CA", "CB", "Res_type"}.intersection(obs.columns))]
         obs_m1.index = obs_m1.index+1
         obs_m1.columns = obs_m1.columns + "_m1"
         obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
                        right_index=True)
         
         # Restrict to specific atom types
-        atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
-        obs = obs[["Res_N","Res_type","Res_type_m1","SS_name"]+
+        atom_set = {"H", "N", "C", "CA", "CB", "C_m1", "CA_m1", "CB_m1", "HA"}
+        obs = obs[["Res_N", "Res_type", "Res_type_m1", "SS_name"]+
                   list(atom_set.intersection(obs.columns))]
         
         # Add SS_class information
@@ -551,7 +550,7 @@ class SNAPS_importer:
         
         if remove_Pro:
             # Remove prolines, as they wouldn't be observed in a real spectrum
-            obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO","P"])]) 
+            obs = obs.drop(obs.index[obs["Res_type"].isin(["PRO", "P"])])
         
         self.obs = obs
         return(self.obs)
@@ -564,8 +563,8 @@ class SNAPS_importer:
         """
         
         df = self.obs.melt(id_vars="SS_name", 
-                      value_vars=set(self.obs.columns).intersection({"H","N",
-                                    "HA","C","CA","CB","C_m1","CA_m1","CB_m1"}), 
+                      value_vars=set(self.obs.columns).intersection({"H", "N",
+                                    "HA", "C", "CA", "CB", "C_m1", "CA_m1", "CB_m1"}),
                       var_name="Atom_type", value_name="Shift")
         df = df.sort_values(by=["SS_name", "Atom_type"])
             
