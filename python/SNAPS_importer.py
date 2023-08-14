@@ -416,18 +416,18 @@ class SNAPS_importer:
         offset: either "i" or "i_minus_1". Whether the aa type restriction 
             applies to the i spin system or to the preceeding i-1 spin system.
         """
-        AA_str = "ACDEFGHIKLMNPQRSTVWY"
+        POSSIBLE_1LET_AAS_STR = "ACDEFGHIKLMNPQRSTVWY"
         
         if offset == "i":
-            col = "SS_class"
+            ss_class_col = "SS_class"
         elif offset == "i-1":
-            col = "SS_class_m1"
+            ss_class_col = "SS_class_m1"
         else:
             raise Exception("in import_aa_type_info invalid value of offset: must be 'i' or 'i-1'.")
         
         # Import file
-        df = pd.read_table(filename, sep="\s+", comment="#", 
-                                    header=0)
+        aa_info_df = pd.read_table(filename, sep= "\s+", comment="#", header=0)
+
 
 
 
@@ -444,17 +444,20 @@ class SNAPS_importer:
         df.index = df["SS_name"]
         
         # Create SS_class column in obs DataFrame if it doesn't already exist.
-        if col not in self.obs.columns:
-            self.obs[col] = AA_str
+
+        if ss_class_col not in self.obs.columns:
+            self.obs[ss_class_col] = POSSIBLE_1LET_AAS_STR
+        else:
+            raise SnapsImportException("SS_class column needs to be present in the Obs DataFrame")
         
         # Write SS_class info into obs data frame. Overwrite any previous info 
         # for these spin systems, but keep SS_class info for any spin systems 
         # not in df
-        self.obs.loc[df.index, col] = df.loc[:, col]
+        self.obs.loc[aa_info_df.index, ss_class_col] = aa_info_df.loc[:, ss_class_col]
        
         # Nan's can be any amino acid
-        self.obs[col] = self.obs[col].fillna(AA_str)
-        
+        self.obs[ss_class_col] = self.obs[ss_class_col].fillna(POSSIBLE_1LET_AAS_STR)
+
         return(self.obs)
 
     def check_headings_and_raise_if_bad(self, df, filename):
