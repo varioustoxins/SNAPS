@@ -14,8 +14,9 @@ from math import sqrt
 
 from NEF_reader import read_nef_shifts_from_file_to_pandas
 
-
-#import nmrstarlib
+class SnapsImportException(Exception):
+    ...
+# import nmrstarlib
 
 class SNAPS_importer:
     # Attributes
@@ -423,7 +424,7 @@ class SNAPS_importer:
         elif offset == "i-1":
             ss_class_col = "SS_class_m1"
         else:
-            raise Exception("in import_aa_type_info invalid value of offset: must be 'i' or 'i-1'.")
+            raise SnapsImportException("in import_aa_type_info invalid value of offset: must be 'i' or 'i-1'.")
         
         # Import file
         aa_info_df = pd.read_table(filename, sep= "\s+", comment="#", header=0)
