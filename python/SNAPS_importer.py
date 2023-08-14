@@ -456,7 +456,23 @@ class SNAPS_importer:
         self.obs[col] = self.obs[col].fillna(AA_str)
         
         return(self.obs)
-    
+
+    def check_headings_and_raise_if_bad(self, df, filename):
+        expected_column_names = set(["SS_name", "AA", "Type"])
+        lower_expected_column_names = set([elem.lower() for elem in expected_column_names])
+        found_columns_names = set(df.columns)
+        lower_found_column_names = set([elem.lower() for elem in found_columns_names])
+        if lower_expected_column_names != lower_found_column_names:
+            bad_column_names = lower_found_column_names - lower_expected_column_names
+            bad_column_names = ', '.join(bad_column_names)
+            lower_expected_columns_names = ', '.join(lower_expected_column_names)
+            msg = f"""\
+                Unexpected case insensitive column name(s) [{bad_column_names}]
+                in file {filename}
+                expected column names are: {lower_expected_columns_names}"
+            """
+            raise SnapsImportException(msg)
+
     def import_testset_shifts(self, filename, remove_Pro=True, 
                           short_aa_names=True, SS_class=None, SS_class_m1=None):
         """ Import observed chemical shifts from testset data
