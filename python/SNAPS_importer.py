@@ -430,6 +430,9 @@ class SNAPS_importer:
         # Import file
         aa_info_df = pd.read_table(filename, sep= "\s+", comment="#", header=0)
 
+        self.check_required_headings_and_raise_if_bad(aa_info_df, filename)
+        self.check_aa_letters_correct_and_raise_if_bad(aa_info_df)
+        self.check_type_column_categories_and_raise_if_bad(aa_info_df)
 
         # puts aa into ss class column
         aa_info_df[ss_class_col] = aa_info_df["AA"]
@@ -483,17 +486,16 @@ class SNAPS_importer:
 
     def check_required_headings_and_raise_if_bad(self, df, filename):
         expected_column_names = set(["SS_name", "AA", "Type"])
-        lower_expected_column_names = set([elem.lower() for elem in expected_column_names])
-        found_columns_names = set(df.columns)
-        lower_found_column_names = set([elem.lower() for elem in found_columns_names])
-        if lower_expected_column_names != lower_found_column_names:
-            bad_column_names = lower_found_column_names - lower_expected_column_names
+        found_column_names = set(df.columns)
+
+        if expected_column_names != found_column_names:
+            bad_column_names = found_column_names - expected_column_names
             bad_column_names = ', '.join(bad_column_names)
-            lower_expected_columns_names = ', '.join(lower_expected_column_names)
+            expected_column_names = ', '.join(expected_column_names)
             msg = f"""\
-                Unexpected case insensitive column name(s) [{bad_column_names}]
+                Unexpected column name(s) [{bad_column_names}]
                 in file {filename}
-                expected column names are: {lower_expected_columns_names}"
+                expected column names are: {expected_column_names}"
             """
             raise SnapsImportException(msg)
 
