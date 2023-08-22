@@ -7,10 +7,8 @@ from SNAPS_importer import SNAPS_importer, SnapsImportException
 
 def test_import_aa_type_info():
     importer = SNAPS_importer()
-
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
     result = importer.import_aa_type_info('test_data/test_aa_info.txt', 'i')
-
     data = {
         'Atom_type': ['236Pro', '237Ala', '238Met', '239Thr'],
         'SS_name': ['236Pro', '237Ala', '238Met', '239Thr'],
@@ -24,17 +22,14 @@ def test_import_aa_type_info():
     }
     expected = pd.DataFrame(data, index=data['SS_name'], columns=['SS_name', 'C', 'CA', 'CB', 'H', 'HA', 'N',
                                                                   'SS_class'])
-
     expected.columns.names = ['Atom_type']
     assert_frame_equal(expected, result, check_exact=False, rtol=0.01)
 
 
 def test_import_aa_type_info_out():
     importer = SNAPS_importer()
-
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
     result_out = importer.import_aa_type_info('test_data/test_aa_info_out.txt', 'i')
-
     data_out = {
         'Atom_type': ['236Pro', '237Ala', '238Met', '239Thr'],
         'SS_name': ['236Pro', '237Ala', '238Met', '239Thr'],
@@ -46,11 +41,49 @@ def test_import_aa_type_info_out():
         'N': [NaN, 124.63832, 119.82062, 115.46265],
         'SS_class': ['ACDEFGHIKLMNPQRSTVWY', 'CDEFGHKLMNPQRSTWY', 'CDEFGHKLMNPQRSTWY', 'ACDEFGHIKLMNPQRSTVWY']
     }
-    expected_out = pd.DataFrame(data_out, index=data_out['SS_name'], columns=['SS_name', 'C', 'CA', 'CB', 'H', 'HA'
-                                                                                                    , 'N', 'SS_class'])
-    expected_out.columns.names = ['Atom_type']
 
+    expected_out = pd.DataFrame(data_out, index=data_out['SS_name'], columns=['SS_name', 'C', 'CA', 'CB', 'H', 'HA',
+                                                                              'N', 'SS_class'])
+    expected_out.columns.names = ['Atom_type']
     assert_frame_equal(expected_out, result_out, check_exact=False, rtol=0.01)
 
+
+def test_headings_aa_info():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_bad_header.txt', 'i')
+
+    assert 'Unexpected column name(s) [AAA]' in str(e.value)
+    assert 'expected column names are:' in str(e.value)
+    for name in 'Type SS_name AA'.split():
+        assert name in str(e.value)
+
+def test_headings_aa_info_type_column_bad():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_bad_type_column.txt', 'i')
+    assert "Type column row error: 'Type' column rows can only contain 'in' or 'ex'" in str(e.value)
+
+
+def test_lowercase_headings_bad():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_lowercase_column_names.txt', 'i')
+
+
+
+def test_aa_letters_bad():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_letters_bad.txt', 'i')
+    assert "AA type letters incorrect, Amino Acid letters can only be: 'ACDEFGHIKLMNPQRSTVWY'" in str(e.value)
 
 
