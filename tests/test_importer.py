@@ -1,7 +1,8 @@
 import pandas as pd
+import pytest
 from numpy import NaN
 from pandas.testing import assert_frame_equal
-from SNAPS_importer import SNAPS_importer
+from SNAPS_importer import SNAPS_importer, SnapsImportException
 
 
 def test_import_aa_type_info():

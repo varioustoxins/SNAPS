@@ -14,6 +14,8 @@ from math import sqrt
 
 from NEF_reader import read_nef_shifts_from_file_to_pandas
 
+POSSIBLE_1LET_AAS_STR = "ACDEFGHIKLMNPQRSTVWY"
+
 class SnapsImportException(Exception):
     ...
 # import nmrstarlib
@@ -417,8 +419,7 @@ class SNAPS_importer:
         offset: either "i" or "i_minus_1". Whether the aa type restriction 
             applies to the i spin system or to the preceding i-1 spin system.
         """
-        POSSIBLE_1LET_AAS_STR = "ACDEFGHIKLMNPQRSTVWY"
-        
+
         if offset == "i":
             ss_class_col = "SS_class"
         elif offset == "i-1":
@@ -459,9 +460,28 @@ class SNAPS_importer:
         # Nan's can be any amino acid
         self.obs[ss_class_col] = self.obs[ss_class_col].fillna(POSSIBLE_1LET_AAS_STR)
 
-        return(self.obs)
+        return self.obs
 
-    def check_headings_and_raise_if_bad(self, df, filename):
+    # puts aa into ss class column
+    def check_aa_letters_correct_and_raise_if_bad(self, aa_info_df):
+
+        expected_1let_aa_set = set(POSSIBLE_1LET_AAS_STR)
+        all_aa_1lets_ok = [set(elem).issubset(expected_1let_aa_set) for elem in aa_info_df['AA']]
+
+        if not all(all_aa_1lets_ok):
+            msg = "AA type letters incorrect, Amino Acid letters can only be: 'ACDEFGHIKLMNPQRSTVWY'"
+            raise SnapsImportException(msg)
+
+    def check_type_column_categories_and_raise_if_bad(self, aa_info_df):
+
+        ex_mask = (aa_info_df["Type"] == "ex")
+        in_mask = (aa_info_df["Type"] == "in")
+        expected_type_column = ex_mask ^ in_mask
+        if not all(expected_type_column):
+            msg = "Type column row error: 'Type' column rows can only contain 'in' or 'ex'"
+            raise SnapsImportException(msg)
+
+    def check_required_headings_and_raise_if_bad(self, df, filename):
         expected_column_names = set(["SS_name", "AA", "Type"])
         lower_expected_column_names = set([elem.lower() for elem in expected_column_names])
         found_columns_names = set(df.columns)
