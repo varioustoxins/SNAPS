@@ -431,20 +431,20 @@ class SNAPS_importer:
         aa_info_df = pd.read_table(filename, sep= "\s+", comment="#", header=0)
 
 
-
+        # puts aa into ss class column
+        aa_info_df[ss_class_col] = aa_info_df["AA"]
 
         # For rows with Type=="in", the SS_class is the same as AA
         # For rows with Type=="ex", the SS_class is all aminos *except* AA
-        df[col] = df["AA"]
-        mask = (df["Type"]=="ex")
-        for i in df.index[mask]:
-            tmp = AA_str
-            for c in df.loc[i, "AA"]:
-                tmp = tmp.replace(c, "")
-            df.loc[i, col] = tmp
-        
-        df.index = df["SS_name"]
-        
+
+        ex_mask = (aa_info_df["Type"] == "ex")
+        for row_index in aa_info_df.index[ex_mask]:
+            expected_aas = POSSIBLE_1LET_AAS_STR
+            for aa_1let in aa_info_df.loc[row_index, "AA"]:
+                expected_aas = expected_aas.replace(aa_1let, "")
+            aa_info_df.loc[row_index, ss_class_col] = expected_aas
+        aa_info_df.index = aa_info_df["SS_name"]
+
         # Create SS_class column in obs DataFrame if it doesn't already exist.
 
         if ss_class_col not in self.obs.columns:
