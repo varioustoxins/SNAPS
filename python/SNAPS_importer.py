@@ -434,6 +434,34 @@ class SNAPS_importer:
         self.check_aa_letters_correct_and_raise_if_bad(aa_info_df)
         self.check_type_column_categories_and_raise_if_bad(aa_info_df)
 
+        if 'Offset' in aa_info_df.columns:
+            self._check_bad_offset_raise_if_bad(aa_info_df)
+
+            result_df_0 = aa_info_df[aa_info_df['Offset'] == 0]
+            self._import_aa_type_info_raw(result_df_0 , 0)
+
+            result_df_m1 = aa_info_df[aa_info_df['Offset'] == -1]
+            self._import_aa_type_info_raw(result_df_m1, -1)
+        else:
+            self._import_aa_type_info_raw(aa_info_df, 0)
+        return self.obs
+
+
+    def _check_bad_offset_raise_if_bad(self, aa_info_df):
+        result_df_other = aa_info_df[(aa_info_df['Offset'] != 0) & (aa_info_df['Offset'] != -1)]
+        msg = 'offset can only be 0 or -1'
+        if len(result_df_other.index):
+            raise SnapsImportException(msg)
+
+    def _import_aa_type_info_raw(self, aa_info_df, offset):
+        if offset == 0:
+            ss_class_col = "SS_class"
+        elif offset == -1:
+            ss_class_col = "SS_class_m1"
+        else:
+            raise SnapsImportException(f"in import_aa_type_info invalid value of offset: must be 0 or -1 i got "
+                                       f"{offset}")
+
         # puts aa into ss class column
         aa_info_df[ss_class_col] = aa_info_df["AA"]
 
