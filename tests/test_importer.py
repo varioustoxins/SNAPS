@@ -60,6 +60,7 @@ def test_headings_aa_info():
     for name in 'Type SS_name AA'.split():
         assert name in str(e.value)
 
+
 def test_headings_aa_info_type_column_bad():
     importer = SNAPS_importer()
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
@@ -75,7 +76,6 @@ def test_lowercase_headings_bad():
 
     with pytest.raises(SnapsImportException) as e:
         importer.import_aa_type_info('test_data/test_aa_info_lowercase_column_names.txt', 'i')
-
 
 
 def test_aa_letters_bad():
@@ -97,4 +97,17 @@ def test_obs_data_bad():
            " shift list" in str(e.value)
 
 
+def test_offset_data():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_m1.txt', 'i')
+    assert "offset can only be 0 or -1" in str(e.value)
+
+
+# def test_import_P3a_L273R_shifts():
+#     importer = SNAPS_importer()
+#     importer.import_obs_shifts('test_data/P3a_L273R_10_test.nef', 'nef')
+#     result = importer.import_aa_type_info('test_data/sparky_10_test.txt.txt', 'i')
 
