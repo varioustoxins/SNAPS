@@ -420,15 +420,8 @@ class SNAPS_importer:
             applies to the i spin system or to the preceding i-1 spin system.
         """
 
-        if offset == "i":
-            ss_class_col = "SS_class"
-        elif offset == "i-1":
-            ss_class_col = "SS_class_m1"
-        else:
-            raise SnapsImportException("in import_aa_type_info invalid value of offset: must be 'i' or 'i-1'.")
-        
         # Import file
-        aa_info_df = pd.read_table(filename, sep= "\s+", comment="#", header=0)
+        aa_info_df = pd.read_table(filename, sep="\s+", comment="#", header=0)
 
         self.check_required_headings_and_raise_if_bad(aa_info_df, filename)
         self.check_aa_letters_correct_and_raise_if_bad(aa_info_df)
@@ -482,14 +475,14 @@ class SNAPS_importer:
 
         if ss_class_col not in self.obs.columns:
             self.obs[ss_class_col] = POSSIBLE_1LET_AAS_STR
-        else:
-            raise SnapsImportException("SS_class column needs to be present in the Obs DataFrame")
-        
-        # Write SS_class info into obs data frame. Overwrite any previous info 
-        # for these spin systems, but keep SS_class info for any spin systems 
+        # else:
+        #     raise SnapsImportException("SS_class column needs to be present in the Obs DataFrame")
+
+        # Write SS_class info into obs data frame. Overwrite any previous info
+        # for these spin systems, but keep SS_class info for any spin systems
         # not in df
         self.obs.loc[aa_info_df.index, ss_class_col] = aa_info_df.loc[:, ss_class_col]
-       
+
         # Nan's can be any amino acid
         self.obs[ss_class_col] = self.obs[ss_class_col].fillna(POSSIBLE_1LET_AAS_STR)
 
@@ -527,10 +520,13 @@ class SNAPS_importer:
             raise SnapsImportException(msg)
 
     def check_required_headings_and_raise_if_bad(self, df, filename):
-        expected_column_names = set(["SS_name", "AA", "Type"])
+        expected_column_names = {"SS_name", "AA", "Type"}
         found_column_names = set(df.columns)
 
-        if expected_column_names != found_column_names:
+        # if 'offset' in found_column_names:
+        #     found_column_names.loc[:, found_column_names.columns != 'offset'])
+
+        if not expected_column_names.issubset(found_column_names):
             bad_column_names = found_column_names - expected_column_names
             bad_column_names = ', '.join(bad_column_names)
             expected_column_names = ', '.join(expected_column_names)
@@ -541,7 +537,12 @@ class SNAPS_importer:
             """
             raise SnapsImportException(msg)
 
-    def import_testset_shifts(self, filename, remove_Pro=True, 
+
+
+
+
+
+    def import_testset_shifts(self, filename, remove_Pro=True,
                           short_aa_names=True, SS_class=None, SS_class_m1=None):
         """ Import observed chemical shifts from testset data
         
