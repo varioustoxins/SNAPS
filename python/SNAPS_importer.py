@@ -465,6 +465,8 @@ class SNAPS_importer:
         # puts aa into ss class column
         aa_info_df[ss_class_col] = aa_info_df["AA"]
 
+        self.check_spin_systems_from_obs_raise_if_bad(aa_info_df)
+
         # For rows with Type=="in", the SS_class is the same as AA
         # For rows with Type=="ex", the SS_class is all aminos *except* AA
 
@@ -491,7 +493,19 @@ class SNAPS_importer:
         # Nan's can be any amino acid
         self.obs[ss_class_col] = self.obs[ss_class_col].fillna(POSSIBLE_1LET_AAS_STR)
 
-        return self.obs
+
+
+    def check_spin_systems_from_obs_raise_if_bad(self, aa_info_df):
+        expected_obs = set()
+        if 'SS_name' in self.obs.columns:
+            expected_obs.update(set(self.obs['SS_name']))
+        if 'SS_name_m1' in self.obs.columns:
+            expected_obs.update(set(self.obs['SS_name_m1']))
+        given_obs = [elem in expected_obs for elem in aa_info_df['SS_name']]
+        if not all(given_obs):
+            msg = "Incorrect data given, unexpected spin system in aa types. the input spin systems should " \
+                  "be in the chemical shift list"
+            raise SnapsImportException(msg)
 
     # puts aa into ss class column
     def check_aa_letters_correct_and_raise_if_bad(self, aa_info_df):
