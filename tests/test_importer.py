@@ -87,3 +87,14 @@ def test_aa_letters_bad():
     assert "AA type letters incorrect, Amino Acid letters can only be: 'ACDEFGHIKLMNPQRSTVWY'" in str(e.value)
 
 
+def test_obs_data_bad():
+    importer = SNAPS_importer()
+    importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
+
+    with pytest.raises(SnapsImportException) as e:
+        importer.import_aa_type_info('test_data/test_aa_info_bad_obs_data.txt', 'i')
+    assert "Incorrect data given, unexpected spin system in aa types. the input spin systems should be in the chemical"\
+           " shift list" in str(e.value)
+
+
+
