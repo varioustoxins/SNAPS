@@ -8,7 +8,7 @@ from SNAPS_importer import SNAPS_importer, SnapsImportException
 def test_import_aa_type_info():
     importer = SNAPS_importer()
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
-    result = importer.import_aa_type_info('test_data/test_aa_info.txt', 'i')
+    result = importer.import_aa_type_info('test_data/test_aa_info.txt')
     data = {
         'Atom_type': ['236Pro', '237Ala', '238Met', '239Thr'],
         'SS_name': ['236Pro', '237Ala', '238Met', '239Thr'],
@@ -29,7 +29,7 @@ def test_import_aa_type_info():
 def test_import_aa_type_info_out():
     importer = SNAPS_importer()
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
-    result_out = importer.import_aa_type_info('test_data/test_aa_info_out.txt', 'i')
+    result_out = importer.import_aa_type_info('test_data/test_aa_info_out.txt')
     data_out = {
         'Atom_type': ['236Pro', '237Ala', '238Met', '239Thr'],
         'SS_name': ['236Pro', '237Ala', '238Met', '239Thr'],
@@ -53,7 +53,7 @@ def test_headings_aa_info():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_bad_header.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_bad_header.txt')
 
     assert 'Unexpected column name(s) [AAA]' in str(e.value)
     assert 'expected column names are:' in str(e.value)
@@ -66,7 +66,7 @@ def test_headings_aa_info_type_column_bad():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_bad_type_column.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_bad_type_column.txt')
     assert "Type column row error: 'Type' column rows can only contain 'in' or 'ex'" in str(e.value)
 
 
@@ -75,7 +75,7 @@ def test_lowercase_headings_bad():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_lowercase_column_names.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_lowercase_column_names.txt')
 
 
 def test_aa_letters_bad():
@@ -83,7 +83,7 @@ def test_aa_letters_bad():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_letters_bad.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_letters_bad.txt')
     assert "AA type letters incorrect, Amino Acid letters can only be: 'ACDEFGHIKLMNPQRSTVWY'" in str(e.value)
 
 
@@ -92,7 +92,7 @@ def test_obs_data_bad():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_bad_obs_data.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_bad_obs_data.txt')
     assert "Incorrect data given, unexpected spin system in aa types. the input spin systems should be in the chemical"\
            " shift list" in str(e.value)
 
@@ -102,7 +102,7 @@ def test_offset_data():
     importer.import_obs_shifts('test_data/nef_resonances_4_test.nef', 'nef')
 
     with pytest.raises(SnapsImportException) as e:
-        importer.import_aa_type_info('test_data/test_aa_info_m1.txt', 'i')
+        importer.import_aa_type_info('test_data/test_aa_info_m1.txt')
     assert "offset can only be 0 or -1" in str(e.value)
 
 
