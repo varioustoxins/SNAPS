@@ -117,10 +117,10 @@ def runSNAPS(system_args):
 
 
     #### Set up the SNAPS_assigner object
-    a = SNAPS_assigner()
+    assigner = SNAPS_assigner()
 
     # Import config file
-    a.read_config_file(args.config_file)
+    assigner.read_config_file(args.config_file)
 
 
     # Import observed and predicted shifts
@@ -137,10 +137,13 @@ def runSNAPS(system_args):
     else:
         importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
 
-    a.obs = importer.obs
+    ##
+    assigner.obs = importer.obs
     logger.info("Finished reading in %d spin systems from %s",
-                 len(a.obs["SS_name"]), args.shift_file)
+                 len(assigner.obs["SS_name"]), args.shift_file)
 
+
+    assigner.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
     # GST add call to importer to read residue restraints from file using
     # file name in args
@@ -154,16 +157,16 @@ def runSNAPS(system_args):
         assigner.pars["use_ss_class_info"] = False
 
     #### Do the analysis
-    a.prepare_obs_preds()
-    a.calc_log_prob_matrix()
-    a.calc_mismatch_matrix()
+    assigner.prepare_obs_preds()
+    assigner.calc_log_prob_matrix()
+    assigner.calc_mismatch_matrix()
 
-    if a.pars["iterate_until_consistent"]:
-        a.assign_df = a.find_consistent_assignments(set_assign_df=True)
+    if assigner.pars["iterate_until_consistent"]:
+        assigner.assign_df = assigner.find_consistent_assignments(set_assign_df=True)
     else:
-        a.assign_from_preds(set_assign_df=True)
+        assigner.assign_from_preds(set_assign_df=True)
         # breakpoint()
-        a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
+        assigner.add_consistency_info(threshold=assigner.pars["seq_link_threshold"])
         # breakpoint()
 
     #### Output the results
@@ -172,7 +175,7 @@ def runSNAPS(system_args):
          C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
     '''.split()
     table = []
-    for df_index, df_row in a.assign_df.iterrows():
+    for df_index, df_row in assigner.assign_df.iterrows():
         table_row = []
         table.append(table_row)
         for heading in headings:
@@ -185,18 +188,18 @@ def runSNAPS(system_args):
 
     #### Write chemical shift lists
     if args.shift_output_file is not None:
-        a.output_shiftlist(args.shift_output_file, args.shift_output_type,
+        assigner.output_shiftlist(args.shift_output_file, args.shift_output_type,
                            confidence_list=args.shift_output_confidence)
 
     #### Make some plots
     plots = []
     if args.hsqc_plot_file is not None:
-        hsqc_plot = a.plot_hsqc(args.hsqc_plot_file, "html")
+        hsqc_plot = assigner.plot_hsqc(args.hsqc_plot_file, "html")
         logger.info("Finished writing HSQC plot to %s", args.hsqc_plot_file)
         plots += [hsqc_plot]
 
     if args.strip_plot_file is not None:
-        strip_plot = a.plot_strips(args.strip_plot_file, "html")
+        strip_plot = assigner.plot_strips(args.strip_plot_file, "html")
         logger.info("Finished writing strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
 
