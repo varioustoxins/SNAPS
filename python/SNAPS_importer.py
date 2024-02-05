@@ -408,7 +408,7 @@ class SNAPS_importer:
         self.obs = obs
         return self.obs
     
-    def import_aa_type_info(self, filename, offset="i-1"):
+    def import_aa_type_info(self, filename):
         """ Add amino acid type information to previously-imported observed 
         shifts
         
@@ -416,8 +416,6 @@ class SNAPS_importer:
             This should have the format:
             SS_name_1   AVI   in   # to set AVI as the only allowed aa types
             SS_name_2   T     ex   # to exclude T from the allowed aa types
-        offset: either "i" or "i_minus_1". Whether the aa type restriction 
-            applies to the i spin system or to the preceding i-1 spin system.
         """
 
         # Import file
