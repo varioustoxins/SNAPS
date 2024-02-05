@@ -2,6 +2,8 @@ import pandas as pd
 import pytest
 from numpy import NaN
 from pandas.testing import assert_frame_equal
+
+from SNAPS_assigner import SNAPS_assigner
 from SNAPS_importer import SNAPS_importer, SnapsImportException
 
 
