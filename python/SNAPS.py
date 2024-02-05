@@ -50,6 +50,9 @@ def get_arguments(system_args):
                         classes for the i-1 residue. No spaces.
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for
                         a sequential HADAMAC """)
+    parser.add_argument("--aa_types", default=None, nargs=1,
+                        help="""A file containing restraints on different residue types.""")
+
     #TODO: Need to rethink how SS_class info is imported.
 
     # Options controlling output files
@@ -139,7 +142,16 @@ def runSNAPS(system_args):
                  len(a.obs["SS_name"]), args.shift_file)
 
 
-    a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
+    # GST add call to importer to read residue restraints from file using
+    # file name in args
+    # possibly add self.pars["use_ss_class_info"] but I guess should already exist??
+
+
+    if args.aa_types:
+        importer.import_aa_type_info(args.aa_types[0])
+        assigner.pars["use_ss_class_info"] = True
+    else:
+        assigner.pars["use_ss_class_info"] = False
 
     #### Do the analysis
     a.prepare_obs_preds()
