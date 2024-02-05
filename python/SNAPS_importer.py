@@ -431,12 +431,12 @@ class SNAPS_importer:
             self._check_bad_offset_raise_if_bad(aa_info_df)
 
             result_df_0 = aa_info_df[aa_info_df['Offset'] == 0]
-            self._import_aa_type_info_raw(result_df_0 , 0)
+            self._process_aa_type_info_single_offset(result_df_0, 0)
 
             result_df_m1 = aa_info_df[aa_info_df['Offset'] == -1]
-            self._import_aa_type_info_raw(result_df_m1, -1)
+            self._process_aa_type_info_single_offset(result_df_m1, -1)
         else:
-            self._import_aa_type_info_raw(aa_info_df, 0)
+            self._process_aa_type_info_single_offset(aa_info_df, 0)
         return self.obs
 
 
@@ -446,7 +446,7 @@ class SNAPS_importer:
         if len(result_df_other.index):
             raise SnapsImportException(msg)
 
-    def _import_aa_type_info_raw(self, aa_info_df, offset):
+    def _process_aa_type_info_single_offset(self, aa_info_df, offset):
         if offset == 0:
             ss_class_col = "SS_class"
         elif offset == -1:
