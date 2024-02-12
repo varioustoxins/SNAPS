@@ -108,8 +108,32 @@ def test_offset_data():
     assert "offset can only be 0 or -1" in str(e.value)
 
 
-# def test_import_P3a_L273R_shifts():
-#     importer = SNAPS_importer()
-#     importer.import_obs_shifts('test_data/P3a_L273R_10_test.nef', 'nef')
-#     result = importer.import_aa_type_info('test_data/sparky_10_test.txt.txt', 'i')
+def test_matrix_data():
+    obs = pd.read_csv('test_data/test_obs.txt', sep='\s+')
+    log = pd.read_csv('test_data/test_log.txt', sep='\s+')
+    preds = pd.read_csv('test_data/test_preds.txt', sep='\s+')
+
+    print('ibs', obs)
+    print('log',log)
+    print('preds', preds)
+
+    original_log_prob_matrix = log.copy(deep=True)
+    updated_log_prob_matrix = SNAPS_assigner._apply_ss_class_penalties(log, obs, preds)
+    diffs = updated_log_prob_matrix - original_log_prob_matrix
+    print("Differences in matrix", diffs)
+
+# if diffs != 0:
+    #with pytest.raises(SnapsImportException) as e:
+
+    #assert "differences in the matrix should be 0"
+
+
+
+
+
+
+
+
+
+
 
