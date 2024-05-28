@@ -48,7 +48,7 @@ class SNAPS_importer:
             hsqc.columns = ["SS_name","H","N","Height"]      
             #hsqc.index = hsqc["SS_name"]
         elif filetype=="sparky":
-            hsqc = pd.read_table(filename, sep="\s+")
+            hsqc = pd.read_table(filename, sep=r"\s+")
             hsqc.columns = ["SS_name","H","N","Height"]
             # If assigned, Name has format "A123HN-A123N"
             # If unassigned, Name column contains "?-?"
@@ -62,7 +62,7 @@ class SNAPS_importer:
                     pd.Series(range(N_unassigned)).astype(str))
             
         elif filetype=="xeasy":
-            hsqc = pd.read_table(filename, sep="\s+", comment="#", header=None,
+            hsqc = pd.read_table(filename, sep=r"\s+", comment="#", header=None,
                                  usecols=[0,1,2,5], 
                                  names=["SS_name","H","N","Height"])
             hsqc["SS_name"] = "x" + hsqc["SS_name"].astype(str)
@@ -74,7 +74,7 @@ class SNAPS_importer:
                         colnames_line = num
                         colnames = line.split()[1:]
             
-            hsqc = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+            hsqc = pd.read_table(filename, sep=r"\s+", skiprows=colnames_line+1,
                                 names=colnames)
             hsqc = hsqc[["INDEX", "ASS", "X_PPM", "Y_PPM", "HEIGHT"]]
             hsqc.columns = ["ID", "SS_name", "H", "N", "Height"]
@@ -121,13 +121,13 @@ class SNAPS_importer:
                                            "Height"])
             peaks.columns = ["F1","F2","F3","A1","A2","A3","Height"]
         elif filetype == "sparky":
-            peaks = pd.read_table(filename, sep="\s+")
+            peaks = pd.read_table(filename, sep=r"\s+")
             peaks.columns=["Name","F1","F2","F3","Height"]
             peaks["A1"], peaks["A2"], peaks["A3"] = list(zip(
                                                 *peaks["Name"].str.split("-")))
             #return(peaks)
         elif filetype == "xeasy":
-            peaks = pd.read_table(filename, sep="\s+", comment="#", header=None,
+            peaks = pd.read_table(filename, sep=r"\s+", comment="#", header=None,
                                  usecols=[1,2,3,6], 
                                  names=["F1","F2","F3","Height"])
             peaks["SS_name"] = None
@@ -139,7 +139,7 @@ class SNAPS_importer:
                         colnames_line = num
                         colnames = line.split()[1:]
                         
-            peaks = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+            peaks = pd.read_table(filename, sep=r"\s+", skiprows=colnames_line+1,
                                 names=colnames)
             peaks = peaks[["ASS", "X_PPM", "Y_PPM", "Z_PPM", "HEIGHT"]]
             peaks.columns = ["SS_name", "F1", "F2", "F3", "Height"]
@@ -335,12 +335,12 @@ class SNAPS_importer:
             obs.columns = ["SS_name", "Atom_type", "Shift"]
             obs["Atom_type"] = obs["Atom_type"].str.upper()
         elif filetype=="sparky":
-            obs = pd.read_table(filename, sep="\s+")
+            obs = pd.read_table(filename, sep=r"\s+")
             obs = obs.loc[:,["Group", "Atom", "Shift"]]
             obs.columns = ["SS_name", "Atom_type", "Shift"]
             obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
         elif filetype=="xeasy":
-            obs = pd.read_table(filename, sep="\s+", 
+            obs = pd.read_table(filename, sep=r"\s+",
                                 header=None, na_values="999.000",
                                 names=["i","Shift","SD","Atom_type","SS_name"])
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
@@ -354,13 +354,13 @@ class SNAPS_importer:
                     if line.find("VARS")>-1:
                         colnames_line = num
             
-            obs = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1, 
+            obs = pd.read_table(filename, sep=r"\s+", skiprows=colnames_line+1,
                                 names=["SS_name","Res_type","Atom_type","Shift"])
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
             obs["SS_name"] = obs["SS_name"].astype(str)
             obs.loc[obs["Atom_type"] == "HN", "Atom_type"] = "H"
         elif filetype == "mars":
-            obs_wide = pd.read_table(filename, sep="\s+", na_values="-")
+            obs_wide = pd.read_table(filename, sep=r"\s+", na_values="-")
             obs_wide = obs_wide.rename(columns={"CO":"C","CO-1":"C_m1",
                                                 "CA-1":"CA_m1","CB-1":"CB_m1"})
             obs_wide = obs_wide.drop(columns="HA-1")
