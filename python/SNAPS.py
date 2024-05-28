@@ -134,15 +134,8 @@ def runSNAPS(system_args):
     # possibly add self.pars["use_ss_class_info"] but I guess should already exist??
 
 
-    if args.aa_types:
-        if args.shift_type=="snaps":
-            importer.import_aa_type_info(args.aa_types[0])
-            assigner.pars["use_ss_class_info"] = True
-    elif args.shift_type=='nef' and not args.aa_types:
-        importer.import_aa_type_info_nef(args.shift_file)
-        assigner.pars["use_ss_class_info"] = True
-    else:
-        assigner.pars["use_ss_class_info"] = False
+    #### import aa type information
+    _import_aa_type_info(args, assigner, importer)
 
     #### Do the analysis
     assigner.prepare_obs_preds()
@@ -196,6 +189,18 @@ def runSNAPS(system_args):
     logger.removeHandler(logger.handlers[0])
 
     return(plots)
+
+
+def _import_aa_type_info(args, assigner, importer):
+    if args.aa_types:
+        if args.shift_type == "snaps":
+            importer.import_aa_type_info(args.aa_types[0])
+            assigner.pars["use_ss_class_info"] = True
+    elif args.shift_type == 'nef' and not args.aa_types:
+        importer.import_aa_type_info_nef(args.shift_file)
+        assigner.pars["use_ss_class_info"] = True
+    else:
+        assigner.pars["use_ss_class_info"] = False
 
 
 def _setup_logger(args):
