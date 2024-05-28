@@ -23,7 +23,7 @@ from copy import deepcopy
 from pathlib import Path
 # from Bio.SeqUtils import seq1
 from Bio import SeqIO
-from distutils.util import strtobool
+from str2bool3 import str2bool
 from collections import namedtuple
 from sortedcontainers import SortedListWithKey
 # from textwrap import dedent
