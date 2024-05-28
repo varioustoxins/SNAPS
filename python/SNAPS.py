@@ -154,22 +154,26 @@ def runSNAPS(system_args):
     _output_results(args, assigner, logger)
 
     #### Make some plots
+    plots = _output_plots(args, assigner, logger)
+
+    return(plots)
+
+
+def _output_plots(args, assigner, logger):
     plots = []
     if args.hsqc_plot_file is not None:
         hsqc_plot = assigner.plot_hsqc(args.hsqc_plot_file, "html")
         logger.info("Finished writing HSQC plot to %s", args.hsqc_plot_file)
         plots += [hsqc_plot]
-
     if args.strip_plot_file is not None:
         strip_plot = assigner.plot_strips(args.strip_plot_file, "html")
         logger.info("Finished writing strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
-
     # Close the log file
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
+    return plots
 
-    return(plots)
 
 def _output_results(args, assigner, logger):
     headings = '''
