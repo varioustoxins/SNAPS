@@ -96,24 +96,7 @@ def runSNAPS(system_args):
     args = get_arguments(system_args)
 
     #### Set up logging
-    if args.log_file is not None:
-        # Create a logger
-        logger = logging.getLogger("SNAPS")
-        logger.setLevel(logging.DEBUG)
-        # Create a log handler that writes to a specific file.
-        # In principle you could have multiple handlers, but here I just have one.
-        # Need to explicitly define a handler so it can be explicitly closed
-        # once the analysis is complete.
-        log_handler = logging.FileHandler(args.log_file, mode='w')
-        log_handler.setLevel(logging.DEBUG)
-        #log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
-        log_handler.setFormatter(logging.Formatter(
-                "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
-        logger.addHandler(log_handler)
-
-    else:
-        logging.basicConfig(level=logging.ERROR)
-        # logging.basicConfig(level=logging.DEBUG)
+    logger = _setup_logger(args)
 
 
     #### Set up the SNAPS_assigner object
@@ -212,6 +195,28 @@ def runSNAPS(system_args):
     logger.removeHandler(logger.handlers[0])
 
     return(plots)
+
+
+def _setup_logger(args):
+    if args.log_file is not None:
+        # Create a logger
+        logger = logging.getLogger("SNAPS")
+        logger.setLevel(logging.DEBUG)
+        # Create a log handler that writes to a specific file.
+        # In principle you could have multiple handlers, but here I just have one.
+        # Need to explicitly define a handler so it can be explicitly closed
+        # once the analysis is complete.
+        log_handler = logging.FileHandler(args.log_file, mode='w')
+        log_handler.setLevel(logging.DEBUG)
+        # log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
+        log_handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
+        logger.addHandler(log_handler)
+
+    else:
+        logging.basicConfig(level=logging.ERROR)
+        # logging.basicConfig(level=logging.DEBUG)
+    return logger
 
 
 #%% Run the actual script
