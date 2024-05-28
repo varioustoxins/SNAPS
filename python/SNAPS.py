@@ -151,26 +151,7 @@ def runSNAPS(system_args):
         # breakpoint()
 
     #### Output the results
-    headings = '''
-        Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
-         C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
-    '''.split()
-    table = []
-    for df_index, df_row in assigner.assign_df.iterrows():
-        table_row = []
-        table.append(table_row)
-        for heading in headings:
-            table_row.append(df_row[heading])
-
-    with open(args.output_file, 'w') as fp:
-        print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
-    
-    logger.info("Finished writing results to %s", args.output_file)
-
-    #### Write chemical shift lists
-    if args.shift_output_file is not None:
-        assigner.output_shiftlist(args.shift_output_file, args.shift_output_type,
-                           confidence_list=args.shift_output_confidence)
+    _output_results(args, assigner, logger)
 
     #### Make some plots
     plots = []
@@ -189,6 +170,25 @@ def runSNAPS(system_args):
     logger.removeHandler(logger.handlers[0])
 
     return(plots)
+
+def _output_results(args, assigner, logger):
+    headings = '''
+        Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
+         C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
+    '''.split()
+    table = []
+    for df_index, df_row in assigner.assign_df.iterrows():
+        table_row = []
+        table.append(table_row)
+        for heading in headings:
+            table_row.append(df_row[heading])
+    with open(args.output_file, 'w') as fp:
+        print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
+    logger.info("Finished writing results to %s", args.output_file)
+    #### Write chemical shift lists
+    if args.shift_output_file is not None:
+        assigner.output_shiftlist(args.shift_output_file, args.shift_output_type,
+                                  confidence_list=args.shift_output_confidence)
 
 
 def _import_aa_type_info(args, assigner, importer):
