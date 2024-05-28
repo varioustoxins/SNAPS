@@ -109,6 +109,7 @@ def runSNAPS(system_args):
     # Import observed and predicted shifts
     importer = SNAPS_importer()
 
+    #TODO: needs a reconfigure to low level and specific
     if args.shift_type=="test":
         if args.test_aa_classes is None:
             importer.import_testset_shifts(args.shift_file)
