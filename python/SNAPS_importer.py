@@ -4,15 +4,12 @@ Defines a class with functions related to importing peak lists and shift lists.
 
 @author: Alex
 """
-
-# import numpy as np
+from pynmrstar import Entry
 import pandas as pd
-# import itertools
-# from pathlib import Path
 from Bio.SeqUtils import seq1
 from math import sqrt
 
-from NEF_reader import read_nef_shifts_from_file_to_pandas
+from NEF_reader import read_nef_shifts_from_file_to_pandas, TRANSLATIONS_3_1_PROTEIN
 
 POSSIBLE_1LET_AAS_STR = "ACDEFGHIKLMNPQRSTVWY"
 
@@ -351,7 +348,7 @@ class SNAPS_importer:
             # Work out where the column names and data are
             with open(filename, 'r') as f:
                 for num, line in enumerate(f, 1):
-                    if line.find("VARS")>-1:
+                    if line.find("VARS") > -1:
                         colnames_line = num
             
             obs = pd.read_table(filename, sep=r"\s+", skiprows=colnames_line+1,
@@ -369,7 +366,7 @@ class SNAPS_importer:
                                 value_vars=["H","HA","N","C","CA",
                                             "CB","C_m1","CA_m1","CB_m1"], 
                                 var_name="Atom_type", value_name="Shift")
-        elif filetype=='nef':
+        elif filetype =='nef':
             obs = read_nef_shifts_from_file_to_pandas(filename)
 
 #        elif filetype == "nmrstar":
@@ -407,21 +404,126 @@ class SNAPS_importer:
         obs.index.name = None
         self.obs = obs
         return self.obs
-    
-    def import_aa_type_info(self, filename):
-        """ Add amino acid type information to previously-imported observed 
+
+    def import_aa_type_info_nef(self, entry: Entry, frame_name: str):
+        """ Add amino acid type information to previously-imported observed
         shifts
-        
-        filename: a file with amino acid information
-            This should have the format:
+
+        entry: a pynmrstar Entry object containing amino acid information
+        offset: either "i" or "i-1". Whether the aa type restriction
+        frame_name: the name of the NEF frame with the restraints in it
+        applies to the i spin system or to the preceeding i-1 spin system.
+        """
+        def is_int(str):
+            result = True
+            try:
+                int(str)
+            except Exception:
+                result = False
+            return result
+
+        RESIDUE_TYPES_FRAME = 'nefpls_residue_types'
+        RESIDUE_TYPES_TAG = '_nefpls_residue_type'
+        REQUIRED_TAG_SET = set([f'{RESIDUE_TYPES_TAG}.{tag}' for tag in 'chain_code sequence_code residue_type'.split()])
+        LEN_RESIDUE_TYPES = len(RESIDUE_TYPES_FRAME)
+        frames = entry.get_saveframes_by_category('nefpls_residue_types')
+        frames = [frame for frame in frames if frame.name[LEN_RESIDUE_TYPES:].strip('_') == frame_name]
+
+        restraints = {}
+
+        for frame in frames:
+            if RESIDUE_TYPES_TAG in frame:
+                loop = frame.get_loop(RESIDUE_TYPES_TAG)
+
+                if not REQUIRED_TAG_SET.issubset(loop.get_tag_names()):
+                    missing_tags = REQUIRED_TAG_SET - set(loop.get_tag_names())
+                    msg = \
+                    f"""
+                        Missing required tags in the frame {frame_name} {missing_tags}, the missing tags are:
+                        {missing_tags}
+                    """
+                    raise SnapsImportException(msg)
+
+                chain_code_index = loop.tag_index('chain_code')
+                sequence_code_index = loop.tag_index('sequence_code')
+                residue_type_index = loop.tag_index('residue_type')
+
+                for row in loop:
+                    chain_code = row[chain_code_index]
+                    sequence_code = row[sequence_code_index]
+                    residue_type = row[residue_type_index]
+
+                    if not chain_code[0] in ['@', '#']:
+                        continue
+
+                    if not sequence_code[0] == '@':
+                        continue
+
+                    chain_code = chain_code[1:]
+                    sequence_code = sequence_code[1:]
+
+                    sequence_code_offset = 0
+                    if not isinstance(sequence_code, int) and '-' in sequence_code:
+                        sequence_code_fields =  sequence_code.split('-')
+                        if is_int(sequence_code[-1]):
+                            sequence_code_offset = int(sequence_code_fields[:-1])
+                            sequence_code = '-'.join(sequence_code_fields[:-1])
+
+                    # TODO: we should select a chain!
+                    ss_name = f'{sequence_code}'
+
+
+                    if residue_type in TRANSLATIONS_3_1_PROTEIN:
+                        residue_type = TRANSLATIONS_3_1_PROTEIN[residue_type]
+                    else:
+                        msg = \
+                        f"""
+                            Non protein residue type {residue_type} in frame {frame_name}
+                        """
+                        raise SnapsImportException(msg)
+
+
+                    key = ss_name, sequence_code_offset
+                    residue_types = restraints.setdefault(key, '')
+                    residue_types += residue_type
+                    restraints[key] = residue_types
+
+
+        residue_restraints = [[ss, residue_types, 'in', offset] for (ss, offset), residue_types in restraints.items()]
+        residue_type_frame = pd.DataFrame(residue_restraints, columns='SS_name AA Type Offset'.split())
+
+        return self._import_aa_type_info(residue_type_frame, source=f'{entry.entry_id}.{frame_name}')
+
+    def import_aa_type_info_file(self, file_name):
+        """ Add amino acid type information to previously-imported observed
+        shifts
+
+        file_name: Path to a file containing amino acid information
+            This should have the following columns:
+            SS_name   AVI     in   Offset
             SS_name_1   AVI   in   # to set AVI as the only allowed aa types
             SS_name_2   T     ex   # to exclude T from the allowed aa types
         """
-
         # Import file
-        aa_info_df = pd.read_table(filename, sep="\s+", comment="#", header=0)
+        df = pd.read_table(file_name, sep=r"\s+", comment="#", header=0)
 
-        self.check_required_headings_and_raise_if_bad(aa_info_df, filename)
+        if 'Offset' not in df.columns:
+            df['Offset'] = 0
+
+        return self._import_aa_type_info(df, file_name)
+
+    def _import_aa_type_info(self, aa_info_df, source):
+        """ Add amino acid type information to previously-imported observed 
+        shifts
+
+        source: a pandas data frame with amino acid information
+            This should have the following columns:
+            SS_name_1   AVI   in   # to set AVI as the only allowed aa types
+            SS_name_2   T     ex   # to exclude T from the allowed aa types
+            offset: either "i" or "i-1". Whether the aa type restriction
+            applies to the i spin system or to the preceeding i-1 spin system.
+        """
+        self.check_required_headings_and_raise_if_bad(aa_info_df, source)
         self.check_aa_letters_correct_and_raise_if_bad(aa_info_df)
         self.check_type_column_categories_and_raise_if_bad(aa_info_df)
 
@@ -436,7 +538,6 @@ class SNAPS_importer:
         else:
             self._process_aa_type_info_single_offset(aa_info_df, 0)
         return self.obs
-
 
     def _check_bad_offset_raise_if_bad(self, aa_info_df):
         result_df_other = aa_info_df[(aa_info_df['Offset'] != 0) & (aa_info_df['Offset'] != -1)]
@@ -484,8 +585,6 @@ class SNAPS_importer:
         # Nan's can be any amino acid
         self.obs[ss_class_col] = self.obs[ss_class_col].fillna(POSSIBLE_1LET_AAS_STR)
 
-
-
     def check_spin_systems_from_obs_raise_if_bad(self, aa_info_df):
         expected_obs = set()
         if 'SS_name' in self.obs.columns:
@@ -498,7 +597,8 @@ class SNAPS_importer:
                   "be in the chemical shift list"
             raise SnapsImportException(msg)
 
-    # puts aa into ss class column
+        # puts aa into ss class column
+
     def check_aa_letters_correct_and_raise_if_bad(self, aa_info_df):
 
         expected_1let_aa_set = set(POSSIBLE_1LET_AAS_STR)
@@ -526,19 +626,16 @@ class SNAPS_importer:
 
         if not expected_column_names.issubset(found_column_names):
             bad_column_names = found_column_names - expected_column_names
+            if 'Offset' in bad_column_names:
+                bad_column_names.remove('Offset')
             bad_column_names = ', '.join(bad_column_names)
             expected_column_names = ', '.join(expected_column_names)
             msg = f"""\
-                Unexpected column name(s) [{bad_column_names}]
-                in file {filename}
-                expected column names are: {expected_column_names}"
-            """
+                   Unexpected column name(s) [{bad_column_names}]
+                   in file {filename}
+                   expected column names are: {expected_column_names}"
+               """
             raise SnapsImportException(msg)
-
-
-
-
-
 
     def import_testset_shifts(self, filename, remove_Pro=True,
                           short_aa_names=True, SS_class=None, SS_class_m1=None):
@@ -549,7 +646,8 @@ class SNAPS_importer:
         
         filename: The simplified BMRB file containing observed shift info.
         remove_Pro: If True, remove proline residues from output
-        short_aa_names: If True, single letter aa codes are used, otherwise 3-letter codes are used
+        short_aa_names: If True, single letter aa codes are used, otherwise 3
+            letter codes are used
         SS_class: Either None or a list of strings, each of which is a list of 
             amino acids (eg. ["VIA","G","S","T","DN","FHYWC","REKPQML"] would 
             give the HADAMAC classes). If not None, a column SS_class will be 
@@ -559,9 +657,9 @@ class SNAPS_importer:
         """
         # Import the observed chemical shifts
         obs_long = pd.read_table(filename)
-        obs_long = obs_long[["Residue_PDB_seq_code", "Residue_label",
-                             "Atom_name", "Chem_shift_value"]]
-        obs_long.columns = ["Res_N", "Res_type", "Atom_type", "Shift"]
+        obs_long = obs_long[["Residue_PDB_seq_code","Residue_label",
+                             "Atom_name","Chem_shift_value"]]
+        obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
         # Convert residue type to single-letter code
         if short_aa_names: 
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
@@ -574,7 +672,7 @@ class SNAPS_importer:
             obs_long["SS_name"] = obs_long["SS_name"].str.rjust(7)
             obs_long["Res_type"] = obs_long["Res_type"].apply(seq1)
         obs_long = obs_long.reindex(columns=["Res_N","Res_type","SS_name",
-                                             "Atom_type", "Shift"])
+                                             "Atom_type","Shift"])
 
         # Convert from long to wide
         obs = obs_long.pivot(index="Res_N", columns="Atom_type", 

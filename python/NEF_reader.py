@@ -18,6 +18,31 @@ _PREVIOUS_RESIDUE_OFFSET = '-1'  # the offset to the previous residue as used by
 
 _DEFAULT_SHIFT_LIST = 'default'
 
+TRANSLATIONS_3_1_PROTEIN = {
+    "ALA": "A",
+    "ARG": "R",
+    "ASN": "N",
+    "ASP": "D",
+    "CYS": "C",
+    "GLU": "E",
+    "GLN": "Q",
+    "GLY": "G",
+    "HIS": "H",
+    "ILE": "I",
+    "LEU": "L",
+    "LYS": "K",
+    "MET": "M",
+    "PHE": "F",
+    "PRO": "P",
+    "SER": "S",
+    "THR": "T",
+    "TRP": "W",
+    "TYR": "Y",
+    "VAL": "V",
+}
+TRANSLATIONS_1_3_PROTEIN = {
+    value: key for (key, value) in TRANSLATIONS_3_1_PROTEIN.items()
+}
 
 def read_nef_shifts_from_file(file_name: Path, shift_list_name: str = _DEFAULT_SHIFT_LIST) -> List[List[str]]:
     """
