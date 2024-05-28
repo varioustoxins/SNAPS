@@ -151,7 +151,11 @@ def runSNAPS(system_args):
 
 
     if args.aa_types:
-        importer.import_aa_type_info(args.aa_types[0])
+        if args.shift_type=="snaps":
+            importer.import_aa_type_info(args.aa_types[0])
+            assigner.pars["use_ss_class_info"] = True
+    elif args.shift_type=='nef' and not args.aa_types:
+        importer.import_aa_type_info_nef(args.shift_file)
         assigner.pars["use_ss_class_info"] = True
     else:
         assigner.pars["use_ss_class_info"] = False
