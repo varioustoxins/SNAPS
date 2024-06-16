@@ -90,7 +90,7 @@ def get_arguments(system_args):
                                   "-l","output/test.log"))
     return(args)
 
-def runSNAPS(system_args):
+def run_snaps(system_args):
 
     #### Command line arguments
     args = get_arguments(system_args)
@@ -233,4 +233,4 @@ def _setup_logger(args):
 if __name__ == '__main__':
     import sys
 
-    runSNAPS(sys.argv[1:])
+    run_snaps(sys.argv[1:])
