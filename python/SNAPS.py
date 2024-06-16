@@ -106,35 +106,22 @@ def run_snaps(system_args):
     assigner.read_config_file(args.config_file)
 
 
-    # Import observed and predicted shifts
+    # Importer for observed and predicted shifts
     importer = SNAPS_importer()
 
-    #TODO: needs a reconfigure to low level and specific
+    #### import observed shifts
     if args.shift_type=="test":
-        if args.test_aa_classes is None:
-            importer.import_testset_shifts(args.shift_file)
-        else:
-            AA_class, AA_class_m1 = args.test_aa_classes.split(";")
-            importer.import_testset_shifts(args.shift_file,
-                                           SS_class=AA_class.split(","),
-                                           SS_class_m1=AA_class_m1.split(","))
+        _import_test_shifts(args, importer)
     else:
-        importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
-
-    ##
-    assigner.obs = importer.obs
+        _import_shifts(args, importer)
     logger.info("Finished reading in %d spin systems from %s",
-                 len(assigner.obs["SS_name"]), args.shift_file)
+                len(assigner.obs["SS_name"]), args.shift_file)
+    assigner.obs = importer.obs
 
-
+    #### import predicted shifts
     assigner.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
-    # GST add call to importer to read residue restraints from file using
-    # file name in args
-    # possibly add self.pars["use_ss_class_info"] but I guess should already exist??
-
-
-    #### import aa type information
+    #### import aa type restraints
     _import_aa_type_info(args, assigner, importer)
 
     #### Do the analysis
@@ -156,7 +143,25 @@ def run_snaps(system_args):
     #### Make some plots
     plots = _output_plots(args, assigner, logger)
 
+    #### Close the log file
+    logger.handlers[0].close()
+    logger.removeHandler(logger.handlers[0])
+
     return(plots)
+
+
+def _import_shifts(args, importer):
+    importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
+
+
+def _import_test_shifts(args, importer):
+    if args.test_aa_classes is None:
+        importer.import_testset_shifts(args.shift_file)
+    else:
+        AA_class, AA_class_m1 = args.test_aa_classes.split(";")
+        importer.import_testset_shifts(args.shift_file,
+                                       SS_class=AA_class.split(","),
+                                       SS_class_m1=AA_class_m1.split(","))
 
 
 def _output_plots(args, assigner, logger):
@@ -169,9 +174,7 @@ def _output_plots(args, assigner, logger):
         strip_plot = assigner.plot_strips(args.strip_plot_file, "html")
         logger.info("Finished writing strip plot to %s", args.strip_plot_file)
         plots += [strip_plot]
-    # Close the log file
-    logger.handlers[0].close()
-    logger.removeHandler(logger.handlers[0])
+
     return plots
 
 
