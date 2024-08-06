@@ -191,10 +191,10 @@ def _import_test_shifts(args, importer):
     if args.test_aa_classes is None:
         importer.import_testset_shifts(args.shift_file)
     else:
-        AA_class, AA_class_m1 = args.test_aa_classes.split(";")
+        aa_class, aa_class_m1 = args.test_aa_classes.split(";")
         importer.import_testset_shifts(args.shift_file,
-                                       SS_class=AA_class.split(","),
-                                       SS_class_m1=AA_class_m1.split(","))
+                                       SS_class=aa_class.split(","),
+                                       SS_class_m1=aa_class_m1.split(","))
 
 
 def _output_plots(args, assigner, logger):
