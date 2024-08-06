@@ -11,7 +11,6 @@ from SNAPS_importer import SNAPS_importer
 from SNAPS_assigner import SNAPS_assigner
 import logging
 
-import pdb
 
 def _get_arguments(system_args):
     import argparse
@@ -21,9 +20,10 @@ def _get_arguments(system_args):
 
     # Mandatory arguments
     parser.add_argument("shift_file",
-                        help="A table of observed chemical shifts.")
+                        help="A table of observed chemical shifts, for nef you can append a data frame name after a colon [e.g. my_shifts.nef:observed].")
     parser.add_argument("pred_file",
-                        help="A table of predicted chemical shifts.")
+                        default=None,
+                        help="A table of predicted chemical shifts for nef can just be a dataframe name [default predicted].")
     parser.add_argument("output_file",
                         help="The file results will be written to.")
 
@@ -31,12 +31,20 @@ def _get_arguments(system_args):
     parser.add_argument("--shift_type",
                         choices=["snaps", "ccpn", "sparky", "mars",
                                  "xeasy", "nmrpipe", "nef", "test"],
-                        default="snaps", 
+                        default=None,
                         help="The format of the observed shift file.")
     parser.add_argument("--pred_type",
-                        choices=["shiftx2", "sparta+"],
-                        default="shiftx2",
+                        choices=["shiftx2", "sparta+", "nef"],
+                        default=None,
                         help="The format of the predicted shifts")
+    parser.add_argument("--out_type",
+                        choices=["snaps", "nef"],
+                        default=None,
+                        help="The format of the predicted shifts")
+    parser.add_argument("--aa_type",
+                        choices=["snaps", "nef"],
+                        default=None,
+                        help="The format of the per residue amino acid type restraints")
     parser.add_argument("--pred_seq_offset", type=int, default=0,
                         help="""An offset to apply to the residue numbering in
                         the predicted shifts.""")
@@ -50,10 +58,12 @@ def _get_arguments(system_args):
                         classes for the i-1 residue. No spaces.
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for
                         a sequential HADAMAC """)
-    parser.add_argument("--aa_types", default=None, nargs=1,
-                        help="""A file containing restraints on different residue types.""")
-
-    #TODO: Need to rethink how SS_class info is imported.
+    parser.add_argument("--aa_restraints", default=None, nargs=1,
+                        help="""A file containing restraints on the amino acid types of residues.""")
+    parser.add_argument("--obs_chain", default='A',
+                        help="""The chain to use for the observed shifts.""")
+    parser.add_argument("--pred_chain", default='A',
+                        help="""The chain to use for the predicted shifts.""")
 
     # Options controlling output files
     parser.add_argument("-l", "--log_file", default=None,
@@ -61,12 +71,12 @@ def _get_arguments(system_args):
 
     parser.add_argument("--shift_output_file", default=None,
                         help="""The file the assigned shiftlist will be written to.""")
-    parser.add_argument("--shift_output_type", default="sparky",
-                        choices=["sparky", "xeasy", "nmrpipe"],
+    parser.add_argument("--shift_output_type", default=None,
+                        choices=["sparky", "xeasy", "nmrpipe", "nef"],
                         help="One or more output formats for chemical shift export")
     parser.add_argument("--shift_output_confidence", nargs="*",
-                        choices=["High","Medium","Low","Unreliable","Undefined"],
-                        default=["High","Medium","Low","Unreliable","Undefined"],
+                        choices=["High", "Medium", "Low", "Unreliable", "Undefined"],
+                        default=["High", "Medium", "Low", "Unreliable", "Undefined"],
                         help="""Limits the shiftlist output to assignments with
                         particular confidence levels. More than one level is allowed""")
 
@@ -77,23 +87,46 @@ def _get_arguments(system_args):
                         default=None,
                         help="A filename for an output HSQC plot.")
 
-
-
     args = parser.parse_args(system_args)
-    if False:   # For convenience when testing
-        args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
-                                  "data/P3a_L273R/shiftx2.cs",
-                                  "output/test.txt",
-                                  "--shift_type","snaps",
-                                  "--pred_type","shiftx2",
-                                  "-c","config/config_yaml_2.txt",
-                                  "-l","output/test.log"))
-    return(args)
+
+    # if input shifts are nef all file types are nef unless
+    # otherwise specified
+    if args.shift_type == "nef":
+        if args.pred_type is None:
+            args.pred_type = "nef"
+        if args.aa_type is None:
+            args.aa_type = "nef"
+        if args.out_type is None:
+            args.out_type = "nef"
+        if args.shift_output_type is None:
+            args.shift_output_type = "nef"
+
+    if args.shift_type is None:
+        args.shift_type = "snaps"
+    if args.pred_type is None:
+        args.pred_type = "shiftx2"
+    if args.aa_type is None:
+        args.aa_type = "snaps"
+    if args.out_type is None:
+        args.out_type ='snaps'
+    if args.shift_output_type is None:
+        args.shift_output_type = "sparky"
+
+    # if False:   # For convenience when testing
+    #     args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
+    #                               "data/P3a_L273R/shiftx2.cs",
+    #                               "output/test.txt",
+    #                               "--shift_type","snaps",
+    #                               "--pred_type","shiftx2",
+    #                               "-c","config/config_yaml_2.txt",
+    #                               "-l","output/test.log"))
+    return args
+
 
 def run_snaps(system_args):
 
     #### Command line arguments
-    args = get_arguments(system_args)
+    args = _get_arguments(system_args)
 
     #### Set up logging
     logger = _setup_logger(args)
