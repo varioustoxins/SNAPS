@@ -13,7 +13,7 @@ import logging
 
 import pdb
 
-def get_arguments(system_args):
+def _get_arguments(system_args):
     import argparse
 
     parser = argparse.ArgumentParser(
