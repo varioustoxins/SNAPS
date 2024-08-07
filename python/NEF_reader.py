@@ -44,6 +44,9 @@ TRANSLATIONS_1_3_PROTEIN = {
     value: key for (key, value) in TRANSLATIONS_3_1_PROTEIN.items()
 }
 
+# ignore pynmrstar warning about loops with no data
+logging.getLogger('pynmrstar').addFilter(lambda record: "Loop with no data" not in record.msg)
+
 def read_nef_shifts_from_file(file_name: Path, shift_list_name: str = _DEFAULT_SHIFT_LIST) -> List[List[str]]:
     """
     read nef shifts from a file given by filename and return a table of shifts with headings sequence_code, atom_name
