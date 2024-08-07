@@ -258,9 +258,11 @@ def _import_aa_type_info(args, assigner, importer):
 
 
 def _setup_logger(args):
-    if args.log_file is not None:
-        # Create a logger
-        logger = logging.getLogger("SNAPS")
+    
+    # Create a logger
+    logger = logging.getLogger("SNAPS")
+    
+    if args.log_file is not None:       
         logger.setLevel(logging.DEBUG)
         # Create a log handler that writes to a specific file.
         # In principle you could have multiple handlers, but here I just have one.
