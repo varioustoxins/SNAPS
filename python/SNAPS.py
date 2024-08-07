@@ -9,6 +9,9 @@ from tabulate import tabulate
 
 from SNAPS_importer import SNAPS_importer
 from SNAPS_assigner import SNAPS_assigner
+
+# TODO remove these from NEF importer
+from NEF_reader import _split_path_and_frame, TRANSLATIONS_1_3_PROTEIN
 import logging
 
 
@@ -147,12 +150,23 @@ def run_snaps(system_args):
         _import_test_shifts(args, importer)
     else:
         _import_shifts(args, importer)
+    assigner.obs = importer.obs
     logger.info("Finished reading in %d spin systems from %s",
                 len(assigner.obs["SS_name"]), args.shift_file)
-    assigner.obs = importer.obs
 
-    #### import predicted shifts
-    assigner.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
+
+    # import predicted shifts
+    #TODO mov e this to importer
+    if args.pred_type == "nef":
+        if not Path(args.pred_file).exists():
+            file_name, shift_list_name = _split_path_and_frame(args.shift_file)
+            pred_file = f"{file_name}:{args.pred_file}"
+
+            assigner.import_pred_shifts(pred_file, args.pred_type, args.pred_chain, args.pred_seq_offset)
+
+
+    else:
+        assigner.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
     #### import aa type restraints
     _import_aa_type_info(args, assigner, importer)
@@ -184,7 +198,7 @@ def run_snaps(system_args):
 
 
 def _import_shifts(args, importer):
-    importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False)
+    importer.import_obs_shifts(args.shift_file, args.shift_type, SS_num=False, chain=args.obs_chain)
 
 
 def _import_test_shifts(args, importer):
