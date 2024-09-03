@@ -457,15 +457,6 @@ class SNAPS_importer:
                     sequence_code = row[sequence_code_index]
                     residue_type = row[residue_type_index]
 
-                    if not chain_code[0] in ['@', '#']:
-                        continue
-
-                    if not sequence_code[0] == '@':
-                        continue
-
-                    # chain_code = chain_code[1:]
-                    sequence_code = sequence_code[1:]
-
                     sequence_code_offset = 0
                     if not isinstance(sequence_code, int) and '-' in sequence_code:
                         sequence_code_fields =  sequence_code.split('-')
