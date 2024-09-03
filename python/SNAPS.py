@@ -371,12 +371,13 @@ def _output_results(args, assigner, logger,):
 
 
 def _import_aa_type_info(args, assigner, importer):
-    if args.aa_type:
-        if args.shift_type == "snaps":
-            importer.import_aa_type_info(args.aa_type[0])
+    if args.aa_restraints:
+        if args.aa_type == "snaps":
+            importer.import_aa_type_info_file(args.aa_restraints[0])
             assigner.pars["use_ss_class_info"] = True
-        elif args.shift_type == 'nef':
-            importer.import_aa_type_info_nef(args.shift_file)
+        elif args.aa_type == 'nef':
+            file_name = args.aa_restraints[0] if args.aa_restraints else args.shift_file
+            importer.import_aa_type_info_nef(file_name)
             assigner.pars["use_ss_class_info"] = True
         else:
             print(f'wrong file format [{args.aa_type}] for aa type info should be one of nef or snaps', file=sys.stderr)
