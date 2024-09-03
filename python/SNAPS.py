@@ -164,7 +164,7 @@ def run_snaps(system_args):
 
 
     # import predicted shifts
-    #TODO mov e this to importer
+    #TODO move this to importer
     if args.pred_type == "nef":
         if not Path(args.pred_file).exists():
             file_name, shift_list_name = _split_path_and_frame(args.shift_file)
