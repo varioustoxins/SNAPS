@@ -4,6 +4,8 @@ Defines a class with functions related to importing peak lists and shift lists.
 
 @author: Alex
 """
+from textwrap import dedent
+
 from pynmrstar import Entry
 import pandas as pd
 from Bio.SeqUtils import seq1
@@ -588,8 +590,15 @@ class SNAPS_importer:
             expected_obs.update(set(self.obs['SS_name_m1']))
         given_obs = [elem in expected_obs for elem in aa_info_df['SS_name']]
         if not all(given_obs):
-            msg = "Incorrect data given, unexpected spin system in aa types. the input spin systems should " \
-                  "be in the chemical shift list"
+            missing_names = set(aa_info_df['SS_name']) - expected_obs
+            msg = \
+            f"""
+                Incorrect data given, unexpected spin system in aa type restraints.
+                The restraint spin systems should be in the chemical shift list.
+                The missing spin systems are:
+                {', '.join(missing_names)}
+            """
+            msg=dedent(msg)
             raise SnapsImportException(msg)
 
         # puts aa into ss class column
