@@ -489,6 +489,8 @@ class SNAPS_importer:
         residue_restraints = [[ss, residue_types, 'in', offset] for (ss, offset), residue_types in restraints.items()]
         residue_type_frame = pd.DataFrame(residue_restraints, columns='SS_name AA Type Offset'.split())
 
+        #TODO: why is this title case
+        residue_type_frame['SS_name'] = residue_type_frame['SS_name'].str.title()
         return self._import_aa_type_info(residue_type_frame, source=f'{entry.entry_id}.{frame_name}')
 
     def import_aa_type_info_file(self, file_name):
