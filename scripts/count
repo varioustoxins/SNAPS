@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+
+import sys
+
+def is_float(value):
+    result = True 
+    try:
+       float(value)
+    except Exception:
+       result = False
+    return result
+
+if __name__ == '__main__':
+    result = 0
+    for i,line in enumerate(sys.stdin, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        fields = line.split()
+
+
+        result += len(fields) 
+    print(result)
